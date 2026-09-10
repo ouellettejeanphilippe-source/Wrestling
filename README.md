@@ -146,8 +146,26 @@ jouer.
 - Après le déplacement, un **menu contextuel** apparaît près du lutteur : Attaquer, Tombé, Provoquer, Spécial, Attendre.
 - Avant de confirmer une cible, une **prévision de combat** montre précision, dégâts estimés, critique, PV après le
   coup, risques (contre, DQ) — cliquer la cible confirme, Échap annule.
-- Barre d'équipe avec **portraits** (SVG générés, un « bonhomme » par lutteur), PV et momentum ; bannière de tour ;
-  journal de commentaires.
+- Barre d'équipe avec **vignettes** (bustes pixel générés, un sprite par lutteur), PV et momentum ; bannière de tour
+  façon transition sentai ; journal de commentaires.
+
+## Direction artistique
+
+Le jeu se présente comme une **émission de catch du samedi soir filmée en pixel** : gros contours d'encre, ombres
+portées dures (jamais de flou), aplats saturés, lignes de balayage et vignettage de vieille télé. C'est un clin d'œil
+assumé aux jeux tactiques tokusatsu — sans copier leur palette : ici c'est violet de coulisses, or de ceinture, rouge
+de tapis.
+
+- **Sprites** (`src/ui/sprite.js`) : chaque lutteur est dessiné pixel par pixel sur une grille 32×40, en SVG à arêtes
+  franches (`shape-rendering="crispEdges"`), à partir de sa description `look` (peau, cheveux, tenue, accent,
+  `features`). Deux cadrages sur le même dessin : `full` (corps entier, pions du plateau, défilé de l'écran titre) et
+  `bust` (portrait, cartes et listes). Les silhouettes sont détourées d'un pixel d'encre, les pions respirent
+  (animation d'attente) et regardent l'adversaire (`facing`).
+- **Aucune image externe** : tout est généré à la volée, donc ajouter un lutteur ne demande aucun fichier d'art.
+- **Habillage** : voyant « ON AIR » sur le bandeau de régie, guirlande de loges sur l'écran titre, menu contextuel
+  coiffé d'un clap de cinéma (qui sert de poignée à la feuille d'actions sur mobile), onomatopées à contour épais pour
+  les dégâts, bannière de tour en balayage diagonal.
+- `prefers-reduced-motion` coupe les animations d'ambiance.
 
 ## Hub de promotion (entre les shows)
 
@@ -178,7 +196,9 @@ src/data/    wrestlers.js     roster parodique
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              script.js        évaluation des directives et des scripts (étoiles)
-src/ui/      title.js hub.js match.js cards.js avatar.js tutorial.js dom.js
+src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
+             sprite.js        sprites pixel 32×40 générés en SVG (corps entier / buste)
+             avatar.js        enrobage DOM des sprites (vignettes, pions)
 tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne
 ```
 
@@ -196,4 +216,4 @@ pour l'équilibrage.
 - Rivalités et storylines persistantes (heat entre lutteurs, promos entre les shows).
 - Blessures, moral, contrats en mode Scénarios ; gestion des heels/faces (turns).
 - Managers et interférences (ref bump), matchs à stipulations (No Holds Barred, Last Man Standing).
-- Sprites/animations, sons ; éditeur de lutteurs.
+- Sons et musiques ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.

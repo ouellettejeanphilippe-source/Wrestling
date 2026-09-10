@@ -11,9 +11,11 @@ import { getStats, moveRange } from '../engine/battle.js';
 export const STAT_LABELS = { str: 'FOR', agi: 'AGI', tec: 'TEC', cha: 'CHA', def: 'DEF', mov: 'MOV' };
 const ALIGN = { face: 'Face (gentil)', heel: 'Heel (méchant)', tweener: 'Tweener' };
 
+// « chip » = vignette buste (listes, barres). « big » = carte de casting corps entier.
 export function chip(def, size = '') {
   const d = def.look ? def : WRESTLERS_BY_ID[def.id] || def;
-  return avatar(d, size === 'big' ? 56 : 30, { class: `chip ${size}` });
+  if (size === 'big') return avatar(d, 62, { class: 'chip big', view: 'full' });
+  return avatar(d, 34, { class: `chip ${size}` });
 }
 
 export function wrestlerCard(def, opts = {}) {

@@ -179,7 +179,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
     const cls = `unit team-${u.team}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
     return h('div', { class: cls, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}` },
-      avatar(def, 0, { fill: true, bg: u.team === 'player' ? '#1e3a5f' : '#5a1e1e', stroke: 'transparent' }),
+      h('span', { class: 'unit-shadow' }),
+      avatar(def, 0, { fill: true, view: 'full', bg: 'none', facing: u.team === 'player' ? 1 : -1 }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
@@ -329,7 +330,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const a = ui.action;
     const tgt = t.unit;
     const box = h('div', { class: 'forecast' });
-    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56), h('b', {}, unit.name),
+    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', facing: unit.team === 'player' ? 1 : -1 }), h('b', {}, unit.name),
       h('div', { class: 'fc-hp' }, `PV ${unit.hp}`, after != null ? h('span', { class: after < unit.hp ? 'dn' : 'up' }, ` → ${after}`) : null),
       bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
     let mid = [], afterT = null, afterU = null;
