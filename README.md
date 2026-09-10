@@ -16,6 +16,10 @@ npm test           # tests du moteur (node:test)
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
 
+**En ligne (GitHub Pages)** : chaque push sur `main` déploie le jeu via `.github/workflows/pages.yml`.
+Première fois seulement : dans *Settings → Pages*, mettre *Source* sur **GitHub Actions**. Le jeu est ensuite servi à
+`https://<utilisateur>.github.io/<dépôt>/`.
+
 ## Les deux modes de campagne
 
 | Mode | Vous êtes… | Objectif d'un match | Récompenses |
