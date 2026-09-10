@@ -310,13 +310,21 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
    terrain sous la case — le relief d'un tactical isométrique, sans quitter la 2D. */
 .view-iso .cell.raised {
   --lift: calc(var(--lvl, 0) * var(--cell) * 0.20);
-  transform: translate(calc(-1 * var(--lift)), calc(-1 * var(--lift)));
-  z-index: calc(1 + var(--lvl, 0));
+  /* le vecteur « vers le haut de l'écran », exprimé dans le repère de la grille,
+     tourne avec la caméra : c'est --lx / --ly, posé par la classe de rotation */
+  transform: translate(calc(var(--lx, -1) * var(--lift)), calc(var(--ly, -1) * var(--lift)));
+  /* pas de z-index ici : c'est l'ordre de dessin (algorithme du peintre) qui
+     décide, sinon chaque case surélevée formerait un calque qui masquerait les
+     lutteurs situés derrière elle */
   box-shadow:
-    calc(var(--lift) * 0.5) calc(var(--lift) * 0.5) 0 #3b2f57,
-    var(--lift) var(--lift) 0 #2a2140,
-    calc(var(--lift) + 2px) calc(var(--lift) + 2px) 0 var(--ink);
+    calc(var(--lx, -1) * var(--lift) * -0.5) calc(var(--ly, -1) * var(--lift) * -0.5) 0 #3b2f57,
+    calc(var(--lx, -1) * var(--lift) * -1) calc(var(--ly, -1) * var(--lift) * -1) 0 #2a2140,
+    calc(var(--lx, -1) * (var(--lift) + 2px) * -1) calc(var(--ly, -1) * (var(--lift) + 2px) * -1) 0 var(--ink);
 }
+[data-rot="0"] { --lx: -1; --ly: -1; }
+[data-rot="1"] { --lx: -1; --ly:  1; }
+[data-rot="2"] { --lx:  1; --ly:  1; }
+[data-rot="3"] { --lx:  1; --ly: -1; }
 .view-iso .cell.raised .tile-mark,
 .view-iso .cell.raised .unit { z-index: 3; }
 /* le lutteur monte avec le sol qu'il occupe */
@@ -694,9 +702,11 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   --iso-span: calc((var(--cols, 14) + var(--rows, 10)) * (var(--cell) + 2px));
   --iso-w: calc(var(--iso-span) * 0.7071);
   --iso-h: calc(var(--iso-span) * 0.3536);
-  /* écran = squash ∘ rotation ; l'inverse pour les enfants est rotation⁻¹ ∘ squash⁻¹ */
-  --iso-in: scaleY(0.5) rotate(45deg);
-  --iso-out: rotate(-45deg) scaleY(2);
+  /* écran = squash ∘ rotation ; l'inverse pour les enfants est rotation⁻¹ ∘ squash⁻¹.
+     La caméra tourne par quarts de tour : --rot vaut 0 à 3. */
+  --iso-angle: calc(45deg + var(--rot, 0) * 90deg);
+  --iso-in: scaleY(0.5) rotate(var(--iso-angle));
+  --iso-out: rotate(calc(-1 * var(--iso-angle))) scaleY(2);
 }
 /* le plateau est transformé, donc hors flux : la scène réserve la place du
    losange, plus une marge en haut pour les lutteurs qui dépassent du tapis */

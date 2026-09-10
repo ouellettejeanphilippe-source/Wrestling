@@ -44,6 +44,20 @@ const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.match
 // Vue du plateau : 'iso' = caméra isométrique (losanges, lutteurs debout sur le
 // tapis), 'top' = vue de dessus classique. Le choix est mémorisé.
 const VIEW_KEY = 'ppw.boardView';
+const ROT_KEY = 'ppw.boardRot';
+// Rotation de caméra : quatre quarts de tour, comme dans un tactical faux-3D.
+// Tourner permet de voir derrière une plateforme et de reprendre un angle de tir.
+function boardRot() {
+  try { return (Number(localStorage.getItem(ROT_KEY)) || 0) % 4; } catch { return 0; }
+}
+function setBoardRot(r) { try { localStorage.setItem(ROT_KEY, String(r)); } catch { /* mode privé */ } }
+// Les quatre directions du regard, dans l'ordre des quarts de tour (+x, +y, -x, -y).
+const FACE_ORDER = ['se', 'sw', 'nw', 'ne'];
+// Direction telle qu'elle apparaît À L'ÉCRAN une fois la caméra tournée.
+function screenFacing(facing, rot) {
+  const i = FACE_ORDER.indexOf(facing || 'se');
+  return FACE_ORDER[(i + (i < 0 ? 0 : rot)) % 4] || 'se';
+}
 function boardView() {
   try { return localStorage.getItem(VIEW_KEY) === 'top' ? 'top' : 'iso'; } catch { return 'iso'; }
 }
@@ -66,7 +80,16 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   // La scène porte l'encombrement réel du losange isométrique : c'est elle qui
   // définit la zone de défilement, le plateau étant transformé (donc hors flux).
   const stage = h('div', { class: 'board-stage' }, el.board);
-  const boardWrap = h('div', { class: `board-wrap view-${boardView()}`, style: { '--rows': g.h, '--cols': g.w } }, stage);
+  const boardWrap = h('div', { class: `board-wrap view-${boardView()}`, style: { '--rows': g.h, '--cols': g.w, '--rot': boardRot() } }, stage);
+  boardWrap.dataset.rot = boardRot();
+  function rotateBoard(step) {
+    const next = (boardRot() + step + 4) % 4;
+    setBoardRot(next);
+    boardWrap.style.setProperty('--rot', next);
+    boardWrap.dataset.rot = next;
+    render();
+    fitBoard();
+  }
   function toggleView() {
     const next = boardWrap.classList.contains('view-iso') ? 'top' : 'iso';
     boardWrap.classList.toggle('view-iso', next === 'iso');
@@ -118,6 +141,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
+      boardWrap.classList.contains('view-iso') ? h('button', { class: 'btn small ghost', title: 'Tourner la caméra d’un quart de tour (touche R)', onclick: () => rotateBoard(1) }, '↻') : null,
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
@@ -154,8 +178,18 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
-    for (let y = 0; y < g.h; y++) {
-      for (let x = 0; x < g.w; x++) {
+    // Ordre du peintre : on dessine du fond vers l'avant, sinon une case
+    // surélevée recouvre les lutteurs qui se tiennent derrière elle. La
+    // profondeur écran dépend de l'angle de caméra ; la position dans la
+    // grille, elle, est posée explicitement (sinon l'ordre casserait la mise
+    // en page).
+    const rot = boardRot();
+    const depth = (x, y) => (rot === 0 ? x + y : rot === 1 ? x - y : rot === 2 ? -(x + y) : y - x);
+    const order = [];
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) order.push([x, y]);
+    order.sort((a, b) => depth(a[0], a[1]) - depth(b[0], b[1]));
+    {
+      for (const [x, y] of order) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
         const lvl = heightAt(g, x, y);
@@ -190,6 +224,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           tok.style.setProperty('--lvl', heightAt(g, x, y));
           cell.append(tok);
         }
+        cell.style.gridColumn = String(x + 1);
+        cell.style.gridRow = String(y + 1);
         el.board.append(cell);
       }
     }
@@ -276,7 +312,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${big ? ` · gabarit ${uw}×${uh} cases` : ''}`,
     },
       h('span', { class: 'unit-shadow' }),
-      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: u.facing }),
+      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: screenFacing(u.facing, boardRot()) }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
@@ -435,7 +471,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const a = ui.action;
     const tgt = t.unit;
     const box = h('div', { class: 'forecast' });
-    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', dir: unit.facing }), h('b', {}, unit.name),
+    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', dir: screenFacing(unit.facing, boardRot()) }), h('b', {}, unit.name),
       h('div', { class: 'fc-hp' }, `PV ${unit.hp}`, after != null ? h('span', { class: after < unit.hp ? 'dn' : 'up' }, ` → ${after}`) : null),
       bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
     let mid = [], afterT = null, afterU = null;
@@ -600,6 +636,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     deselect();
   }
   function onKey(e) {
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && boardWrap.classList.contains('view-iso')) { rotateBoard(e.shiftKey ? -1 : 1); return; }
     if (e.key !== 'Escape' || ui.busy) return;
     if (ui.mode === 'target') { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
     else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
