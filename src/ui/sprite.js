@@ -66,8 +66,12 @@ export function spriteSvg(def, opts = {}) {
   const armX = [tx - 4, tx + tw];                  // bras gauche / droit
 
   // ---- jambes & bottes ------------------------------------------------------
-  c.px(11, 30, 4, 6, skin, true);
-  c.px(17, 30, 4, 6, skin, true);
+  c.px(11, 30, 4, 4, skin, true);
+  c.px(17, 30, 4, 4, skin, true);
+  c.px(11, 33, 3, 3, skin, true);                   // mollets
+  c.px(18, 33, 3, 3, skin, true);
+  c.px(14, 30, 1, 6, dark(skin, 0.3));              // intérieur des cuisses
+  c.px(17, 30, 1, 6, dark(skin, 0.3));
   c.px(10, 35, 5, 5, boots, true);
   c.px(17, 35, 5, 5, boots, true);
   c.px(10, 35, 5, 1, light(boots, 0.35));
@@ -78,32 +82,37 @@ export function spriteSvg(def, opts = {}) {
   c.px(tx + 1, 26, tw - 2, 1, light(attire, 0.35));
   if (f.has('singlet')) { c.px(tx + 2, 27, 2, 4, accent); c.px(tx + tw - 4, 27, 2, 4, accent); }
 
-  // ---- torse ----------------------------------------------------------------
+  // ---- torse : épaules larges, taille rentrée (silhouette de catcheur) ------
   const torso = f.has('shirt') || f.has('suit') || f.has('jacket') ? accent : skin;
-  c.px(tx, 17, tw, 10, torso, true);
-  c.px(tx, 17, tw, 1, light(torso, 0.28));
-  c.px(tx, 25, tw, 2, dark(torso, 0.2));
+  const wx = tx + 1, ww = tw - 2;                   // taille, un pixel plus étroite de chaque côté
+  c.px(tx, 17, tw, 7, torso, true);                 // épaules + poitrine
+  c.px(wx, 23, ww, 4, torso, true);                 // taille
+  c.px(tx, 17, tw, 1, light(torso, 0.3));           // lumière sur les trapèzes
+  c.px(tx + 1, 22, tw - 2, 1, dark(torso, 0.18));   // ligne sous les pectoraux
+  c.px(wx, 25, ww, 2, dark(torso, 0.22));
   if (torso === skin) {                             // pectoraux / abdos
-    c.px(tx + 2, 20, tw / 2 - 3, 1, skinDark);
-    c.px(tx + tw / 2 + 2, 20, tw / 2 - 3, 1, skinDark);
-    c.px(15, 22, 2, 4, skinDark);
+    c.px(tx + 2, 19, Math.floor(tw / 2) - 3, 2, light(skin, 0.16));
+    c.px(tx + Math.ceil(tw / 2) + 1, 19, Math.floor(tw / 2) - 3, 2, light(skin, 0.16));
+    c.px(15, 21, 2, 5, skinDark);                   // sillon central
+    c.px(wx + 1, 24, 1, 2, skinDark); c.px(wx + ww - 2, 24, 1, 2, skinDark);
   }
-  if (f.has('singlet')) { c.px(tx + 2, 17, 3, 9, attire); c.px(tx + tw - 5, 17, 3, 9, attire); }
-  if (f.has('vest')) { c.px(tx, 17, 3, 10, '#191723'); c.px(tx + tw - 3, 17, 3, 10, '#191723'); }
-  if (f.has('jacket')) { c.px(tx, 17, 3, 10, dark(accent, 0.35)); c.px(tx + tw - 3, 17, 3, 10, dark(accent, 0.35)); }
+  if (f.has('singlet')) { c.px(tx + 2, 17, 3, 6, attire); c.px(wx + 1, 23, 3, 4, attire); c.px(tx + tw - 5, 17, 3, 6, attire); c.px(wx + ww - 4, 23, 3, 4, attire); }
+  if (f.has('vest')) { c.px(tx, 17, 3, 6, '#191723'); c.px(wx, 23, 3, 4, '#191723'); c.px(tx + tw - 3, 17, 3, 6, '#191723'); c.px(wx + ww - 3, 23, 3, 4, '#191723'); }
+  if (f.has('jacket')) { c.px(tx, 17, 3, 6, dark(accent, 0.35)); c.px(wx, 23, 3, 4, dark(accent, 0.35)); c.px(tx + tw - 3, 17, 3, 6, dark(accent, 0.35)); c.px(wx + ww - 3, 23, 3, 4, dark(accent, 0.35)); }
   if (f.has('suit')) { c.px(15, 17, 2, 6, WHITE); c.px(15, 18, 2, 4, '#c1272d'); }
-  if (f.has('chops')) { c.px(tx + 3, 19, 1, 4, '#e3403a'); c.px(tx + 6, 20, 1, 4, '#e3403a'); c.px(tx + 9, 19, 1, 4, '#e3403a'); }
+  if (f.has('chops')) { c.px(tx + 3, 18, 1, 4, '#e3403a'); c.px(tx + 6, 19, 1, 4, '#e3403a'); c.px(tx + 9, 18, 1, 4, '#e3403a'); }
   if (f.has('chain')) { c.px(14, 18, 4, 1, '#ffd34d'); c.px(13, 19, 1, 1, '#ffd34d'); c.px(18, 19, 1, 1, '#ffd34d'); }
   if (f.has('scarf')) { c.px(tx + 2, 16, tw - 4, 2, accent, true); c.px(tx + tw - 4, 18, 2, 4, accent); }
   if (f.has('choker')) c.px(13, 16, 6, 1, '#191723');
-  if (f.has('belt')) { c.px(tx, 25, tw, 3, '#ffd34d', true); c.px(14, 25, 4, 3, '#f2a03c'); }
+  if (f.has('belt')) { c.px(wx - 1, 25, ww + 2, 3, '#ffd34d', true); c.px(14, 25, 4, 3, '#f2a03c'); }
   if (f.has('bandage')) c.px(tx + 1, 22, 4, 2, '#efe6d8');
 
   // ---- bras -----------------------------------------------------------------
   for (const [i, ax] of armX.entries()) {
-    c.px(ax, 18, 4, 8, skin, true);
-    c.px(ax, 26, 4, 3, skin, true);                 // main
-    c.px(ax + (i ? 0 : 3), 18, 1, 8, skinDark);
+    c.px(ax, 17, 4, 4, skin, true);                 // épaule / biceps
+    c.px(ax + (i ? 0 : 1), 21, 3, 5, skin, true);   // avant-bras
+    c.px(ax + (i ? 0 : 1), 26, 3, 3, skin, true);   // main
+    c.px(ax + (i ? 0 : 3), 17, 1, 4, skinDark);
     if (f.has('tattoo_arms')) { c.px(ax + 1, 20, 2, 1, '#2f4f3a'); c.px(ax + 1, 22, 2, 1, '#2f4f3a'); }
     if (f.has('wristbands')) c.px(ax, 25, 4, 2, accent);
     if (f.has('gloves')) c.px(ax, 25, 4, 4, '#191723');

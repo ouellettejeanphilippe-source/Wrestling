@@ -41,6 +41,14 @@ const CATS = [
 
 const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse), (max-width: 800px)').matches;
 
+// Vue du plateau : 'iso' = caméra isométrique (losanges, lutteurs debout sur le
+// tapis), 'top' = vue de dessus classique. Le choix est mémorisé.
+const VIEW_KEY = 'ppw.boardView';
+function boardView() {
+  try { return localStorage.getItem(VIEW_KEY) === 'top' ? 'top' : 'iso'; } catch { return 'iso'; }
+}
+function setBoardView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch { /* mode privé : tant pis */ } }
+
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
   const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
@@ -52,19 +60,43 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     tileInfo: h('div', { class: 'tile-info' }),
     right: h('aside', { class: 'm-right' }),
     party: h('div', { class: 'partybar' }),
-    log: h('details', { class: 'm-log', open: true }),
+    log: h('details', { class: 'm-log', open: !TOUCH }),
     banner: h('div', { class: 'turn-banner', hidden: true }),
   };
-  const boardWrap = h('div', { class: 'board-wrap' }, el.board, el.popover, el.tileInfo);
-  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, el.top, h('div', { class: 'm-stage' }, h('div', { class: 'm-center' }, boardWrap, el.party, el.log), el.right), el.banner));
+  // La scène porte l'encombrement réel du losange isométrique : c'est elle qui
+  // définit la zone de défilement, le plateau étant transformé (donc hors flux).
+  const stage = h('div', { class: 'board-stage' }, el.board);
+  const boardWrap = h('div', { class: `board-wrap view-${boardView()}`, style: { '--rows': g.h, '--cols': g.w } }, stage);
+  function toggleView() {
+    const next = boardWrap.classList.contains('view-iso') ? 'top' : 'iso';
+    boardWrap.classList.toggle('view-iso', next === 'iso');
+    boardWrap.classList.toggle('view-top', next === 'top');
+    setBoardView(next);
+    render();
+    fitBoard();
+  }
+  // Mise en scène façon tactical console : le plateau occupe tout l'écran et le
+  // HUD flotte par-dessus (coins), pour laisser un maximum de place aux sprites.
+  el.endTurn = h('div', { class: 'hud-endturn' });
+  const scene = h('div', { class: 'm-scene' },
+    boardWrap,
+    h('div', { class: 'hud hud-tl' }, el.top),
+    h('div', { class: 'hud hud-bl' }, el.right, el.tileInfo),
+    h('div', { class: 'hud hud-br' }, el.endTurn, el.party, el.log),
+    el.popover,
+  );
+  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, scene, el.banner));
   document.addEventListener('keydown', onKey);
+  document.body.classList.add('in-match');
+  window.addEventListener('resize', fitBoard);
+  requestAnimationFrame(fitBoard);
   showBanner('🔔 DING DING DING !', 'start');
   render();
   if (!tutorialSeen()) showTutorial(root, {});
 
   // ------------------------------------------------------------ rendu global
   function render() {
-    renderTop(); renderBoard(); renderPopover(); renderRight(); renderParty(); renderLog(); flushEvents();
+    renderTop(); renderBoard(); renderPopover(); renderRight(); renderEndTurn(); renderParty(); renderLog(); flushEvents(); fitBoard();
     if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
   }
 
@@ -80,6 +112,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
+      h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
@@ -127,7 +160,14 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const item = battle.items.find((i) => i.x === x && i.y === y);
         if (item) cell.append(h('span', { class: 'item', title: item.weapon.name }, item.weapon.icon));
         const u = unitAt(battle, x, y);
-        if (u) { const tok = unitToken(u); if (ui.sel === u) tok.classList.add('selected'); if (ui.acting === u) tok.classList.add('acting'); cell.append(tok); }
+        if (u) {
+          const tok = unitToken(u);
+          if (ui.sel === u) tok.classList.add('selected');
+          if (ui.acting === u) tok.classList.add('acting');
+          // en isométrie, un lutteur plus « en avant » (x + y grand) passe devant
+          tok.style.zIndex = 10 + x + y;
+          cell.append(tok);
+        }
         el.board.append(cell);
       }
     }
@@ -233,12 +273,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function placePopover(u) {
     const cell = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`);
     if (!cell) return;
-    const b = el.board.getBoundingClientRect(), c = cell.getBoundingClientRect();
+    const b = boardWrap.getBoundingClientRect(), c = cell.getBoundingClientRect();
     const left = c.right - b.left + 8, top = c.top - b.top - 8;
     const flip = u.x >= g.w - 4;
     el.popover.style.left = flip ? `${c.left - b.left - 8}px` : `${left}px`;
     el.popover.style.transform = flip ? 'translateX(-100%)' : '';
-    el.popover.style.top = `${Math.max(0, Math.min(top, b.height - 260))}px`;
+    el.popover.style.top = `${Math.max(0, Math.min(top, b.height - el.popover.offsetHeight - 8))}px`;
   }
 
   function openCategory(c, list) {
@@ -285,7 +325,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez un de vos lutteurs (plateau ou barre du bas). Survolez un adversaire pour voir sa zone de menace.' : 'Tour adverse…'));
     el.right.append(renderObjectives());
     el.right.append(renderRoutes());
-    if (!battle.result) el.right.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${living(battle, 'player').filter((x) => !x.acted && !x.down).length} à jouer)`));
+  }
+
+  function renderEndTurn() {
+    clear(el.endTurn);
+    if (battle.result) return;
+    const left = living(battle, 'player').filter((x) => !x.acted && !x.down).length;
+    el.endTurn.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${left})`));
   }
 
   function renderRoutes() {
@@ -497,7 +543,34 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
     else if (ui.sel) deselect();
   }
-  function cleanup() { document.removeEventListener('keydown', onKey); document.body.classList.remove('sheet-open'); }
+  function cleanup() {
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('resize', fitBoard);
+    document.body.classList.remove('sheet-open', 'in-match');
+  }
+
+  // Le plateau doit tenir dans la place qui lui reste : on calcule la taille de
+  // case à partir de la boîte disponible, dans les deux dimensions. En iso, le
+  // losange fait (colonnes + rangées) de diagonale, et les lutteurs dépassent
+  // du tapis vers le haut (d'où la marge de 1,5 case).
+  function fitBoard() {
+    // Le plateau se range sous le bandeau du haut et au-dessus des boîtes du bas,
+    // sinon le HUD intercepte les clics des rangées qu'il recouvre.
+    const scene = boardWrap.parentElement;
+    const topH = el.top.offsetHeight || 0;
+    const botH = Math.min(110, Math.round((scene.clientHeight || 0) * 0.14));
+    boardWrap.style.top = `${topH + 6}px`;
+    boardWrap.style.bottom = `${botH}px`;
+    const availW = boardWrap.clientWidth, availH = boardWrap.clientHeight;
+    if (!availW || !availH) return;
+    const iso = boardWrap.classList.contains('view-iso');
+    const h = Math.max(80, availH - 4);
+    const span = g.w + g.h;
+    const cell = iso
+      ? Math.min(availW / (span * 0.7072), h / (span * 0.3536 + 1.5))
+      : Math.min(availW / g.w, h / g.h) - 2;
+    boardWrap.style.setProperty('--cell', `${Math.max(14, Math.min(112, Math.floor(cell)))}px`);
+  }
 
   async function endTurn() {
     if (ui.busy || battle.result || battle.phase !== 'player') return;
