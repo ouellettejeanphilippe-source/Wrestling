@@ -26,7 +26,8 @@ export function createUnit(def, team, x, y, opts = {}) {
     hp: maxHp, maxHp, momentum: opts.momentum ?? 0, grit, maxGrit: grit,
     stats, cls: def.cls, spec: def.spec, gimmick: def.gimmick, alignment: def.alignment,
     moves: movesFor(def), weight: def.weight || 'heavy', color: def.color, initials: def.initials,
-    // gabarit sur la grille : les colosses tiennent sur 2×2
+    // gabarit sur la grille : `size` accepte 2, [3, 2] ou { w, h }.
+    // Par défaut les colosses tiennent sur 2×2, les autres sur une case.
     size: def.size || (def.weight === 'super' ? 2 : 1),
     statuses: {}, down: false, downTurns: 0, acted: false, moved: false, movedTiles: 0,
     eliminated: false, elimReason: null, weapon: null, outsideCount: 0, climb: 0, legal: true,

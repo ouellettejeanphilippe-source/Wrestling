@@ -56,6 +56,17 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 *Meilleure machine à matchs* (combo), *La Liste*, *Très gentil très méchant* (malédiction), *Laisse-moi entrer*
 (transformation), *Inamovible*, *Le Boss Final*… (30 lutteurs + jobbers, voir `src/data/wrestlers.js`).
 
+## Le plateau et les gabarits
+
+L'aréna fait **20×14 cases**, le ring 10×6 (cordes comprises). Chaque lutteur occupe un **rectangle** de cases,
+ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 3, h: 2 }`. Par défaut, un colosse
+(`weight: 'super'`, comme Andrei le Géant) tient sur 2×2 et tout le monde sur une case.
+
+- Le gabarit complet doit tenir pour se déplacer : terrain praticable, pas d'adversaire, et le coût payé est celui
+  de la case la plus chère (un colosse à cheval sur les cordes paie le prix des cordes).
+- Les distances sont calculées entre gabarits : « à portée 1 » veut dire que les deux rectangles se touchent.
+- Un colosse ne rentre pas partout : points d'apparition et projections vérifient qu'il tient.
+
 ## Règles de match
 
 - **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les cordes et les coins coûtent
@@ -77,6 +88,20 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 
 - **Étourdissement** : un coup qui étourdit dure jusqu'à votre tour suivant, ce qui permet des enchaînements
   (doigt dans l'œil puis Elbow Drop, coup de pied retourné puis finisher, étourdir puis jeter par-dessus la corde).
+
+## Stipulations
+
+Les règles transversales d'un type de match : `dq` (disqualification), `countOut` (compte à l'extérieur),
+`tables` (la table des commentateurs peut être brisée), `weapons` (armes déjà au sol), `underRing` (armes
+disponibles **sous le ring**), `tenCount` (compte de dix sur un lutteur au sol).
+
+- **La table des commentateurs ne se brise que si la stipulation l'autorise** (TLC, hardcore, street fight, Hell in
+  a Cell). Ailleurs on s'écrase dessus — ça fait mal et ça fait du bruit — mais elle tient.
+- **Les armes se cherchent sous le ring** : sortir, se placer contre le tablier, et fouiller. C'est légal ; s'en
+  servir devant l'arbitre ne l'est pas (risque de DQ dans les matchs avec règles).
+- Stipulations disponibles : match simple, par équipes, hardcore, **street fight (sans DQ)**, **Last Man Standing**
+  (compte de dix), **soumission uniquement**, bataille royale, échelle, **TLC**, cage, **Hell in a Cell**,
+  confrontation, survie.
 
 ## Les trois actes d'un match
 

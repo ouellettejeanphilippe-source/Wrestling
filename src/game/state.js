@@ -111,6 +111,6 @@ export function exhibitionMatch(type, playerIds, enemyIds, seed) {
   return {
     id: 'exhibition', title: `Exhibition — ${rules.name}`, type, teamSize: playerIds.length, enemies: enemyIds, directives: [], reward: { money: 0, fans: 0 },
     desc: rules.desc, mode: 'kayfabe', seed, turns: 8,
-    reinforcements: type === 'survival' ? [{ turn: 3, enemies: ['invader'], spawns: [[0, 4]] }, { turn: 6, enemies: ['invader'], spawns: [[0, 5]] }] : undefined,
+    reinforcements: type === 'survival' ? [{ turn: 3, enemies: ['invader'], spawns: [[0, 6]] }, { turn: 6, enemies: ['invader'], spawns: [[0, 7]] }] : undefined,
   };
 }

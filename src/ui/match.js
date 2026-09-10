@@ -5,7 +5,7 @@ import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
-import { TERRAIN, tileAt, key, manhattan } from '../engine/grid.js';
+import { TERRAIN, tileAt, key, manhattan, sizeOf } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
@@ -218,9 +218,15 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (battle.rules.tag && u.legal) icons.push('⭐');
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
-    const size = u.size || 1;
-    const cls = `unit team-${u.team}${size > 1 ? ` size-${size}` : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
-    return h('div', { class: cls, 'data-size': size, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${size > 1 ? ' · colosse (2×2 cases)' : ''}` },
+    const { w: uw, h: uh } = sizeOf(u);
+    const big = uw > 1 || uh > 1;
+    const cls = `unit team-${u.team}${big ? ' big' : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
+    return h('div', {
+      class: cls,
+      // le gabarit pilote la taille et le recentrage du sprite (voir styles.css)
+      style: big ? { '--uw': uw, '--uh': uh } : {},
+      title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${big ? ` · gabarit ${uw}×${uh} cases` : ''}`,
+    },
       h('span', { class: 'unit-shadow' }),
       avatar(def, 0, { fill: true, view: 'full', bg: 'none', facing: u.team === 'player' ? 1 : -1 }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),

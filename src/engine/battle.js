@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, unitSize, occupies } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -13,12 +13,12 @@ import { planUnit } from './ai.js';
 import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
-  standard: { player: [[5, 4], [5, 5], [4, 4], [4, 5], [6, 3], [6, 6]], enemy: [[8, 4], [8, 5], [9, 4], [9, 5], [7, 6], [7, 3]] },
-  ladder: { player: [[4, 4], [4, 5], [5, 3], [5, 6]], enemy: [[9, 4], [9, 5], [8, 3], [8, 6]] },
-  tag: { player: [[5, 4], [3, 5], [3, 4]], enemy: [[8, 5], [10, 4], [10, 5]] },
-  invasion: { enemy: [[1, 4], [1, 5], [1, 3], [1, 6], [0, 4]] },
+  standard: { player: [[6, 6], [6, 7], [5, 6], [5, 7], [7, 5], [7, 8]], enemy: [[13, 6], [13, 7], [14, 6], [14, 7], [12, 5], [12, 8]] },
+  ladder: { player: [[6, 5], [6, 8], [5, 6], [5, 7]], enemy: [[13, 5], [13, 8], [14, 6], [14, 7]] },
+  tag: { player: [[6, 6], [4, 8], [4, 7]], enemy: [[13, 6], [15, 7], [15, 6]] },
+  invasion: { enemy: [[1, 6], [1, 7], [1, 5], [1, 8], [0, 6]] },
 };
-const WEAPON_SPOTS = [[2, 4], [11, 5], [2, 5], [11, 4], [1, 2], [12, 7], [1, 7], [12, 2]];
+const WEAPON_SPOTS = [[3, 6], [16, 7], [3, 7], [16, 6], [2, 3], [17, 11], [2, 11], [17, 3]];
 const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
 
@@ -84,6 +84,8 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
 
+  // Armes cachées sous le ring : il faudra aller les chercher au bord du tablier.
+  battle.underRing = rules.underRing ?? 0;
   const nWeapons = rules.weapons || 0;
   WEAPON_SPOTS.filter(([x, y]) => tileAt(grid, x, y) === 'floor').slice(0, nWeapons).forEach(([x, y], i) => {
     battle.items.push({ x, y, weapon: { ...WEAPONS[WEAPON_ORDER[i % WEAPON_ORDER.length]] } });
@@ -227,6 +229,17 @@ export function listActions(battle, unit, pos = null) {
   }
   const item = battle.items.find((i) => i.x === p.x && i.y === p.y);
   if (item && !unit.weapon) actions.push({ id: 'pickup', name: `${item.weapon.icon} Ramasser : ${item.weapon.name}`, tier: 'base', type: 'pickup', desc: `+${item.weapon.power} dégâts, ${item.weapon.uses} utilisations.`, targets: [{ self: true }], ok: true });
+  // Sous le ring : accessible depuis l'extérieur, au bord du tablier.
+  if (battle.underRing > 0 && !unit.weapon) {
+    const apron = isOutside(g, p.x, p.y) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => ['rope', 'turnbuckle'].includes(tileAt(g, p.x + dx, p.y + dy)));
+    actions.push({
+      id: 'scavenge', name: '🔦 Chercher sous le ring', tier: 'base', type: 'scavenge',
+      desc: battle.rules.dq
+        ? 'Sortez une arme de sous le tablier. La chercher est légal ; s’en servir devant l’arbitre, non.'
+        : 'Sortez une arme de sous le tablier. Tout est légal ici.',
+      targets: [{ self: true }], ok: apron, reason: apron ? null : 'Il faut être à l’extérieur, contre le tablier du ring',
+    });
+  }
   if (rules.tag && unit.legal) {
     const partners = allies.filter((a) => !a.legal && !a.down && manhattan(p, a) === 1).map((u) => ({ unit: u }));
     actions.push({ id: 'tag', name: '🤝 Tag !', tier: 'base', type: 'tag', desc: 'Passe le relais à un partenaire adjacent : il devient légal, soigne 15 % et gagne 30 momentum.', targets: partners, ok: partners.length > 0, reason: 'Partenaire non adjacent' });
@@ -277,6 +290,17 @@ export function executeAction(battle, unit, actionId, target = null) {
     case 'weapon': {
       result = resolveAttack(battle, unit, tgt, a.move);
       if (unit.weapon) { unit.weapon.uses -= 1; if (unit.weapon.uses <= 0) { log(battle, `${unit.weapon.name} de ${unit.name} se brise.`); unit.weapon = null; } }
+      break;
+    }
+    case 'scavenge': {
+      if (battle.underRing > 0) {
+        battle.underRing--;
+        const pool = WEAPON_ORDER.filter((w) => WEAPONS[w]);
+        const pick = pool[Math.floor(battle.rng.next() * pool.length)] || 'chair';
+        unit.weapon = { ...WEAPONS[pick] };
+        addHeat(battle, 8);
+        log(battle, `🔦 ${unit.name} plonge sous le ring et en ressort ${unit.weapon.name} ! (${battle.underRing} objet(s) restant(s))`, 'big');
+      }
       break;
     }
     case 'pickup': {
@@ -612,10 +636,11 @@ function irishWhip(battle, unit, target, move) {
 }
 
 const footprintAt = (unit, x, y) => {
-  const s = unitSize(unit), out = [];
-  for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) out.push({ x: x + dx, y: y + dy });
+  const { w, h } = sizeOf(unit), out = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push({ x: x + dx, y: y + dy });
   return out;
 };
+const isBig = (unit) => { const { w, h } = sizeOf(unit); return w > 1 || h > 1; };
 
 export function pushUnit(battle, target, dx, dy, dist, source) {
   const g = battle.grid;
@@ -629,7 +654,7 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
     // pour un colosse, c'est tout le gabarit qui doit tenir sur la case d'arrivée
     let occ = null;
     for (const cell of footprintAt(target, nx, ny)) { occ = unitAt(battle, cell.x, cell.y); if (occ && occ !== target) break; occ = null; }
-    if (!occ && unitSize(target) > 1 && !fits(g, battle.units, target, nx, ny)) {
+    if (!occ && isBig(target) && !fits(g, battle.units, target, nx, ny)) {
       log(battle, `${target.name} est trop massif pour passer par là.`);
       break;
     }
@@ -641,6 +666,15 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
     }
     if (!t.passable) {
       if (t.hazard) {
+        if (t.breakable && !battle.rules.tables) {
+          // La table des commentateurs n'est pas au menu ce soir : on s'écrase
+          // dessus (ça fait mal, ça fait du bruit) mais elle tient.
+          log(battle, `${target.name} s’écrase sur la table des commentateurs — elle tient bon ! (pas de tables dans ce match)`);
+          addHeat(battle, 6);
+          credit();
+          applyDamage(battle, target, 10, source, { move: { type: 'hazard' } });
+          break;
+        }
         if (t.breakable) {
           setTile(g, nx, ny, 'debris'); battle.stats.tables++; addHeat(battle, 25);
           log(battle, `💥 ${target.name} PASSE À TRAVERS LA TABLE !!!`, 'big');
@@ -729,8 +763,15 @@ export function startPhase(battle, team) {
   for (const u of living(battle, team)) {
     u.acted = false; u.moved = false; u.movedTiles = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
-      if (u.downTurns === 0) { u.downTurns = 1; u.acted = true; log(battle, `${u.name} est toujours au sol…`); }
-      else standUp(battle, u);
+      if (u.downTurns === 0) {
+        u.downTurns = 1; u.acted = true;
+        log(battle, battle.rules.tenCount ? `🔟 L’arbitre compte sur ${u.name}… un, deux, trois…` : `${u.name} est toujours au sol…`);
+      } else if (battle.rules.tenCount) {
+        // Last Man Standing : deux tours au sol = le compte de dix va au bout.
+        log(battle, `🔟 …HUIT ! NEUF ! DIX ! ${u.name} n’a pas répondu au compte.`, 'big');
+        eliminate(battle, u, 'stoppage');
+        continue;
+      } else standUp(battle, u);
     }
     if (battle.rules.countOut > 0) {
       if (isOutside(battle.grid, u.x, u.y)) {

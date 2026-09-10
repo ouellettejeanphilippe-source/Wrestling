@@ -44,6 +44,9 @@ function scoreAction(battle, unit, pos, a, tg) {
     case 'taunt': return unit.momentum >= 100 ? 0 : 12 + (100 - unit.momentum) * 0.12 + ((a.move && a.move.effects && a.move.effects.heat) || 0) * 0.5;
     case 'wait': return 1;
     case 'pickup': return rules.dq ? 12 : 70;
+    // Aller fouiller sous le ring : intéressant quand les armes sont légales,
+    // et seulement si on n'est pas en train de se faire compter à l'extérieur.
+    case 'scavenge': return rules.dq ? 6 : rules.countOut > 0 ? 10 : 55;
     case 'special': {
       if (a.id === 'whip') return scoreWhip(battle, unit, pos, tg.unit);
       return tg.unit.momentum >= 50 ? 45 : 5;

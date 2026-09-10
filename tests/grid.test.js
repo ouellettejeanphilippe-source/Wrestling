@@ -4,35 +4,36 @@ import { buildArena, tileAt, reachable, isOutside, TERRAIN } from '../src/engine
 
 test('l’aréna standard a un ring entouré de cordes et de coins', () => {
   const g = buildArena('standard');
-  assert.equal(tileAt(g, 3, 2), 'turnbuckle');
-  assert.equal(tileAt(g, 10, 7), 'turnbuckle');
-  assert.equal(tileAt(g, 5, 2), 'rope');
-  assert.equal(tileAt(g, 5, 4), 'ring');
-  assert.equal(tileAt(g, 12, 4), 'table');
-  assert.equal(tileAt(g, 0, 3), 'ramp');
-  assert.ok(isOutside(g, 1, 4));
-  assert.ok(!isOutside(g, 5, 4));
+  assert.equal(g.w, 20); assert.equal(g.h, 14);
+  assert.equal(tileAt(g, 4, 3), 'turnbuckle');
+  assert.equal(tileAt(g, 15, 10), 'turnbuckle');
+  assert.equal(tileAt(g, 8, 3), 'rope');
+  assert.equal(tileAt(g, 8, 6), 'ring');
+  assert.equal(tileAt(g, 18, 7), 'table');
+  assert.equal(tileAt(g, 0, 5), 'ramp');
+  assert.ok(isOutside(g, 2, 6));
+  assert.ok(!isOutside(g, 8, 6));
 });
 
 test('la cage entoure le ring et le reste est vide', () => {
   const g = buildArena('cage');
-  assert.equal(tileAt(g, 2, 4), 'cage');
+  assert.equal(tileAt(g, 2, 6), 'cage');
   assert.equal(tileAt(g, 0, 0), 'void');
-  assert.equal(tileAt(g, 5, 4), 'ring');
+  assert.equal(tileAt(g, 8, 6), 'ring');
   assert.ok(!TERRAIN.cage.passable);
 });
 
 test('les cordes coûtent plus cher et les ennemis bloquent le passage', () => {
   const g = buildArena('standard');
-  const me = { x: 5, y: 4, team: 'player', flags: {} };
-  const enemy = { x: 6, y: 4, team: 'enemy' };
+  const me = { x: 6, y: 6, team: 'player', flags: {} };
+  const enemy = { x: 7, y: 6, team: 'enemy' };
   const r = reachable(g, [me, enemy], me, 2);
-  assert.ok(!r.has('7,4'), 'ne peut pas traverser un ennemi en ligne droite avec 2 de mouvement');
-  assert.ok(!r.has('6,4'), 'la case de l’ennemi est inaccessible');
-  assert.ok(r.has('4,3'));
-  const r2 = reachable(g, [me], { x: 4, y: 4, team: 'player', flags: {} }, 2);
-  assert.equal(r2.get('3,4').cost, 2, 'entrer dans les cordes coûte 2');
-  assert.ok(!r2.has('2,4'), 'sortir du ring en un tour de 2 MOV est impossible');
+  assert.ok(!r.has('8,6'), 'ne peut pas traverser un ennemi en ligne droite avec 2 de mouvement');
+  assert.ok(!r.has('7,6'), 'la case de l’ennemi est inaccessible');
+  assert.ok(r.has('6,5'));
+  const r2 = reachable(g, [me], { x: 5, y: 6, team: 'player', flags: {} }, 2);
+  assert.equal(r2.get('4,6').cost, 2, 'entrer dans les cordes coûte 2');
+  assert.ok(!r2.has('3,6'), 'sortir du ring en un tour de 2 MOV est impossible');
 });
 
 // --------------------------------------------------------------- gabarits 2×2
