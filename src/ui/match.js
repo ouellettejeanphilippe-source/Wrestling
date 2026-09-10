@@ -146,7 +146,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       for (let x = 0; x < g.w; x++) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
-        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
+        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
         else if (atk && atk.has(k)) cell.classList.add('atk');
@@ -160,6 +160,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const item = battle.items.find((i) => i.x === x && i.y === y);
         if (item) cell.append(h('span', { class: 'item', title: item.weapon.name }, item.weapon.icon));
         const u = unitAt(battle, x, y);
+        if (u) {
+          // marquage au sol aux couleurs de l'équipe : posé sur la case, donc
+          // parfaitement aligné sur le losange (c'est le repère le plus lisible)
+          const mark = h('span', { class: `tile-mark team-${u.team}${ui.sel === u ? ' sel' : ''}${u.acted && u.team === 'player' ? ' acted' : ''}` });
+          cell.append(mark);
+        }
         if (u && (u.x !== x || u.y !== y)) cell.classList.add('unit-body');   // reste du gabarit
         if (u && u.x === x && u.y === y) {
           const tok = unitToken(u);
@@ -171,6 +177,21 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         }
         el.board.append(cell);
       }
+    }
+    // Marquage au centre du tapis : hors du flux de la grille (sinon il décalerait
+    // toutes les cases) et peint après elles, mais sous les lutteurs.
+    const ring = g.ring;
+    if (ring) {
+      const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
+      el.board.append(h('div', {
+        class: 'ring-logo',
+        style: {
+          left: `calc(${cx - 2} * (var(--cell) + 2px))`,
+          top: `calc(${cy - 1} * (var(--cell) + 2px))`,
+          width: `calc(4 * (var(--cell) + 2px))`,
+          height: `calc(2 * (var(--cell) + 2px))`,
+        },
+      }, h('span', {}, 'PPW')));
     }
   }
 

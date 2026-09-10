@@ -95,36 +95,37 @@ export function isAdjacentToTerrain(g, x, y, type) {
   return neighbors(g, x, y).some(([nx, ny]) => tileAt(g, nx, ny) === type);
 }
 
-// Construit une aréna 20×14. Le ring occupe x 4..15 / y 3..10 (cordes incluses),
-// soit un tapis de 10×6 : de la place pour manœuvrer, et pour les gabarits qui
-// tiennent sur plusieurs cases sans boucher tout le ring.
+// Construit une aréna 20×16. Le ring est CARRÉ, comme un vrai : 10×10 cordes
+// comprises, soit un tapis de 8×8. Vu en isométrie il se lit comme un losange
+// parfait. Autour, il reste de la place pour le plancher, la rampe d'entrée,
+// les marches et la table des commentateurs.
 export function buildArena(kind = 'standard') {
-  const w = 20, h = 14;
+  const w = 20, h = 16;
   const g = createGrid(w, h, 'floor');
   g.arena = kind;
-  g.ring = { x0: 5, y0: 4, x1: 14, y1: 9, rx0: 4, ry0: 3, rx1: 15, ry1: 10 };
-  for (let x = 4; x <= 15; x++) {
-    for (let y = 3; y <= 10; y++) {
-      const ex = x === 4 || x === 15, ey = y === 3 || y === 10;
+  g.ring = { x0: 6, y0: 4, x1: 13, y1: 11, rx0: 5, ry0: 3, rx1: 14, ry1: 12 };
+  for (let x = 5; x <= 14; x++) {
+    for (let y = 3; y <= 12; y++) {
+      const ex = x === 5 || x === 14, ey = y === 3 || y === 12;
       setTile(g, x, y, ex && ey ? 'turnbuckle' : ex || ey ? 'rope' : 'ring');
     }
   }
   if (kind === 'cage') {
     for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) {
-      const inCage = x >= 2 && x <= 17 && y >= 1 && y <= 12;
-      const wall = inCage && (x === 2 || x === 17 || y === 1 || y === 12);
+      const inCage = x >= 3 && x <= 16 && y >= 1 && y <= 14;
+      const wall = inCage && (x === 3 || x === 16 || y === 1 || y === 14);
       if (!inCage) setTile(g, x, y, 'void');
       else if (wall) setTile(g, x, y, 'cage');
     }
     return g;
   }
   for (let y = 0; y < h; y++) setTile(g, 0, y, 'ramp');
-  for (let x = 1; x < w; x++) { setTile(g, x, 0, 'barricade'); setTile(g, x, 13, 'barricade'); }
+  for (let x = 1; x < w; x++) { setTile(g, x, 0, 'barricade'); setTile(g, x, 15, 'barricade'); }
   // table des commentateurs : trois places, côté cour
-  for (let y = 6; y <= 8; y++) setTile(g, 18, y, 'table');
-  setTile(g, 3, 11, 'steps'); setTile(g, 16, 2, 'steps');
-  if (kind === 'hardcore') { setTile(g, 3, 2, 'table'); setTile(g, 16, 11, 'table'); }
-  if (kind === 'ladder') setTile(g, 9, 6, 'ladder');
+  for (let y = 7; y <= 9; y++) setTile(g, 17, y, 'table');
+  setTile(g, 4, 13, 'steps'); setTile(g, 15, 2, 'steps');
+  if (kind === 'hardcore') { setTile(g, 3, 2, 'table'); setTile(g, 16, 13, 'table'); }
+  if (kind === 'ladder') setTile(g, 9, 7, 'ladder');
   return g;
 }
 

@@ -271,22 +271,44 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 
 /* ---------------- plateau : le ring vu du dessus */
 .board {
-  display: grid; gap: 2px; background: var(--ink); padding: 6px;
+  display: grid; gap: 2px; background: var(--ink); padding: 6px; position: relative;
   border: 3px solid var(--ink); box-shadow: var(--pop); width: max-content; max-width: 100%;
 }
 .cell { width: var(--cell); height: var(--cell); position: relative; display: flex; align-items: center; justify-content: center; font-size: calc(var(--cell) * 0.42); }
-.t-floor { background: #3b3350; background-image: repeating-linear-gradient(45deg, #ffffff06 0 8px, transparent 8px 16px); }
-.t-ramp { background: #7d2a55; background-image: repeating-linear-gradient(90deg, #ffffff14 0 3px, transparent 3px 9px), linear-gradient(180deg, #a53a72, #7d2a55); }
-.t-ring { background: var(--canvas); background-image: repeating-linear-gradient(90deg, #00000010 0 6px, transparent 6px 12px); }
+/* Lisibilité avant tout : chaque type de sol est un aplat franc, et un damier
+   discret (une case sur deux) permet de COMPTER les cases d'un coup d'œil —
+   c'est ce qui manque le plus sur un tapis uni vu en biais. */
+.cell[data-p="1"]::before { content: ''; position: absolute; inset: 0; background: #00000018; pointer-events: none; }
+.t-ring[data-p="1"]::before { background: #6b4a2c1f; }
+.t-floor { background: #3a3450; }
+.t-floor[data-p="1"]::before { background: #ffffff0a; }
+.t-ramp { background: #8e3160; }
+.t-ramp[data-p="1"]::before { background: #ffffff12; }
+.t-ring { background: var(--canvas); }
 .t-ladder { background: var(--canvas); box-shadow: inset 0 0 0 4px var(--gold); }
-.t-rope { background: linear-gradient(180deg, var(--canvas) 0 32%, var(--red) 32% 46%, var(--canvas) 46% 60%, var(--red) 60% 74%, var(--canvas) 74% 100%); }
-.t-turnbuckle { background: var(--red); background-image: radial-gradient(circle at 50% 50%, var(--gold) 0 30%, transparent 32%); }
-.t-table { background: #8a5a2b; background-image: repeating-linear-gradient(0deg, #00000022 0 5px, transparent 5px 10px); }
-.t-debris { background: #4a2f16; background-image: repeating-linear-gradient(45deg, #00000044 0 3px, transparent 3px 6px); }
-.t-barricade { background: repeating-linear-gradient(90deg, #6d6a8c 0 4px, #35314d 4px 8px); }
-.t-steps { background: linear-gradient(180deg, #9aa3b8 0 33%, #7b839c 33% 66%, #5e6478 66% 100%); }
+/* cordes : deux câbles épais bien contrastés sur le tablier */
+.t-rope {
+  background:
+    linear-gradient(180deg, transparent 0 26%, #b3232f 26% 40%, transparent 40% 58%, #b3232f 58% 72%, transparent 72% 100%),
+    linear-gradient(180deg, #cbbb99 0 22%, var(--canvas) 22% 100%);
+}
+/* coin : le poteau et son coussin, en gros */
+.t-turnbuckle { background: #8d1f28; box-shadow: inset 0 0 0 3px var(--ink); }
+.t-turnbuckle::after { background: radial-gradient(circle at 50% 50%, var(--gold) 0 34%, #e0a92a 34% 46%, transparent 48%); }
+.t-table { background: #8a5a2b; box-shadow: inset 0 0 0 3px #5b3717; }
+.t-debris { background: #4a2f16; background-image: repeating-linear-gradient(45deg, #00000044 0 4px, transparent 4px 8px); }
+.t-barricade { background: #4a4768; box-shadow: inset 0 0 0 3px #2a2740; }
+.t-steps { background: #8892a8; box-shadow: inset 0 0 0 3px #5e6478; }
 .t-cage { background: repeating-linear-gradient(45deg, #9aa3b8 0 3px, #4b5066 3px 6px); }
 .t-void { background: transparent; }
+.t-void::before { display: none; }
+
+/* logo au centre du tapis : un repère fixe pour se situer */
+.ring-logo {
+  position: absolute; z-index: 0; display: flex; align-items: center; justify-content: center;
+  pointer-events: none; color: #0000003d; font-family: var(--display);
+  font-size: calc(var(--cell) * 0.7); letter-spacing: 0.08em;
+}
 .cell::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
 .cell.reach::after { background: #3fa9f544; box-shadow: inset 0 0 0 3px var(--blue); }
 .cell.reach { cursor: pointer; }
@@ -302,7 +324,18 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 /* ---------------- pions : sprites plantés sur le tapis */
 .unit { position: absolute; inset: -34% -6% 0; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; z-index: 2; transition: transform 0.1s steps(2); }
 .unit .avatar-wrap { width: 100%; height: 100%; filter: drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)); animation: idle 1.1s steps(2) infinite; }
-.unit-shadow { position: absolute; bottom: 4%; left: 18%; right: 18%; height: 12%; background: #00000066; border-radius: 50%; z-index: 0; }
+.unit-shadow { position: absolute; bottom: 4%; left: 20%; right: 20%; height: 10%; background: #00000055; border-radius: 50%; z-index: 0; }
+/* Repère d'équipe peint sur la case : posé dans le plan du tapis, il épouse le
+   losange et dit d'un coup d'œil à qui appartient le lutteur et où il se tient. */
+.tile-mark {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--team, var(--blue));
+  background: color-mix(in srgb, var(--team, var(--blue)) 22%, transparent);
+}
+.tile-mark.team-player { --team: var(--blue); }
+.tile-mark.team-enemy { --team: var(--red); }
+.tile-mark.sel { --team: var(--gold); box-shadow: inset 0 0 0 4px var(--gold); }
+.tile-mark.acted { opacity: 0.4; }
 @keyframes idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%); } }
 .unit.team-player .avatar-wrap { filter: drop-shadow(2px 0 0 var(--blue)) drop-shadow(-2px 0 0 var(--blue)) drop-shadow(0 -2px 0 var(--blue)); }
 .unit.team-enemy .avatar-wrap { filter: drop-shadow(2px 0 0 var(--red)) drop-shadow(-2px 0 0 var(--red)) drop-shadow(0 -2px 0 var(--red)); }
@@ -650,7 +683,11 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .view-iso .unit.selected { transform: var(--iso-out) scale(1.08); }
 .view-iso .unit.down { transform: var(--iso-out) rotate(74deg) scale(0.9); }
 .view-iso .unit.down .avatar-wrap { transform: none; }
-.view-iso .unit-shadow { bottom: 26%; left: 22%; right: 22%; height: 10%; transform: var(--iso-in); }
+.view-iso .unit-shadow { bottom: 26%; left: 24%; right: 24%; height: 9%; transform: var(--iso-in); }
+.view-iso .unit-marker {
+  bottom: calc(30% - var(--cell) * 0.06); left: 2%; right: 2%; height: 34%;
+  transform: var(--iso-in); transform-origin: 50% 100%;
+}
 
 .view-iso .float { animation-name: floatUpIso; transform-origin: 50% 100%; }
 @keyframes floatUpIso {

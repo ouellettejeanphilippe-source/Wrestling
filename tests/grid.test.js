@@ -4,60 +4,62 @@ import { buildArena, tileAt, reachable, isOutside, TERRAIN } from '../src/engine
 
 test('l’aréna standard a un ring entouré de cordes et de coins', () => {
   const g = buildArena('standard');
-  assert.equal(g.w, 20); assert.equal(g.h, 14);
-  assert.equal(tileAt(g, 4, 3), 'turnbuckle');
-  assert.equal(tileAt(g, 15, 10), 'turnbuckle');
-  assert.equal(tileAt(g, 8, 3), 'rope');
-  assert.equal(tileAt(g, 8, 6), 'ring');
-  assert.equal(tileAt(g, 18, 7), 'table');
+  assert.equal(g.w, 20); assert.equal(g.h, 16);
+  // le ring est carré : 10×10 cordes comprises
+  assert.equal(g.ring.rx1 - g.ring.rx0, g.ring.ry1 - g.ring.ry0);
+  assert.equal(tileAt(g, 5, 3), 'turnbuckle');
+  assert.equal(tileAt(g, 14, 12), 'turnbuckle');
+  assert.equal(tileAt(g, 9, 3), 'rope');
+  assert.equal(tileAt(g, 9, 7), 'ring');
+  assert.equal(tileAt(g, 17, 8), 'table');
   assert.equal(tileAt(g, 0, 5), 'ramp');
-  assert.ok(isOutside(g, 2, 6));
-  assert.ok(!isOutside(g, 8, 6));
+  assert.ok(isOutside(g, 2, 7));
+  assert.ok(!isOutside(g, 9, 7));
 });
 
 test('la cage entoure le ring et le reste est vide', () => {
   const g = buildArena('cage');
-  assert.equal(tileAt(g, 2, 6), 'cage');
+  assert.equal(tileAt(g, 3, 7), 'cage');
   assert.equal(tileAt(g, 0, 0), 'void');
-  assert.equal(tileAt(g, 8, 6), 'ring');
+  assert.equal(tileAt(g, 9, 7), 'ring');
   assert.ok(!TERRAIN.cage.passable);
 });
 
 test('les cordes coûtent plus cher et les ennemis bloquent le passage', () => {
   const g = buildArena('standard');
-  const me = { x: 6, y: 6, team: 'player', flags: {} };
-  const enemy = { x: 7, y: 6, team: 'enemy' };
+  const me = { x: 7, y: 7, team: 'player', flags: {} };
+  const enemy = { x: 8, y: 7, team: 'enemy' };
   const r = reachable(g, [me, enemy], me, 2);
-  assert.ok(!r.has('8,6'), 'ne peut pas traverser un ennemi en ligne droite avec 2 de mouvement');
-  assert.ok(!r.has('7,6'), 'la case de l’ennemi est inaccessible');
-  assert.ok(r.has('6,5'));
-  const r2 = reachable(g, [me], { x: 5, y: 6, team: 'player', flags: {} }, 2);
-  assert.equal(r2.get('4,6').cost, 2, 'entrer dans les cordes coûte 2');
-  assert.ok(!r2.has('3,6'), 'sortir du ring en un tour de 2 MOV est impossible');
+  assert.ok(!r.has('9,7'), 'ne peut pas traverser un ennemi en ligne droite avec 2 de mouvement');
+  assert.ok(!r.has('8,7'), 'la case de l’ennemi est inaccessible');
+  assert.ok(r.has('7,6'));
+  const r2 = reachable(g, [me], { x: 6, y: 7, team: 'player', flags: {} }, 2);
+  assert.equal(r2.get('5,7').cost, 2, 'entrer dans les cordes coûte 2');
+  assert.ok(!r2.has('4,7'), 'sortir du ring en un tour de 2 MOV est impossible');
 });
 
 // --------------------------------------------------------------- gabarits 2×2
 test('gabarit 2×2 : occupation, distance et déplacement', async () => {
   const { buildArena, manhattan, occupies, fits, reachable, key } = await import('../src/engine/grid.js');
   const g = buildArena('standard');
-  const geant = { x: 4, y: 3, size: 2, team: 'player', flags: {} };
-  const petit = { x: 6, y: 3, size: 1, team: 'enemy', flags: {} };
+  const geant = { x: 6, y: 5, size: 2, team: 'player', flags: {} };
+  const petit = { x: 8, y: 5, size: 1, team: 'enemy', flags: {} };
 
   // le colosse couvre bien ses quatre cases
-  assert.ok(occupies(geant, 4, 3) && occupies(geant, 5, 4) && !occupies(geant, 6, 3));
+  assert.ok(occupies(geant, 6, 5) && occupies(geant, 7, 6) && !occupies(geant, 8, 5));
   // son gabarit touche le petit : corps à corps malgré des ancres à 2 cases
   assert.equal(manhattan(geant, petit), 1);
   assert.equal(manhattan(petit, geant), 1);
 
   // il ne rentre pas là où une case du gabarit est infranchissable (barricade en y=0)
-  assert.ok(!fits(g, [], geant, 5, 0));
+  assert.ok(!fits(g, [], geant, 7, 0));
   // ni là où il chevaucherait un adversaire
-  assert.ok(!fits(g, [petit], geant, 5, 3));
-  assert.ok(fits(g, [petit], geant, 4, 5));
+  assert.ok(!fits(g, [petit], geant, 7, 5));
+  assert.ok(fits(g, [petit], geant, 6, 8));
 
   // ses cases atteignables excluent celles où le gabarit ne tient pas
   const reach = reachable(g, [geant, petit], geant, 4);
-  const arrivee = reach.get(key(5, 3));
+  const arrivee = reach.get(key(7, 5));
   assert.ok(!arrivee || arrivee.blocked, 'ne doit pas pouvoir s’arrêter sur l’adversaire');
 });
 

@@ -13,12 +13,12 @@ import { planUnit } from './ai.js';
 import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
-  standard: { player: [[6, 6], [6, 7], [5, 6], [5, 7], [7, 5], [7, 8]], enemy: [[13, 6], [13, 7], [14, 6], [14, 7], [12, 5], [12, 8]] },
-  ladder: { player: [[6, 5], [6, 8], [5, 6], [5, 7]], enemy: [[13, 5], [13, 8], [14, 6], [14, 7]] },
-  tag: { player: [[6, 6], [4, 8], [4, 7]], enemy: [[13, 6], [15, 7], [15, 6]] },
-  invasion: { enemy: [[1, 6], [1, 7], [1, 5], [1, 8], [0, 6]] },
+  standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
+  ladder: { player: [[7, 6], [7, 9], [6, 7], [6, 8]], enemy: [[12, 6], [12, 9], [13, 7], [13, 8]] },
+  tag: { player: [[7, 7], [5, 10], [5, 9]], enemy: [[12, 7], [14, 8], [14, 7]] },
+  invasion: { enemy: [[1, 7], [1, 8], [1, 6], [1, 9], [0, 7]] },
 };
-const WEAPON_SPOTS = [[3, 6], [16, 7], [3, 7], [16, 6], [2, 3], [17, 11], [2, 11], [17, 3]];
+const WEAPON_SPOTS = [[4, 7], [15, 8], [4, 8], [15, 7], [2, 4], [16, 12], [2, 12], [16, 4]];
 const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
 
