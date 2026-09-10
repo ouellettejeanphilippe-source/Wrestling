@@ -35,8 +35,10 @@ const CATS = [
   { id: 'wait', icon: '⏳', name: 'Attendre', match: (a) => a.type === 'wait' },
 ];
 
+const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse), (max-width: 800px)').matches;
+
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
-  const ui = { sel: null, mode: 'idle', cat: null, action: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
+  const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
   clear(root);
   const el = {
@@ -50,7 +52,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     banner: h('div', { class: 'turn-banner', hidden: true }),
   };
   const boardWrap = h('div', { class: 'board-wrap' }, el.board, el.popover, el.tileInfo);
-  root.append(h('div', { class: 'match' }, el.top, h('div', { class: 'm-stage' }, h('div', { class: 'm-center' }, boardWrap, el.party, el.log), el.right), el.banner));
+  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, el.top, h('div', { class: 'm-stage' }, h('div', { class: 'm-center' }, boardWrap, el.party, el.log), el.right), el.banner));
   document.addEventListener('keydown', onKey);
   showBanner('🔔 DING DING DING !', 'start');
   render();
@@ -102,7 +104,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       for (let x = 0; x < g.w; x++) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
-        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onmouseenter: () => onHover(x, y), onmouseleave: () => onHover(null) });
+        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
         else if (atk && atk.has(k)) cell.classList.add('atk');
@@ -179,8 +181,23 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function renderPopover() {
     const pop = el.popover;
     clear(pop);
-    if (!ui.sel || ui.mode !== 'menu' || battle.result) { pop.hidden = true; return; }
+    const sheetModes = TOUCH ? ['menu', 'list', 'target'] : ['menu'];
+    if (!ui.sel || !sheetModes.includes(ui.mode) || battle.result) { pop.hidden = true; document.body.classList.remove('sheet-open'); return; }
     const u = ui.sel;
+    if (TOUCH && ui.mode === 'list') {
+      pop.append(h('div', { class: 'pop-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
+      pop.append(renderActionList(u, listActions(battle, u).filter(ui.cat.match)));
+      pop.hidden = false; document.body.classList.add('sheet-open'); return;
+    }
+    if (TOUCH && ui.mode === 'target') {
+      pop.append(h('div', { class: 'pop-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; ui.pending = null; render(); } }, '← Retour'), h('b', {}, ui.action.name)));
+      const t = ui.pending || (ui.action.targets.length === 1 ? ui.action.targets[0] : null);
+      if (t) {
+        pop.append(renderForecast(u, t, true));
+        pop.append(h('button', { class: 'pop-btn hot confirm', onclick: () => doAction(ui.action.id, { unit: t.unit }) }, `✅ Confirmer : ${ui.action.name} sur ${t.unit.name}`));
+      } else pop.append(h('div', { class: 'hint' }, 'Touchez une cible (cases rouges) pour voir la prévision.'));
+      pop.hidden = false; document.body.classList.add('sheet-open'); return;
+    }
     const actions = listActions(battle, u);
     if (u.onlyPin) {
       const pin = actions.find((a) => a.id === 'pin');
@@ -200,7 +217,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.moved && !u.acted) pop.append(h('button', { class: 'pop-btn ghost', onclick: () => { undoMove(battle, u); select(u); } }, '↩ Annuler le déplacement'));
     pop.append(h('button', { class: 'pop-btn ghost', onclick: deselect }, '✖ Fermer'));
     pop.hidden = false;
-    placePopover(u);
+    document.body.classList.add('sheet-open');
+    if (!TOUCH) placePopover(u);
   }
   function placePopover(u) {
     const cell = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`);
@@ -225,6 +243,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function renderRight() {
     clear(el.right);
     const u = ui.sel;
+    if (TOUCH && (ui.mode === 'list' || ui.mode === 'target') && u) {
+      el.right.append(h('div', { class: 'hint' }, ui.mode === 'target' ? 'Touchez une cible rouge, puis confirmez dans le panneau du bas.' : 'Choisissez un mouvement dans le panneau du bas.'));
+      el.right.append(unitCard(battle, u, { class: 'selected compact' }));
+      el.right.append(renderObjectives());
+      return;
+    }
     if (ui.mode === 'list' && u) {
       const actions = listActions(battle, u).filter(ui.cat.match);
       el.right.append(h('div', { class: 'panel-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
@@ -278,7 +302,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return box;
   }
 
-  function renderForecast(u, t) {
+  function renderForecast(u, t, compact = false) {
     const a = ui.action;
     const tgt = t.unit;
     const box = h('div', { class: 'forecast' });
@@ -306,7 +330,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     else if (a.type === 'job') mid = [['Script', 'votre lutteur perd volontairement']];
     else if (a.move && a.move.effects && a.move.effects.drainMomentum) mid = [['Momentum adverse', `-${a.move.effects.drainMomentum}`]];
     box.append(side(u, afterU), h('div', { class: 'fc-mid' }, h('div', { class: 'fc-name' }, a.name), mid.map(([k, v]) => h('div', { class: 'fc-row' }, h('span', {}, k), h('b', {}, v)))), side(tgt, afterT));
-    box.append(h('div', { class: 'hint center' }, 'Cliquez la cible pour confirmer'));
+    if (!compact) box.append(h('div', { class: 'hint center' }, 'Cliquez la cible pour confirmer'));
     return box;
   }
   function whipPreview(u, tgt) {
@@ -331,7 +355,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const mk = (u) => {
       const def = WRESTLERS_BY_ID[u.id];
       const st = [u.down ? '💫' : '', u.statuses.dazed ? '😵' : '', u.statuses.finished ? '☠️' : '', u.weapon ? u.weapon.icon : '', battle.rules.tag && u.legal ? '⭐' : ''].join('');
-      return h('div', { class: `pm team-${u.team}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}${u.eliminated ? ' out' : ''}${ui.sel === u ? ' sel' : ''}`, onclick: () => { if (u.eliminated) return; if (u.team === 'player' && canSelect(u)) select(u); else { ui.inspect = u; render(); } }, onmouseenter: () => { ui.hover = u; renderRight(); renderBoard(); }, onmouseleave: () => { ui.hover = null; renderRight(); renderBoard(); } },
+      return h('div', { class: `pm team-${u.team}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}${u.eliminated ? ' out' : ''}${ui.sel === u ? ' sel' : ''}`, onclick: () => { if (u.eliminated) return; if (u.team === 'player' && canSelect(u)) select(u); else { ui.inspect = u; render(); } }, onpointerenter: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = u; renderRight(); renderBoard(); }, onpointerleave: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = null; renderRight(); renderBoard(); } },
         avatar(def, 44), h('div', { class: 'pm-info' }, h('b', {}, u.name), bar(u.hp, u.maxHp, 'hpbar', `${u.hp}`), bar(u.momentum, 100, 'mombar', `${u.momentum}`)), h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
     };
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Votre équipe'), battle.units.filter((u) => u.team === 'player').map(mk)));
@@ -384,8 +408,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.moved || u.onlyPin) { ui.mode = 'menu'; ui.reach = null; ui.atkRange = null; }
     else { ui.mode = 'move'; ui.reach = getReachable(battle, u); ui.atkRange = attackRangeFrom(ui.reach, u); }
     render();
+    if (TOUCH) { const c = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`); if (c) c.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }
   }
-  function deselect() { ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.cat = null; ui.reach = null; ui.atkRange = null; render(); }
+  function deselect() { ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.cat = null; ui.pending = null; ui.reach = null; ui.atkRange = null; render(); }
   function onHover(x, y) {
     const u = x == null ? null : unitAt(battle, x, y);
     const tile = x == null ? null : tileAt(g, x, y);
@@ -401,8 +426,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = unitAt(battle, x, y);
     if (ui.mode === 'target') {
       const t = ui.action.targets.find((t) => t.unit && t.unit.x === x && t.unit.y === y);
+      if (t && TOUCH && !(ui.pending && ui.pending.unit === t.unit)) { ui.pending = t; render(); return; }
       if (t) doAction(ui.action.id, { unit: t.unit });
-      else { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
+      else { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; ui.pending = null; render(); }
       return;
     }
     if (ui.mode === 'move') {
@@ -425,6 +451,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   }
   function chooseAction(a) {
     if (!a || !a.ok || ui.busy) return;
+    ui.pending = null;
     if (a.targets.length && a.targets[0].unit) { ui.mode = 'target'; ui.action = a; render(); return; }
     doAction(a.id, null);
   }
@@ -442,7 +469,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
     else if (ui.sel) deselect();
   }
-  function cleanup() { document.removeEventListener('keydown', onKey); }
+  function cleanup() { document.removeEventListener('keydown', onKey); document.body.classList.remove('sheet-open'); }
 
   async function endTurn() {
     if (ui.busy || battle.result || battle.phase !== 'player') return;
