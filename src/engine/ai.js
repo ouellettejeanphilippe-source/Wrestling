@@ -1,5 +1,5 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
-import { manhattan, tileAt, isOutside, stepToward } from './grid.js';
+import { manhattan, tileAt, isOutside, stepToward, heightAt } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange } from './battle.js';
 import { MOVES } from '../data/moves.js';
@@ -53,7 +53,7 @@ function scoreAction(battle, unit, pos, a, tg) {
     }
     default: {
       const m = a.move, t = tg.unit;
-      const hit = hitChance(battle, unit, t, m) / 100;
+      const hit = hitChance(battle, unit, t, m, { pos }) / 100;
       const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos });
       let s = hit * dmg * 2;
       if (!t.down && dmg >= t.hp) s += 90;
@@ -112,6 +112,15 @@ function perchValue(battle, unit, pos) {
 function positional(battle, unit, pos) {
   const rules = battle.rules, g = battle.grid;
   let s = perchValue(battle, unit, pos);
+  // Prendre la hauteur : on y frappe plus juste et on encaisse moins. On ne
+  // compare qu'aux adversaires proches, sinon un lutteur irait se percher au
+  // bout de l'aréna pour un bonus théorique.
+  const near = enemiesOf(battle, unit).filter((e) => manhattan(e, pos) <= 4);
+  if (near.length) {
+    const mine = heightAt(g, pos.x, pos.y);
+    const theirs = near.reduce((a, e) => a + heightAt(g, e.x, e.y), 0) / near.length;
+    s += Math.max(-12, Math.min(12, (mine - theirs) * 7));
+  }
   if (rules.countOut > 0 && isOutside(g, pos.x, pos.y)) s -= 35;
   if (rules.toss && ['rope', 'turnbuckle'].includes(tileAt(g, pos.x, pos.y))) s -= 30;
   if (rules.cage && hpRatio(unit) < 0.4 && tileAt(g, pos.x, pos.y) === 'turnbuckle') s += 25;

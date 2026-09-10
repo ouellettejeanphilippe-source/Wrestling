@@ -200,12 +200,12 @@ export function listActions(battle, unit, pos = null) {
     else if (req.attackerOnRope && !onRope) { a.ok = false; a.reason = 'Doit être sur les cordes'; }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
-      a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m) }));
+      a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
       if (a.ok && !a.targets.length) { a.ok = false; a.reason = 'Aucune cible debout adjacente'; }
     } else if (m.type === 'special') {
       a.targets = enemies.filter((e) => inRange(e, m.range)).map((e) => ({ unit: e }));
     } else {
-      a.targets = enemies.filter((e) => inRange(e, m.range) && targetOk(battle, m, e, p)).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m) }));
+      a.targets = enemies.filter((e) => inRange(e, m.range) && targetOk(battle, m, e, p)).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
     }
     if (a.ok && !a.targets.length) {
       a.ok = false;
@@ -215,7 +215,7 @@ export function listActions(battle, unit, pos = null) {
   }
 
   if (unit.weapon) {
-    const targets = enemies.filter((e) => manhattan(p, e) === 1).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, weaponMove(battle, unit)) }));
+    const targets = enemies.filter((e) => manhattan(p, e) === 1).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, weaponMove(battle, unit), { pos: p }) }));
     actions.push({ id: 'weapon', name: `${unit.weapon.icon} Frapper : ${unit.weapon.name} (${unit.weapon.uses})`, tier: 'base', type: 'weapon', move: weaponMove(battle, unit), desc: rules.dq ? 'Gros dégâts. Illégal : risque de DQ si l’arbitre regarde.' : 'Gros dégâts. Légal ici.', targets, ok: targets.length > 0, reason: 'Aucune cible adjacente' });
   }
   if (!rules.noPin) {
@@ -359,8 +359,12 @@ function doSpecial(battle, unit, target, move) {
   return {};
 }
 
-export function hitChance(battle, attacker, target, move) {
+export function hitChance(battle, attacker, target, move, opts = {}) {
   if (target.down) return 100;
+  // `pos` : la case d'où le coup partira (l'IA et la prévision évaluent des
+  // déplacements pas encore joués ; sans ça, l'avantage de hauteur serait
+  // calculé depuis la position actuelle).
+  const from = opts.pos || attacker;
   const A = getStats(battle, attacker), D = getStats(battle, target);
   // L'écart d'agilité est plafonné : un colosse touche encore un voltigeur.
   // Une prise s'esquive moins bien qu'une frappe : quand on est attrapé, on est attrapé.
@@ -368,7 +372,7 @@ export function hitChance(battle, attacker, target, move) {
   let c = (move.acc ?? 90) + clamp(A.agi - D.agi, -12, 12) * (grabby ? 1.2 : 2.2);
   if (target.statuses.dazed) c += 25;
   // Le relief compte : frapper d'en haut est plus facile, d'en bas plus dur.
-  c += clamp(heightAt(battle.grid, attacker.x, attacker.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
+  c += clamp(heightAt(battle.grid, from.x, from.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
   if (gim(attacker).modHitChance) c = gim(attacker).modHitChance(battle, attacker, attacker, target, move, c, 'attacker');

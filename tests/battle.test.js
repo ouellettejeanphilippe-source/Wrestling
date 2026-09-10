@@ -363,3 +363,29 @@ test('Last Man Standing : deux tours au sol et c’est le compte de dix', () => 
   endPlayerPhase(b);                    // deuxième passage : dix !
   assert.ok(j.eliminated && j.elimReason === 'stoppage');
 });
+
+test('la précision se calcule depuis la case d’où l’on frappera', () => {
+  const b = mk('singles', ['derby_allin'], ['jobber_1']);
+  const a = findP(b, 'derby_allin'), d = findE(b, 'jobber_1');
+  place(a, 7, 7); place(d, 6, 4);                 // la cible est sur le tapis (2)
+  const coin = { x: 5, y: 3 };                    // un coin, à 3 de hauteur
+  const depuisPlat = hitChance(b, a, d, MOVES.powerbomb);
+  const depuisCoin = hitChance(b, a, d, MOVES.powerbomb, { pos: coin });
+  assert.ok(depuisCoin > depuisPlat, 'évaluer depuis le coin doit donner une meilleure précision');
+  // sans l'option, on retombe bien sur la position réelle
+  assert.equal(hitChance(b, a, d, MOVES.powerbomb, {}), depuisPlat);
+});
+
+test('l’IA préfère la hauteur quand l’adversaire est à portée', async () => {
+  const { setHeight, heightAt } = await import('../src/engine/grid.js');
+  const b = mk('singles', ['jean_sina'], ['jobber_1']);
+  const a = findP(b, 'jean_sina'), d = findE(b, 'jobber_1');
+  // le lutteur adverse démarre au niveau du tapis, avec une estrade à sa portée
+  place(a, 9, 7); place(d, 12, 7);
+  for (const y of [6, 7, 8]) setHeight(b.grid, 11, y, 3);
+  d.moves = ['punch'];
+  endPlayerPhase(b);
+  runEnemyPhase(b);
+  assert.ok(heightAt(b.grid, d.x, d.y) >= heightAt(b.grid, a.x, a.y),
+    `l’IA devrait chercher la hauteur (elle est en ${d.x},${d.y})`);
+});

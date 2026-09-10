@@ -484,7 +484,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
     let mid = [], afterT = null, afterU = null;
     if (a.move && ATTACK_TYPES.has(a.type)) {
-      const hit = hitChance(battle, u, tgt, a.move);
+      const hit = hitChance(battle, u, tgt, a.move, { pos: u });
       const { dmg } = computeDamage(battle, u, tgt, a.move, { noRng: true });
       const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
       afterT = Math.max(0, tgt.hp - dmg);
