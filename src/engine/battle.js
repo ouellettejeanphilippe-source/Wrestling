@@ -6,6 +6,8 @@ import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { MATCH_TYPES, WEAPONS } from '../data/matchTypes.js';
 import { createUnit } from './units.js';
 import { createRng } from './rng.js';
+import { matchPhase, isFlashy } from './phases.js';
+import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
 import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
@@ -21,6 +23,31 @@ const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
 
 const gim = (u) => GIMMICKS[u.gimmick] || {};
+const HAZARD_TILES = ['table', 'steps', 'cage', 'barricade', 'turnbuckle'];
+
+// Contexte utilisé par les combos : d'où part le coup, et la cible est-elle acculée ?
+function comboContext(battle, attacker, target, move, pos = null) {
+  const g = battle.grid;
+  const from = pos || attacker;
+  const tile = tileAt(g, from.x, from.y);
+  return {
+    fromCorner: tile === 'turnbuckle',
+    fromRope: tile === 'rope',
+    targetPinnedToHazard: HAZARD_TILES.some((t) => isAdjacentToTerrain(g, target.x, target.y, t)),
+    phase: matchPhase(battle),
+  };
+}
+
+// Combos déclenchés par un coup qui touche. Les multiplicateurs se cumulent, plafonnés.
+export function activeCombos(battle, attacker, target, move, ctx = null) {
+  const context = ctx || comboContext(battle, attacker, target, move);
+  return COMBOS.filter((c) => {
+    try { return c.when(battle, attacker, target, move, context); } catch { return false; }
+  });
+}
+export function comboDamageMult(combos) {
+  return Math.min(1.8, combos.reduce((m, c) => m * (c.dmg || 1), 1));
+}
 
 export function createBattle({ match, playerTeam, seed = Date.now(), playerBonuses = {} }) {
   const rules = MATCH_TYPES[match.type];
@@ -308,11 +335,12 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   let dmg = (move.power || 0) + atk * 1.3 - D.def * 0.9 * (eff.ignoreDef ? 1 - eff.ignoreDef : 1);
   if (move.type === 'aerial' && isOnTurnbuckle(battle.grid, pos.x, pos.y)) dmg *= 1.35;
   if (eff.charge && attacker.movedTiles >= 3) dmg += 8;
-  if (target.down) dmg *= 1.1;
-  if (target.statuses.dazed) dmg *= 1.15;
+  // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
   if (gim(target).modInDamage) dmg = gim(target).modInDamage(battle, target, attacker, move, dmg);
-  dmg *= 0.8;
+  const phase = matchPhase(battle);
+  dmg *= 0.8 * phase.dmg * (isFlashy(move) ? phase.flashy : 1);
+  dmg *= comboDamageMult(activeCombos(battle, attacker, target, move, opts.ctx || comboContext(battle, attacker, target, move, pos)));
   let crit = false;
   if (!opts.noRng) {
     if (battle.rng.chance(0.04 + A.tec * 0.007)) { crit = true; dmg *= 1.5; }
@@ -337,16 +365,27 @@ export function resolveAttack(battle, attacker, target, move) {
     addHeat(battle, -2);
     return { hit: false, chance };
   }
-  const { dmg, crit } = computeDamage(battle, attacker, target, move);
+  const ctx = comboContext(battle, attacker, target, move);
+  const combos = activeCombos(battle, attacker, target, move, ctx);
+  const { dmg, crit } = computeDamage(battle, attacker, target, move, { ctx });
   const eff = move.effects || {};
   const wasDown = target.down;
   const fromCorner = move.type === 'aerial' && isOnTurnbuckle(battle.grid, attacker.x, attacker.y);
   log(battle, `${attacker.name} → ${move.name} sur ${target.name} : ${dmg} dégâts${crit ? ' — CRITIQUE !' : ''}${fromCorner ? ' (depuis le coin !)' : ''}`, move.tier === 'finisher' ? 'finisher' : crit ? 'crit' : '');
   applyDamage(battle, target, dmg, attacker, { move, crit });
-  addMomentum(battle, attacker, move.momentum ?? 10);
+  const phase = matchPhase(battle);
+  addMomentum(battle, attacker, Math.round((move.momentum ?? 10) * phase.momentum));
   addMomentum(battle, target, 5);
-  addHeat(battle, move.tier === 'finisher' ? 15 : move.tier === 'signature' ? 8 : move.type === 'aerial' ? 6 : 2 + (eff.heat || 0));
-  if (eff.heat) addHeat(battle, eff.heat);
+  for (const c of combos) {
+    if (c.momentum) addMomentum(battle, attacker, c.momentum);
+    if (c.heat) addHeat(battle, Math.round(c.heat * phase.heat));
+  }
+  if (combos.length) {
+    log(battle, `${combos.map((c) => `${c.icon} ${c.name}`).join(' + ')} !`, 'combo');
+    emit(battle, { type: 'combo', x: target.x, y: target.y, names: combos.map((c) => c.name) });
+  }
+  const baseHeat = move.tier === 'finisher' ? 15 : move.tier === 'signature' ? 8 : move.type === 'aerial' ? 6 : 2;
+  addHeat(battle, Math.round((baseHeat + (eff.heat || 0)) * phase.heat));
   if (eff.selfMomentum) addMomentum(battle, attacker, eff.selfMomentum);
   if (fromCorner) { battle.stats.highSpots++; }
   if (move.type === 'weapon') { battle.stats.weaponsUsed++; if (attacker.team === 'player') battle.stats.playerWeaponHits++; }
@@ -370,6 +409,7 @@ export function resolveAttack(battle, attacker, target, move) {
     if (target.down && !battle.rules.noPin && manhattan(attacker, target) === 1 && canPin(battle, attacker, target).ok) { freePin = true; log(battle, `${attacker.name} peut couvrir immédiatement !`); }
   }
   if (move.type === 'submission' && !target.eliminated) attemptSubmission(battle, attacker, target, move);
+  attacker.memory.lastHit = { uid: target.uid, type: move.type };
   if (gim(attacker).onHit) gim(attacker).onHit(battle, attacker, target, move, dmg);
   if (eff.illegal && !target.eliminated) checkDq(battle, attacker, 0.35, move.name);
   if (battle.rules.tag && !attacker.legal && !attacker.eliminated) checkDq(battle, attacker, 0.25, 'attaque sans être légal');
@@ -393,6 +433,12 @@ function downUnit(battle, unit) {
   if (gim(unit).beforeDown && gim(unit).beforeDown(battle, unit)) return;
   unit.down = true; unit.downTurns = 0; unit.hp = 0; unit.climb = 0;
   delete unit.statuses.dazed;
+  if (unit.grit <= 0 && !battle.rules.noPin && scriptAllowsElimination(battle, unit, 'stoppage')) {
+    log(battle, `🛑 ARRÊT DE L’ARBITRE ! ${unit.name} n’a plus rien à donner.`, 'big');
+    addHeat(battle, 15);
+    eliminate(battle, unit, 'stoppage');
+    return;
+  }
   if (unit.team === 'player') battle.stats.playerDowned++;
   log(battle, `💫 ${unit.name} est au sol !`, 'down');
   emit(battle, { type: 'down', x: unit.x, y: unit.y });
@@ -451,6 +497,7 @@ export function pinChance(battle, pinner, target) {
   c -= saves * 0.2;
   if (gim(pinner).modPinChance) c = gim(pinner).modPinChance(battle, pinner, pinner, target, c, 'pinner');
   if (gim(target).modPinChance) c = gim(target).modPinChance(battle, target, pinner, target, c, 'target');
+  c += matchPhase(battle).pin;
   if (!scriptAllowsElimination(battle, target, 'pin')) c *= SCRIPT_PENALTY;
   return clamp(c, 0.03, 0.95);
 }
@@ -492,6 +539,7 @@ function attemptSubmission(battle, attacker, target, move) {
   let c = worn * 0.75 + A.tec * 0.01 - target.grit * 0.07 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.15 : 0);
   if (gim(attacker).modTapChance) c = gim(attacker).modTapChance(battle, attacker, attacker, target, c, 'attacker');
   if (gim(target).modTapChance) c = gim(target).modTapChance(battle, target, attacker, target, c, 'target');
+  c += matchPhase(battle).wear;
   if (!scriptAllowsElimination(battle, target, 'submission')) c *= SCRIPT_PENALTY;
   c = clamp(c, 0, 0.9);
   const roll = battle.rng.next();

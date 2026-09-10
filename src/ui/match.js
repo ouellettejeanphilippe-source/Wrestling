@@ -9,6 +9,10 @@ import { TERRAIN, tileAt, key, manhattan } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
+import { matchPhase } from '../engine/phases.js';
+import { activeCombos } from '../engine/battle.js';
+import { winRoutes } from '../engine/rules.js';
+import { showTutorial, tutorialSeen } from './tutorial.js';
 
 const TIER_ORDER = ['base', 'class', 'specialty', 'signature', 'finisher', 'script'];
 const TIER_LABELS = { base: 'Base', class: `Classe · ⚡${MOVE_TIERS.class.unlock}+`, specialty: `Spécialité · ⚡${MOVE_TIERS.specialty.unlock}+`, signature: `Signature · ⚡${MOVE_TIERS.signature.unlock}+`, finisher: `Finisher · ⚡${MOVE_TIERS.finisher.unlock}`, script: 'Script' };
@@ -56,6 +60,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   document.addEventListener('keydown', onKey);
   showBanner('🔔 DING DING DING !', 'start');
   render();
+  if (!tutorialSeen()) showTutorial(root, {});
 
   // ------------------------------------------------------------ rendu global
   function render() {
@@ -68,10 +73,14 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const r = battle.rules;
     const phase = battle.result ? 'Terminé' : battle.phase === 'player' ? 'Votre tour' : 'Tour adverse';
     const survive = r.victory === 'survive' ? ` · Survivre ${Math.min(battle.turn, battle.match.turns)}/${battle.match.turns}` : '';
+    const mp = matchPhase(battle);
     el.top.append(
       h('div', { class: `phase-badge ${battle.phase}` }, h('b', {}, `Tour ${battle.turn}`), h('span', {}, phase + survive)),
+      h('div', { class: `act-badge act-${mp.key}`, title: mp.desc },
+        h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
+      h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
   }
@@ -274,7 +283,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (insp) el.right.append(h('div', { class: 'inspect-label' }, insp.team === 'enemy' ? '🔍 Adversaire (zone de menace en rouge)' : '🔍 Inspection'), unitCard(battle, insp));
     if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez un de vos lutteurs (plateau ou barre du bas). Survolez un adversaire pour voir sa zone de menace.' : 'Tour adverse…'));
     el.right.append(renderObjectives());
+    el.right.append(renderRoutes());
     if (!battle.result) el.right.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${living(battle, 'player').filter((x) => !x.acted && !x.down).length} à jouer)`));
+  }
+
+  function renderRoutes() {
+    const routes = winRoutes(battle);
+    const ready = routes.filter((r) => r.ready).length;
+    return h('details', { class: 'routes' },
+      h('summary', {}, `🏆 Comment gagner · ${routes.length} route(s)`, ready ? h('span', { class: 'route-ready' }, ` ${ready} à portée`) : null),
+      routes.map((r) => h('div', { class: `route ${r.ready ? 'ready' : ''}` },
+        h('b', {}, `${r.icon} ${r.name}`), h('span', { class: 'route-how' }, r.how), r.state ? h('span', { class: 'route-state' }, r.state) : null)));
   }
 
   function renderActionList(u, actions) {
@@ -293,9 +312,11 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         if (a.cost) meta.push(`⚡ -${a.cost}`);
         if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
         const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
+        const combos = m && best && best.unit ? activeCombos(battle, u, best.unit, m) : [];
         const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'}`, disabled: !a.ok || ui.busy, onclick: () => chooseAction(a) },
           h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
           meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
+          combos.length ? h('span', { class: 'act-combo' }, combos.map((c) => `${c.icon} ${c.name}`).join(' + ')) : null,
           h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
         group.append(btn);
       }
@@ -318,6 +339,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
       afterT = Math.max(0, tgt.hp - dmg);
       mid = [['Précision', `${hit} %`], ['Dégâts', `~${dmg}`], ['Critique', `${crit} %`]];
+      const cbs = activeCombos(battle, u, tgt, a.move);
+      for (const c of cbs) mid.push([`${c.icon} ${c.name}`, `+${Math.round((c.dmg - 1) * 100)} % dégâts`]);
       if (dmg >= tgt.hp && !tgt.down) mid.push(['Résultat', '💫 AU SOL']);
       if (a.type === 'submission') mid.push(['Abandon', 'possible si affaibli']);
       if (a.move.tier === 'finisher') mid.push(['Finisher', 'tombé immédiat +30 %']);
@@ -385,6 +408,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         case 'pin': text = ev.count === 3 ? '1·2·3 !' : ev.count === 2.9 ? 'KICK OUT à 2,9 !' : ev.count === 2 ? 'KICK OUT !' : 'UN…'; cls = ev.count === 3 ? 'pin3' : 'pin'; break;
         case 'eliminated': text = 'ÉLIMINÉ'; cls = 'elim'; break;
         case 'taunt': text = '📣'; cls = 'taunt'; break;
+        case 'combo': text = ev.names.join(' + '); cls = 'combo'; break;
         default: continue;
       }
       const f = h('span', { class: `float ${cls}` }, text);
