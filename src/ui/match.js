@@ -50,7 +50,7 @@ function boardView() {
 function setBoardView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch { /* mode privé : tant pis */ } }
 
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
-  const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
+  const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, hoverXY: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
   clear(root);
   const el = {
@@ -85,7 +85,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     h('div', { class: 'hud hud-br' }, el.endTurn, el.party, el.log),
     el.popover,
   );
-  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, scene, el.banner));
+  // Le jeu est pensé pour le paysage sur téléphone : en portrait, l'écran ne
+  // laisse pas assez de largeur au losange. On le dit, sans bloquer.
+  const rotate = h('div', { class: 'rotate-hint' },
+    h('span', {}, '📱↻ Tournez votre appareil : le plateau a besoin de largeur.'),
+    h('button', { class: 'btn small', onclick: () => rotate.remove() }, 'OK'));
+  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, scene, el.banner, rotate));
   document.addEventListener('keydown', onKey);
   document.body.classList.add('in-match');
   window.addEventListener('resize', fitBoard);
@@ -139,6 +144,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function renderBoard() {
     clear(el.board);
     const reach = ui.mode === 'move' ? ui.reach : null;
+    // Chemin prévu jusqu'à la case survolée : on remonte les liens du Dijkstra.
+    const path = new Set();
+    if (reach && ui.hoverXY) {
+      let k = key(ui.hoverXY.x, ui.hoverXY.y);
+      let guard = 0;
+      while (k && reach.has(k) && guard++ < 200) { path.add(k); k = reach.get(k).from; }
+    }
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
@@ -149,6 +161,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
+        if (path.has(k)) cell.classList.add('path');
         else if (atk && atk.has(k)) cell.classList.add('atk');
         if (threat && threat.has(k)) cell.classList.add('threat');
         if (targets && targets.has(k)) {
@@ -178,20 +191,24 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         el.board.append(cell);
       }
     }
-    // Marquage au centre du tapis : hors du flux de la grille (sinon il décalerait
-    // toutes les cases) et peint après elles, mais sous les lutteurs.
+    // Décor du ring, hors du flux de la grille (sinon il décalerait les cases) et
+    // peint après elles, mais sous les lutteurs :
+    //   · le tablier, qui donne au ring son épaisseur de plateforme surélevée
+    //   · le marquage central, repère fixe pour se situer
     const ring = g.ring;
     if (ring) {
-      const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
-      el.board.append(h('div', {
-        class: 'ring-logo',
+      const box = (x0, y0, w, hh, cls, kid) => h('div', {
+        class: cls,
         style: {
-          left: `calc(${cx - 2} * (var(--cell) + 2px))`,
-          top: `calc(${cy - 1} * (var(--cell) + 2px))`,
-          width: `calc(4 * (var(--cell) + 2px))`,
-          height: `calc(2 * (var(--cell) + 2px))`,
+          left: `calc(${x0} * (var(--cell) + 2px))`,
+          top: `calc(${y0} * (var(--cell) + 2px))`,
+          width: `calc(${w} * (var(--cell) + 2px))`,
+          height: `calc(${hh} * (var(--cell) + 2px))`,
         },
-      }, h('span', {}, 'PPW')));
+      }, kid || null);
+      el.board.append(box(ring.rx0, ring.ry0, ring.rx1 - ring.rx0 + 1, ring.ry1 - ring.ry0 + 1, 'ring-apron'));
+      const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
+      el.board.append(box(cx - 2, cy - 1, 4, 2, 'ring-logo', h('span', {}, 'PPW')));
     }
   }
 
@@ -229,6 +246,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return set;
   }
 
+  // Nom court pour la plaque au-dessus du sprite (« Stone Cold Steve Boston » est
+  // illisible à cette taille).
+  function shortName(name) {
+    const parts = name.replace(/\(.*\)/, '').trim().split(/\s+/);
+    return parts.length > 2 ? `${parts[0]} ${parts[parts.length - 1]}` : name;
+  }
+
   function unitToken(u) {
     const def = WRESTLERS_BY_ID[u.id];
     const icons = [];
@@ -237,11 +261,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.statuses.finished) icons.push('☠️');
     if (u.weapon) icons.push(u.weapon.icon);
     if (battle.rules.tag && u.legal) icons.push('⭐');
+    if (u.acted && u.team === 'player' && battle.phase === 'player') icons.push('✔');
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
     const { w: uw, h: uh } = sizeOf(u);
     const big = uw > 1 || uh > 1;
-    const cls = `unit team-${u.team}${big ? ' big' : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
+    const hurt = u.hp / u.maxHp <= 0.4;
+    const cls = `unit team-${u.team}${big ? ' big' : ''}${hurt ? ' hurt' : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
     return h('div', {
       class: cls,
       // le gabarit pilote la taille et le recentrage du sprite (voir styles.css)
@@ -249,10 +275,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${big ? ` · gabarit ${uw}×${uh} cases` : ''}`,
     },
       h('span', { class: 'unit-shadow' }),
-      avatar(def, 0, { fill: true, view: 'full', bg: 'none', facing: u.team === 'player' ? 1 : -1 }),
+      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: u.facing }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
+      // Plaque de nom : visible pour le lutteur sélectionné, celui qu'on survole,
+      // et ceux qui sont en danger — pas pour tout le monde tout le temps.
+      h('span', { class: 'uname' }, h('b', {}, shortName(u.name)), h('i', {}, `${u.hp}`)),
     );
   }
 
@@ -346,12 +375,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       return;
     }
     if (u) {
-      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Déplacement · 🟥 portée d’attaque. Cliquez une case bleue, ou le lutteur lui-même pour agir sur place.' : 'Choisissez une action dans le menu près du lutteur.'));
+      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Se déplacer · 🟥 portée d’attaque · cliquez le lutteur pour agir sur place' : 'Choisissez une action dans le menu.'));
       el.right.append(unitCard(battle, u, { class: 'selected' }));
     }
     const insp = ui.hover && ui.hover !== u ? ui.hover : ui.inspect && ui.inspect !== u ? ui.inspect : null;
     if (insp) el.right.append(h('div', { class: 'inspect-label' }, insp.team === 'enemy' ? '🔍 Adversaire (zone de menace en rouge)' : '🔍 Inspection'), unitCard(battle, insp));
-    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez un de vos lutteurs (plateau ou barre du bas). Survolez un adversaire pour voir sa zone de menace.' : 'Tour adverse…'));
+    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? '👉 Choisissez un lutteur (survolez un adversaire pour voir sa zone de menace)' : 'Tour adverse…'));
     el.right.append(renderObjectives());
     el.right.append(renderRoutes());
   }
@@ -405,7 +434,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const a = ui.action;
     const tgt = t.unit;
     const box = h('div', { class: 'forecast' });
-    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', facing: unit.team === 'player' ? 1 : -1 }), h('b', {}, unit.name),
+    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', dir: unit.facing }), h('b', {}, unit.name),
       h('div', { class: 'fc-hp' }, `PV ${unit.hp}`, after != null ? h('span', { class: after < unit.hp ? 'dn' : 'up' }, ` → ${after}`) : null),
       bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
     let mid = [], afterT = null, afterU = null;
@@ -518,11 +547,14 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = x == null ? null : unitAt(battle, x, y);
     const tile = x == null ? null : tileAt(g, x, y);
     if (tile !== ui.hoverTile) { ui.hoverTile = tile; el.tileInfo.textContent = tile && TILE_HELP[tile] ? `${TERRAIN[tile].name} — ${TILE_HELP[tile]}` : ''; }
+    // La case survolée sert à dessiner le chemin prévu pendant un déplacement.
+    const moved = !ui.hoverXY || x !== ui.hoverXY.x || y !== ui.hoverXY.y;
+    ui.hoverXY = x == null ? null : { x, y };
     if (u !== ui.hover) {
       ui.hover = u;
       renderRight();
       if (ui.mode === 'idle') renderBoard();
-    }
+    } else if (moved && ui.mode === 'move') renderBoard();
   }
   function onCell(x, y) {
     if (ui.busy || battle.result || battle.phase !== 'player') return;

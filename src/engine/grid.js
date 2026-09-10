@@ -16,6 +16,16 @@ export const TERRAIN = {
 
 export const key = (x, y) => `${x},${y}`;
 
+// Direction du regard sur les quatre diagonales de la projection isométrique :
+// 'se' = vers +x (bas-droite à l'écran), 'sw' = +y, 'ne' = -y, 'nw' = -x.
+export const FACINGS = ['se', 'sw', 'ne', 'nw'];
+export function facingTo(from, to) {
+  const dx = (to.x ?? 0) - (from.x ?? 0), dy = (to.y ?? 0) - (from.y ?? 0);
+  if (!dx && !dy) return from.facing || 'se';
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'se' : 'nw';
+  return dy >= 0 ? 'sw' : 'ne';
+}
+
 // ---------------------------------------------------------------- gabarits
 // Un lutteur occupe un rectangle de cases, ancré en haut à gauche sur (x, y).
 // `size` s'écrit au choix : 2 (carré 2×2), [3, 2] ou { w: 3, h: 2 }. De quoi

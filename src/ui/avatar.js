@@ -6,7 +6,7 @@ import { spriteSvg } from './sprite.js';
 export { spriteSvg };
 
 export function avatarSvg(def, size = 48, opts = {}) {
-  return spriteSvg(def, { view: opts.view || 'bust', size: opts.fill ? 'fill' : size, facing: opts.facing });
+  return spriteSvg(def, { view: opts.view || 'bust', size: opts.fill ? 'fill' : size, facing: opts.facing, dir: opts.dir });
 }
 
 // Vignette carrée façon carte de collection : fond de scène + sprite détouré.
@@ -21,6 +21,6 @@ export function avatar(def, size = 48, opts = {}) {
     title: def.name,
   });
   if (opts.bg === 'none') el.classList.add('bare');
-  el.innerHTML = spriteSvg(def, { view, size: opts.fill ? 'fill' : undefined, facing: opts.facing });
+  el.innerHTML = spriteSvg(def, { view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir });
   return el;
 }

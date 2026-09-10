@@ -23,6 +23,8 @@ export function createUnit(def, team, x, y, opts = {}) {
   return {
     uid: opts.uid || `${def.id}-${team}-${x}-${y}`,
     id: def.id, name: def.name, nick: def.nick, team, x, y,
+    // direction du regard : les deux camps se font face au coup d'envoi
+    facing: opts.facing || (team === 'player' ? 'se' : 'nw'),
     hp: maxHp, maxHp, momentum: opts.momentum ?? 0, grit, maxGrit: grit,
     stats, cls: def.cls, spec: def.spec, gimmick: def.gimmick, alignment: def.alignment,
     moves: movesFor(def), weight: def.weight || 'heavy', color: def.color, initials: def.initials,

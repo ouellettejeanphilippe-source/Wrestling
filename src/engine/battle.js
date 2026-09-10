@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -141,8 +141,9 @@ export function moveUnit(battle, unit, x, y) {
   if (unit.acted || unit.moved || unit.down || unit.eliminated) return false;
   const n = getReachable(battle, unit).get(key(x, y));
   if (!n || n.blocked) return false;
-  unit.prev = { x: unit.x, y: unit.y };
+  unit.prev = { x: unit.x, y: unit.y, facing: unit.facing };
   unit.movedTiles = manhattan(unit, { x, y });
+  unit.facing = facingTo(unit, { x, y });          // on regarde là où on va
   unit.x = x; unit.y = y; unit.moved = true; unit.climb = 0;
   emit(battle, { type: 'move', uid: unit.uid, x, y });
   if (battle.rules.tag && !unit.legal && !isOutside(battle.grid, x, y) && !isOnRope(battle.grid, x, y) && !isOnTurnbuckle(battle.grid, x, y)) {
@@ -152,7 +153,8 @@ export function moveUnit(battle, unit, x, y) {
 }
 export function undoMove(battle, unit) {
   if (!unit.prev || unit.acted) return false;
-  unit.x = unit.prev.x; unit.y = unit.prev.y; unit.prev = null; unit.moved = false; unit.movedTiles = 0;
+  unit.x = unit.prev.x; unit.y = unit.prev.y; unit.facing = unit.prev.facing || unit.facing;
+  unit.prev = null; unit.moved = false; unit.movedTiles = 0;
   return true;
 }
 
@@ -281,6 +283,8 @@ export function executeAction(battle, unit, actionId, target = null) {
   } else if (a.targets.length && a.targets[0].unit) {
     return { ok: false, reason: 'Cible requise' };
   }
+  // On se tourne vers sa cible avant d'agir : le sprite suit le regard.
+  if (tgt) unit.facing = facingTo(unit, tgt);
   let result = {};
   switch (a.type) {
     case 'taunt': result = doTaunt(battle, unit, a.move); break;
