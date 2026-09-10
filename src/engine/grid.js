@@ -82,11 +82,23 @@ export function fitCost(grid, units, unit, x, y, opts = {}) {
 export const fits = (grid, units, unit, x, y, opts = {}) => fitCost(grid, units, unit, x, y, opts) !== null;
 
 export function createGrid(w, h, fill = 'floor') {
-  return { w, h, tiles: Array(w * h).fill(fill), ring: null, arena: 'standard' };
+  return { w, h, tiles: Array(w * h).fill(fill), heights: Array(w * h).fill(0), ring: null, arena: 'standard' };
 }
 export const inBounds = (g, x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h;
 export const tileAt = (g, x, y) => (inBounds(g, x, y) ? g.tiles[y * g.w + x] : 'void');
 export const setTile = (g, x, y, t) => { if (inBounds(g, x, y)) g.tiles[y * g.w + x] = t; };
+
+// ---------------------------------------------------------------- altitudes
+// Le plateau a du relief : le plancher est à 0, le tapis du ring à 2, les coins
+// à 3, les marches à 1. C'est ce qui fait qu'on GRIMPE dans le ring au lieu d'y
+// entrer de plain-pied, et que sauter d'un coin fait mal.
+export const heightAt = (g, x, y) => (inBounds(g, x, y) && g.heights ? g.heights[y * g.w + x] : 0);
+export const setHeight = (g, x, y, h) => { if (inBounds(g, x, y) && g.heights) g.heights[y * g.w + x] = h; };
+// Dénivelé entre deux cases (positif = la seconde est plus haute).
+export const heightDiff = (g, from, to) => heightAt(g, to.x, to.y) - heightAt(g, from.x, from.y);
+// Un lutteur franchit `climb` niveaux vers le haut (2 par défaut : ce sont des
+// athlètes), et descend deux fois plus bas sans se faire mal.
+export const climbOf = (u) => (u && u.climbHeight) || 2;
 export const terrainAt = (g, x, y) => TERRAIN[tileAt(g, x, y)];
 export const isOutside = (g, x, y) => !!terrainAt(g, x, y).outside;
 export const isRingFloor = (g, x, y) => ['ring', 'ladder'].includes(tileAt(g, x, y));
@@ -117,7 +129,10 @@ export function buildArena(kind = 'standard') {
   for (let x = 5; x <= 14; x++) {
     for (let y = 3; y <= 12; y++) {
       const ex = x === 5 || x === 14, ey = y === 3 || y === 12;
-      setTile(g, x, y, ex && ey ? 'turnbuckle' : ex || ey ? 'rope' : 'ring');
+      const corner = ex && ey;
+      setTile(g, x, y, corner ? 'turnbuckle' : ex || ey ? 'rope' : 'ring');
+      // le ring est une plateforme : tapis à 2, coins à 3
+      setHeight(g, x, y, corner ? 3 : 2);
     }
   }
   if (kind === 'cage') {
@@ -125,17 +140,20 @@ export function buildArena(kind = 'standard') {
       const inCage = x >= 3 && x <= 16 && y >= 1 && y <= 14;
       const wall = inCage && (x === 3 || x === 16 || y === 1 || y === 14);
       if (!inCage) setTile(g, x, y, 'void');
-      else if (wall) setTile(g, x, y, 'cage');
+      else if (wall) { setTile(g, x, y, 'cage'); setHeight(g, x, y, 5); }
     }
     return g;
   }
   for (let y = 0; y < h; y++) setTile(g, 0, y, 'ramp');
   for (let x = 1; x < w; x++) { setTile(g, x, 0, 'barricade'); setTile(g, x, 15, 'barricade'); }
   // table des commentateurs : trois places, côté cour
-  for (let y = 7; y <= 9; y++) setTile(g, 17, y, 'table');
-  setTile(g, 4, 13, 'steps'); setTile(g, 15, 2, 'steps');
-  if (kind === 'hardcore') { setTile(g, 3, 2, 'table'); setTile(g, 16, 13, 'table'); }
-  if (kind === 'ladder') setTile(g, 9, 7, 'ladder');
+  for (let y = 7; y <= 9; y++) { setTile(g, 17, y, 'table'); setHeight(g, 17, y, 1); }
+  // les marches d'acier : le vrai chemin pour monter sur le tablier
+  setTile(g, 4, 13, 'steps'); setHeight(g, 4, 13, 1);
+  setTile(g, 15, 2, 'steps'); setHeight(g, 15, 2, 1);
+  for (const [x, y] of [[3, 2], [16, 13]]) if (kind === 'hardcore') { setTile(g, x, y, 'table'); setHeight(g, x, y, 1); }
+  if (kind === 'ladder') { setTile(g, 9, 7, 'ladder'); setHeight(g, 9, 7, 2); }
+  for (let x = 1; x < w; x++) { setHeight(g, x, 0, 2); setHeight(g, x, 15, 2); }   // barricades
   return g;
 }
 
@@ -151,7 +169,12 @@ export function reachable(grid, units, unit, mov, from = null) {
     for (const [nx, ny] of neighbors(grid, cur.x, cur.y)) {
       const step = fitCost(grid, units, unit, nx, ny);   // gabarit complet, terrain et adversaires
       if (step == null) continue;
-      const c = cur.cost + step;
+      // relief : monter coûte un point par niveau et se limite à la détente du
+      // lutteur ; descendre est gratuit jusqu'au double, au-delà on ne saute pas.
+      const climb = climbOf(unit);
+      const dh = heightAt(grid, nx, ny) - heightAt(grid, cur.x, cur.y);
+      if (dh > climb || dh < -2 * climb) continue;
+      const c = cur.cost + step + Math.max(0, dh);
       if (c > mov) continue;
       const k = key(nx, ny);
       if (!best.has(k) || best.get(k).cost > c) {

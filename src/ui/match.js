@@ -5,7 +5,7 @@ import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
-import { TERRAIN, tileAt, key, manhattan, sizeOf } from '../engine/grid.js';
+import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
@@ -158,7 +158,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       for (let x = 0; x < g.w; x++) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
-        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
+        const lvl = heightAt(g, x, y);
+        const cell = h('div', { class: `cell t-${tile}${lvl ? ' raised' : ''}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, style: lvl ? { '--lvl': lvl } : {}, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
         if (path.has(k)) cell.classList.add('path');
@@ -185,7 +186,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           if (ui.sel === u) tok.classList.add('selected');
           if (ui.acting === u) tok.classList.add('acting');
           // en isométrie, un lutteur plus « en avant » (x + y grand) passe devant
-          tok.style.zIndex = 10 + x + y;
+          tok.style.zIndex = 10 + x + y + heightAt(g, x, y);
+          tok.style.setProperty('--lvl', heightAt(g, x, y));
           cell.append(tok);
         }
         el.board.append(cell);
@@ -206,7 +208,6 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           height: `calc(${hh} * (var(--cell) + 2px))`,
         },
       }, kid || null);
-      el.board.append(box(ring.rx0, ring.ry0, ring.rx1 - ring.rx0 + 1, ring.ry1 - ring.ry0 + 1, 'ring-apron'));
       const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
       el.board.append(box(cx - 2, cy - 1, 4, 2, 'ring-logo', h('span', {}, 'PPW')));
     }

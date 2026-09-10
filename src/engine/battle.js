@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, heightAt, climbOf } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -367,6 +367,8 @@ export function hitChance(battle, attacker, target, move) {
   const grabby = move.type === 'grapple' || move.type === 'submission';
   let c = (move.acc ?? 90) + clamp(A.agi - D.agi, -12, 12) * (grabby ? 1.2 : 2.2);
   if (target.statuses.dazed) c += 25;
+  // Le relief compte : frapper d'en haut est plus facile, d'en bas plus dur.
+  c += clamp(heightAt(battle.grid, attacker.x, attacker.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
   if (gim(attacker).modHitChance) c = gim(attacker).modHitChance(battle, attacker, attacker, target, move, c, 'attacker');
@@ -380,7 +382,11 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   const pos = opts.pos || attacker;
   const atk = A[move.stat || 'str'];
   let dmg = (move.power || 0) + atk * 1.3 - D.def * 0.9 * (eff.ignoreDef ? 1 - eff.ignoreDef : 1);
-  if (move.type === 'aerial' && isOnTurnbuckle(battle.grid, pos.x, pos.y)) dmg *= 1.35;
+  // Un mouvement aérien tire sa force du dénivelé : depuis un coin (3) sur une
+  // cible au tapis (2), c'est +1 ; depuis le tablier vers le plancher, c'est +2.
+  const drop = heightAt(battle.grid, pos.x, pos.y) - heightAt(battle.grid, target.x, target.y);
+  if (move.type === 'aerial' && drop > 0) dmg *= 1 + Math.min(3, drop) * 0.22;
+  else if (drop > 0) dmg *= 1 + Math.min(3, drop) * 0.07;
   if (eff.charge && attacker.movedTiles >= 3) dmg += 8;
   // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
@@ -704,7 +710,18 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
       log(battle, `${target.name} s’accroche aux cordes de justesse ! (${Math.round(c * 100)} %)`);
       break;
     }
+    // chute : quitter le tablier pour le plancher, ça se paie
+    const fall = heightAt(g, x, y) - heightAt(g, nx, ny);
     x = nx; y = ny; moved++;
+    if (fall >= 2) {
+      target.x = x; target.y = y;
+      const dmg = 6 + fall * 4;
+      setStatus(battle, target, 'dazed', 1);
+      credit(); addHeat(battle, 10);
+      log(battle, `🪂 ${target.name} bascule de ${fall} niveaux et s’écrase au sol ! (-${dmg}, étourdi)`, 'big');
+      applyDamage(battle, target, dmg, source, { move: { type: 'hazard' } });
+      break;
+    }
     if (tileName === 'rope') { setStatus(battle, target, 'dazed', 1); log(battle, `${target.name} est projeté dans les cordes ! (étourdi)`); break; }
     if (tileName === 'turnbuckle') { setStatus(battle, target, 'dazed', 1); credit(); target.x = x; target.y = y; applyDamage(battle, target, 10, source, { move: { type: 'hazard' } }); log(battle, `${target.name} s’écrase dans le coin ! (-10, étourdi)`); break; }
     if (tileName === 'steps') { credit(); target.x = x; target.y = y; applyDamage(battle, target, t.hazard, source, { move: { type: 'hazard' } }); log(battle, `${target.name} percute les marches d’acier ! (-${t.hazard})`); break; }

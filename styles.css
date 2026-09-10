@@ -303,10 +303,26 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .t-void { background: transparent; }
 .t-void::before { display: none; }
 
-/* Tablier du ring : le ring est une plateforme surélevée, pas un simple carré
-   peint. L'ombre est décalée à parts égales sur les deux axes de la grille, ce
-   qui, une fois la projection appliquée, tombe pile vers le bas de l'écran :
-   on obtient l'épaisseur du tablier sans quitter la 2D. */
+/* RELIEF (faux 3D)
+   Une case surélevée est décalée à parts égales sur les deux axes de la grille :
+   après projection, ce décalage tombe pile vers le haut de l'écran. La tranche
+   est peinte par une ombre portée dans l'autre sens, ce qui donne la colonne de
+   terrain sous la case — le relief d'un tactical isométrique, sans quitter la 2D. */
+.view-iso .cell.raised {
+  --lift: calc(var(--lvl, 0) * var(--cell) * 0.20);
+  transform: translate(calc(-1 * var(--lift)), calc(-1 * var(--lift)));
+  z-index: calc(1 + var(--lvl, 0));
+  box-shadow:
+    calc(var(--lift) * 0.5) calc(var(--lift) * 0.5) 0 #3b2f57,
+    var(--lift) var(--lift) 0 #2a2140,
+    calc(var(--lift) + 2px) calc(var(--lift) + 2px) 0 var(--ink);
+}
+.view-iso .cell.raised .tile-mark,
+.view-iso .cell.raised .unit { z-index: 3; }
+/* le lutteur monte avec le sol qu'il occupe */
+.view-iso .unit { --ulift: calc(var(--lvl, 0) * var(--cell) * 0.20); }
+
+/* (ancien tablier, conservé pour la vue de dessus) */
 .ring-apron {
   position: absolute; z-index: 0; pointer-events: none;
   --lift: calc(var(--cell) * 0.58);

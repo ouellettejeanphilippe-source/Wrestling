@@ -81,3 +81,47 @@ test('gabarit 2×2 : un colosse réel apparaît et joue sans casser le moteur', 
   const res = autoPlay(b, 60);
   assert.ok(res === null || res.winner, 'le match doit se dérouler jusqu’au bout');
 });
+
+// ------------------------------------------------------------------- relief
+test('le plateau a du relief : le ring est une plateforme qu’il faut escalader', async () => {
+  const { buildArena, heightAt, reachable, key } = await import('../src/engine/grid.js');
+  const g = buildArena('standard');
+  assert.equal(heightAt(g, 2, 7), 0, 'le plancher est au niveau zéro');
+  assert.equal(heightAt(g, 4, 13), 1, 'les marches d’acier sont à mi-hauteur');
+  assert.equal(heightAt(g, 9, 7), 2, 'le tapis est surélevé');
+  assert.equal(heightAt(g, 5, 3), 3, 'les coins dominent le ring');
+
+  // depuis le plancher, entrer dans le ring coûte le terrain PLUS le dénivelé
+  const u = { x: 4, y: 8, team: 'player', flags: {} };
+  const petit = reachable(g, [], u, 3);
+  assert.ok(!petit.has(key(5, 8)), '3 MOV ne suffisent pas à grimper sur le tablier');
+  const grand = reachable(g, [], u, 4);
+  assert.ok(grand.has(key(5, 8)), '4 MOV suffisent : 2 de cordes + 2 de dénivelé');
+  // le coin culmine trop haut pour qu'on y saute depuis le plancher : il faut
+  // passer par le tapis, donc en faire le tour — beaucoup plus loin.
+  const coin = reachable(g, [], { x: 4, y: 12, team: 'player', flags: {} }, 5);
+  assert.ok(!coin.has(key(5, 12)), 'pas de saut de trois niveaux depuis le plancher');
+  const longTour = reachable(g, [], { x: 4, y: 12, team: 'player', flags: {} }, 12);
+  assert.ok(longTour.has(key(5, 12)), 'mais on y grimpe depuis le tapis');
+});
+
+test('relief : on ne saute pas d’une hauteur impossible, et frapper d’en haut aide', async () => {
+  const { buildArena, setHeight, reachable, key } = await import('../src/engine/grid.js');
+  const { createBattle, hitChance } = await import('../src/engine/battle.js');
+  const { WRESTLERS_BY_ID } = await import('../src/data/wrestlers.js');
+  const { MOVES } = await import('../src/data/moves.js');
+
+  const g = buildArena('standard');
+  setHeight(g, 8, 7, 9);                       // une falaise au milieu du tapis
+  const u = { x: 7, y: 7, team: 'player', flags: {} };
+  const r = reachable(g, [], u, 9);
+  assert.ok(!r.has(key(8, 7)), 'personne ne grimpe neuf niveaux d’un pas');
+
+  const b = createBattle({ match: { id: 't', title: 'T', type: 'singles', enemies: ['jobber_1'] }, playerTeam: [WRESTLERS_BY_ID.derby_allin], seed: 7 });
+  const a = b.units.find((x) => x.team === 'player'), d = b.units.find((x) => x.team === 'enemy');
+  a.x = 5; a.y = 3; d.x = 6; d.y = 4;           // attaquant dans le coin (3), cible au tapis (2)
+  const haut = hitChance(b, a, d, MOVES.powerbomb);
+  a.x = 6; a.y = 5;                             // même niveau que la cible
+  const plat = hitChance(b, a, d, MOVES.powerbomb);
+  assert.ok(haut > plat, 'frapper depuis le coin doit être plus précis');
+});
