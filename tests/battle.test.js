@@ -87,8 +87,13 @@ test('échelle de momentum : un mouvement coûte son palier et en rapporte s’i
   assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer toujours disponible');
   const r = executeAction(b, s, 'bodyslam', { unit: j });
   assert.ok(r.ok);
-  if (r.hit) assert.equal(s.momentum, 30 - 10 + MOVES.bodyslam.momentum);
-  else assert.equal(s.momentum, 20);
+  if (r.hit) assert.equal(s.momentum, 30 + MOVES.bodyslam.momentum, 'un mouvement de classe ne coûte rien et rapporte');
+  else assert.equal(s.momentum, 30);
+  // Signature et finisher, eux, consomment la jauge.
+  s.acted = false; s.momentum = 100;
+  const f = executeAction(b, s, 'attitude_adjustment', { unit: j });
+  assert.ok(f.ok);
+  assert.ok(s.momentum < 100, 'le finisher dépense le momentum');
 });
 
 test('un lutteur à 0 PV est au sol, peut être couvert, puis se relève', () => {

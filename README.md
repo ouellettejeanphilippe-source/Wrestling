@@ -66,14 +66,17 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
   | Palier | Débloqué à | Coût à l'usage |
   | --- | --- | --- |
   | Base (coup de poing, prise, Irish Whip, provoquer) | 0 | 0 |
-  | Classe | 25 | 10 |
-  | Spécialité | 45 | 20 |
+  | Classe | 25 | 0 |
+  | Spécialité | 45 | 0 |
   | Signature | 60 | 40 |
   | Finisher | 100 | 100 |
 
-  Un coup qui touche rapporte son propre momentum (10 à 20), donc les mouvements de classe s'autofinancent à peu près,
-  les spécialités grignotent la jauge, et signature/finisher sont de gros investissements. Les provocations sont
-  toujours gratuites.
+  Le palier donne l'**accès** ; seuls le signature et le finisher **consomment** la jauge. Un coup qui touche rapporte
+  son propre momentum (10 à 20), donc la jauge monte pendant que le match s'installe, puis se vide sur les grands coups.
+  Les provocations sont toujours gratuites.
+
+- **Étourdissement** : un coup qui étourdit dure jusqu'à votre tour suivant, ce qui permet des enchaînements
+  (doigt dans l'œil puis Elbow Drop, coup de pied retourné puis finisher, étourdir puis jeter par-dessus la corde).
 - **Au sol** : à 0 PV un lutteur tombe et perd un tour. C'est là qu'on le **couvre**. Il peut se dégager (kick-out),
   mais chaque kick-out et chaque relevé use son **cœur ❤️**. Un finisher donne un tombé immédiat et +30 %.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).

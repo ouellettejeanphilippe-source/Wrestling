@@ -113,6 +113,7 @@ function targetOk(battle, move, e, pos) {
   const req = move.requires || {};
   const g = battle.grid;
   if (req.targetDown && !e.down) return false;
+  if (req.targetDownOrDazed && !e.down && !e.statuses.dazed) return false;
   if (req.targetOnRope && tileAt(g, e.x, e.y) !== 'rope') return false;
   if (req.targetDazedOrCorner && !e.statuses.dazed && tileAt(g, e.x, e.y) !== 'turnbuckle') return false;
   if (req.targetNearTable && !isAdjacentToTerrain(g, e.x, e.y, 'table')) return false;
@@ -126,7 +127,8 @@ export function listActions(battle, unit, pos = null) {
   const g = battle.grid, rules = battle.rules;
   const enemies = enemiesOf(battle, unit), allies = alliesOf(battle, unit);
   const tile = tileAt(g, p.x, p.y);
-  const onTb = tile === 'turnbuckle', onRope = tile === 'rope';
+  // Un coin est une jonction de cordes : les mouvements « depuis les cordes » y fonctionnent aussi.
+  const onTb = tile === 'turnbuckle', onRope = tile === 'rope' || tile === 'turnbuckle';
   const inRange = (t, [lo, hi]) => { const d = manhattan(p, t); return d >= lo && d <= hi; };
   const wait = { id: 'wait', name: 'Attendre', tier: 'base', type: 'wait', desc: 'Termine le tour de ce lutteur. Récupère 4 PV.', targets: [{ self: true }], ok: true };
 
@@ -157,7 +159,7 @@ export function listActions(battle, unit, pos = null) {
     }
     if (a.ok && !a.targets.length) {
       a.ok = false;
-      a.reason = req.targetDown ? 'Cible au sol requise' : req.targetOnRope ? 'Cible sur les cordes requise' : req.targetNearTable ? 'Cible adjacente à une table requise' : req.targetDazedOrCorner ? 'Cible étourdie ou dans un coin requise' : 'Aucune cible à portée';
+      a.reason = req.targetDownOrDazed ? 'Cible au sol ou étourdie requise' : req.targetDown ? 'Cible au sol requise' : req.targetOnRope ? 'Cible sur les cordes requise' : req.targetNearTable ? 'Cible adjacente à une table requise' : req.targetDazedOrCorner ? 'Cible étourdie ou dans un coin requise' : 'Aucune cible à portée';
     }
     actions.push(a);
   }
@@ -286,7 +288,10 @@ function doSpecial(battle, unit, target, move) {
 export function hitChance(battle, attacker, target, move) {
   if (target.down) return 100;
   const A = getStats(battle, attacker), D = getStats(battle, target);
-  let c = (move.acc ?? 90) + (A.agi - D.agi) * 3;
+  // L'écart d'agilité est plafonné : un colosse touche encore un voltigeur.
+  // Une prise s'esquive moins bien qu'une frappe : quand on est attrapé, on est attrapé.
+  const grabby = move.type === 'grapple' || move.type === 'submission';
+  let c = (move.acc ?? 90) + clamp(A.agi - D.agi, -12, 12) * (grabby ? 1.2 : 2.2);
   if (target.statuses.dazed) c += 25;
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
@@ -301,7 +306,7 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   const pos = opts.pos || attacker;
   const atk = A[move.stat || 'str'];
   let dmg = (move.power || 0) + atk * 1.3 - D.def * 0.9 * (eff.ignoreDef ? 1 - eff.ignoreDef : 1);
-  if (move.type === 'aerial' && isOnTurnbuckle(battle.grid, pos.x, pos.y)) dmg *= 1.25;
+  if (move.type === 'aerial' && isOnTurnbuckle(battle.grid, pos.x, pos.y)) dmg *= 1.35;
   if (eff.charge && attacker.movedTiles >= 3) dmg += 8;
   if (target.down) dmg *= 1.1;
   if (target.statuses.dazed) dmg *= 1.15;
@@ -310,7 +315,7 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   dmg *= 0.8;
   let crit = false;
   if (!opts.noRng) {
-    if (battle.rng.chance(0.05 + A.tec * 0.01)) { crit = true; dmg *= 1.5; }
+    if (battle.rng.chance(0.04 + A.tec * 0.007)) { crit = true; dmg *= 1.5; }
     dmg *= 0.9 + battle.rng.next() * 0.2;
   }
   return { dmg: Math.max(1, Math.round(dmg)), crit };
@@ -346,7 +351,7 @@ export function resolveAttack(battle, attacker, target, move) {
   if (fromCorner) { battle.stats.highSpots++; }
   if (move.type === 'weapon') { battle.stats.weaponsUsed++; if (attacker.team === 'player') battle.stats.playerWeaponHits++; }
   if (!target.eliminated) {
-    if (eff.daze) setStatus(battle, target, 'dazed', eff.daze);
+    if (eff.daze) setStatus(battle, target, 'dazed', eff.daze + 1);
     if (eff.welt) addStatus(battle, target, 'welt', eff.welt, 4);
     if (eff.push) pushUnit(battle, target, Math.sign(target.x - attacker.x), Math.sign(target.y - attacker.y), eff.push, attacker);
     if (eff.breakTable) {
@@ -483,7 +488,8 @@ function attemptSubmission(battle, attacker, target, move) {
     return { ropeBreak: true };
   }
   const A = getStats(battle, attacker);
-  let c = (1 - hpRatio(target)) * 0.5 + A.tec * 0.012 - target.grit * 0.07 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.15 : 0);
+  const worn = Math.max(0, 0.65 - hpRatio(target)) / 0.65;
+  let c = worn * 0.75 + A.tec * 0.01 - target.grit * 0.07 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.15 : 0);
   if (gim(attacker).modTapChance) c = gim(attacker).modTapChance(battle, attacker, attacker, target, c, 'attacker');
   if (gim(target).modTapChance) c = gim(target).modTapChance(battle, target, attacker, target, c, 'target');
   if (!scriptAllowsElimination(battle, target, 'submission')) c *= SCRIPT_PENALTY;
@@ -504,7 +510,7 @@ function attemptSubmission(battle, attacker, target, move) {
 
 export function tossChance(battle, unit, target) {
   const A = getStats(battle, unit), D = getStats(battle, target);
-  let c = 0.25 + (1 - hpRatio(target)) * 0.5 + (A.str - D.str) * 0.03 + (target.down ? 0.25 : 0);
+  let c = 0.28 + (1 - hpRatio(target)) * 0.5 + (A.str - D.str) * 0.03 + (target.down ? 0.25 : 0) + (target.statuses.dazed ? 0.15 : 0);
   if (target.weight === 'light') c += 0.15;
   if (target.weight === 'super') c -= 0.2;
   if (gim(unit).modTossChance) c = gim(unit).modTossChance(battle, unit, c, 'attacker');

@@ -2,6 +2,7 @@
 import { manhattan, tileAt, isOutside, stepToward } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange } from './battle.js';
+import { MOVES } from '../data/moves.js';
 
 export function planUnit(battle, unit) {
   const reach = getReachable(battle, unit);
@@ -69,23 +70,45 @@ function scoreAction(battle, unit, pos, a, tg) {
 function scoreWhip(battle, unit, pos, target) {
   const g = battle.grid;
   const dx = Math.sign(target.x - pos.x), dy = Math.sign(target.y - pos.y);
-  let s = 12;
+  // Projeter une cible déjà étourdie n'apporte rien : évite les boucles de projections.
+  const mult = target.statuses.dazed ? 0.25 : 1;
+  let s = 8;
   for (let i = 1; i <= 2; i++) {
     const tile = tileAt(g, target.x + dx * i, target.y + dy * i);
-    if (tile === 'table') return 140;
-    if (tile === 'cage' || tile === 'barricade') return 85;
-    if (tile === 'steps') return 80;
-    if (tile === 'turnbuckle') return 70;
-    if (tile === 'rope') { s = battle.rules.toss ? 60 : 28; break; }
-    if (battle.rules.toss && isOutside(g, target.x + dx * i, target.y + dy * i)) return 230;
+    if (tile === 'table') return 140 * mult;
+    if (tile === 'cage' || tile === 'barricade') return 85 * mult;
+    if (tile === 'steps') return 80 * mult;
+    if (tile === 'turnbuckle') return 70 * mult;
+    if (tile === 'rope') { s = battle.rules.toss ? 60 : 14; break; }
+    if (battle.rules.toss && isOutside(g, target.x + dx * i, target.y + dy * i)) return 230 * mult;
     if (tile === 'void') break;
   }
-  return s;
+  return s * mult;
+}
+
+// Un lutteur dont le kit exige un coin ou les cordes gagne à s'y placer.
+function perchValue(battle, unit, pos) {
+  const tile = tileAt(battle.grid, pos.x, pos.y);
+  if (tile !== 'turnbuckle' && tile !== 'rope') return 0;
+  let best = 0;
+  for (const id of unit.moves) {
+    const m = MOVES[id];
+    if (!m || !m.requires) continue;
+    const needsCorner = m.requires.turnbuckle && !unit.flags.ignoreTurnbuckle;
+    const needsRope = m.requires.attackerOnRope;
+    if (!needsCorner && !needsRope) continue;
+    if (needsCorner && tile !== 'turnbuckle') continue;
+    if (unit.momentum < (m.unlock ?? 0)) continue;
+    const enemies = enemiesOf(battle, unit).filter((e) => manhattan(e, pos) <= m.range[1]);
+    if (!enemies.length) continue;
+    best = Math.max(best, 18 + (m.power || 0) * 0.6);
+  }
+  return best;
 }
 
 function positional(battle, unit, pos) {
   const rules = battle.rules, g = battle.grid;
-  let s = 0;
+  let s = perchValue(battle, unit, pos);
   if (rules.countOut > 0 && isOutside(g, pos.x, pos.y)) s -= 35;
   if (rules.toss && ['rope', 'turnbuckle'].includes(tileAt(g, pos.x, pos.y))) s -= 30;
   if (rules.cage && hpRatio(unit) < 0.4 && tileAt(g, pos.x, pos.y) === 'turnbuckle') s += 25;

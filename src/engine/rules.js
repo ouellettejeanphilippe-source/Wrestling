@@ -27,7 +27,18 @@ export function checkWin(battle) {
     } else if (!E.length) { winner = 'player'; reason = 'Tous les adversaires sont éliminés !'; }
     else if (!P.length) { winner = 'enemy'; reason = 'Tous vos lutteurs ont été éliminés.'; }
   }
-  if (!winner && battle.turn > (battle.match.maxTurns || 30)) { winner = 'enemy'; reason = 'Limite de temps : match nul. Le Network déteste les matchs nuls.'; }
+  if (!winner && battle.turn > (battle.match.maxTurns || 30)) {
+    // Limite de temps : décision aux points (PV restants), pas une défaite automatique.
+    const share = (team) => {
+      const us = living(battle, team);
+      return us.length ? us.reduce((a, u) => a + u.hp / u.maxHp, 0) / us.length : 0;
+    };
+    const p = share('player'), e = share('enemy');
+    winner = p > e ? 'player' : 'enemy';
+    reason = p === e
+      ? 'Limite de temps : match nul, l’arbitre donne la décision aux visiteurs.'
+      : `Limite de temps : décision aux points pour ${winner === 'player' ? 'votre équipe' : 'l’adversaire'} (${Math.round((winner === 'player' ? p : e) * 100)} % de PV restants).`;
+  }
   if (winner) battle.result = { winner, reason, turns: battle.turn };
   return battle.result;
 }

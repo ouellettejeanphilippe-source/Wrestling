@@ -8,7 +8,7 @@ export const MATCH_TYPES = {
   hardcore: { name: 'Hardcore', icon: '🪑', arena: 'hardcore', victory: 'fall', firstFall: true, countOut: 0, dq: false, weapons: 4,
     desc: 'Pas de DQ, pas de compte à l’extérieur, armes et tables partout. Le tombé compte n’importe où.' },
   battle_royal: { name: 'Bataille royale', icon: '👑', arena: 'standard', victory: 'lastStanding', firstFall: false, countOut: 0, dq: false, toss: true, noPin: true,
-    desc: 'Aucun tombé : on élimine en jetant un adversaire par-dessus la troisième corde (il doit être sur les cordes ou dans un coin). Dernier debout gagne.' },
+    desc: 'Aucun tombé : on élimine en jetant un adversaire par-dessus la troisième corde (il doit être sur les cordes ou dans un coin). Usez-le ou étourdissez-le d’abord. Dernier debout gagne.' },
   ladder: { name: 'Match d’échelle', icon: '🪜', arena: 'ladder', victory: 'belt', firstFall: false, countOut: 0, dq: false, weapons: 2, noPin: true,
     desc: 'Grimpez l’échelle (au centre du ring) deux tours de suite sans subir de dégâts pour décrocher la ceinture. Pas de tombé, pas de DQ.' },
   cage: { name: 'Cage d’acier', icon: '🔒', arena: 'cage', victory: 'fall_or_escape', firstFall: true, countOut: 0, dq: false, cage: true,

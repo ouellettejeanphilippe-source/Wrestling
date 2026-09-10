@@ -58,10 +58,11 @@ export const GIMMICKS = {
   },
   beer_bash: {
     name: 'Bière 3:16',
-    desc: 'Provoquer soigne 15 PV pour lui et les alliés adjacents, +10 chaleur.',
+    desc: 'Provoquer soigne 20 PV pour lui et les alliés adjacents, +15 momentum, +10 chaleur.',
     onTaunt: (b, u) => {
-      heal(b, u, 15);
-      for (const a of unitsWithin(b, u, 1, u.team)) heal(b, a, 15);
+      heal(b, u, 20);
+      addMomentum(b, u, 15);
+      for (const a of unitsWithin(b, u, 1, u.team)) heal(b, a, 20);
       addHeat(b, 10);
       log(b, `🍺 ${u.name} ouvre des bières. Ça fait du bien.`, 'gimmick');
     },
@@ -73,11 +74,11 @@ export const GIMMICKS = {
   },
   hulk_up: {
     name: 'Se gonfler',
-    desc: 'Une fois par match, sous 35 % PV au début de son tour : +3 FOR, soigne 15, +25 momentum.',
+    desc: 'Une fois par match, sous 35 % PV au début de son tour : +4 FOR, soigne 25, +40 momentum, et il ne peut plus être étourdi.',
     onTurnStart: (b, u) => {
       if (u.memory.hulked || hpRatio(u) >= 0.35) return;
       u.memory.hulked = true;
-      u.stats.str += 3; heal(b, u, 15); addMomentum(b, u, 25); addHeat(b, 10);
+      u.stats.str += 4; heal(b, u, 25); addMomentum(b, u, 40); addHeat(b, 10); u.flags.noDaze = true;
       log(b, `💛 ${u.name} SE GONFLE ! Les coups ne lui font plus rien !`, 'gimmick');
     },
   },
@@ -96,8 +97,8 @@ export const GIMMICKS = {
   },
   hands_in_pockets: {
     name: 'Mains dans les poches',
-    desc: '-25 % de chance d’être touché. À 75+ momentum, ses coups font +30 % (il y met de l’effort).',
-    modHitChance: (b, u, atk, tgt, m, c, role) => (role === 'target' ? c - 25 : c),
+    desc: '-12 % de chance d’être touché. À 75+ momentum, ses coups font +30 % (il y met de l’effort).',
+    modHitChance: (b, u, atk, tgt, m, c, role) => (role === 'target' ? c - 12 : c),
     modOutDamage: (b, u, t, m, dmg) => (u.momentum >= 75 || m.tier === 'finisher' ? dmg * 1.3 : dmg),
   },
   finish_story: {
@@ -109,7 +110,8 @@ export const GIMMICKS = {
   },
   curse: {
     name: 'Très gentil, très méchant',
-    desc: 'Au début de son tour, maudit les ennemis à 2 cases : -25 précision pendant 2 tours.',
+    desc: 'Au début de son tour, maudit les ennemis à 2 cases : -25 précision pendant 2 tours. Ses coups font +30 % sur une cible maudite.',
+    modOutDamage: (b, u, t, m, dmg) => (t.statuses.cursed ? dmg * 1.3 : dmg),
     onTurnStart: (b, u) => {
       const t = unitsWithin(b, u, 2).filter((e) => e.team !== u.team);
       for (const e of t) setStatus(b, e, 'cursed', 2);
@@ -163,31 +165,31 @@ export const GIMMICKS = {
   },
   aerial_assassin: {
     name: 'Assassin aérien',
-    desc: 'Ses mouvements aériens n’exigent pas de coin. Aérien +15 %.',
+    desc: 'Ses mouvements aériens n’exigent pas de coin. Aérien +10 %.',
     onMatchStart: (b, u) => { u.flags.ignoreTurnbuckle = true; },
-    modOutDamage: (b, u, t, m, dmg) => (m.type === 'aerial' ? dmg * 1.15 : dmg),
+    modOutDamage: (b, u, t, m, dmg) => (m.type === 'aerial' ? dmg * 1.1 : dmg),
   },
   whose_house: {
     name: 'C’est la maison à qui ?',
-    desc: 'Provoquer : +12 chaleur et +15 momentum aux alliés à 3 cases.',
-    onTaunt: (b, u) => { addHeat(b, 12); for (const a of unitsWithin(b, u, 3, u.team)) addMomentum(b, a, 15); },
+    desc: 'Provoquer : +12 chaleur, et +15 momentum pour lui et ses alliés à 3 cases.',
+    onTaunt: (b, u) => { addHeat(b, 12); addMomentum(b, u, 15); for (const a of unitsWithin(b, u, 3, u.team)) addMomentum(b, a, 15); },
   },
   timeless: {
     name: 'Intemporelle',
-    desc: 'Subit -25 % des frappes. Provoquer : monologue, +10 chaleur, -10 momentum aux ennemis adjacents.',
-    modInDamage: (b, u, a, m, dmg) => (m && m.type === 'strike' ? dmg * 0.75 : dmg),
+    desc: 'Subit -25 % des frappes et des prises. Provoquer : monologue, +10 chaleur, -10 momentum aux ennemis adjacents.',
+    modInDamage: (b, u, a, m, dmg) => (m && ['strike', 'grapple'].includes(m.type) ? dmg * 0.75 : dmg),
     onTaunt: (b, u) => { addHeat(b, 10); for (const e of unitsWithin(b, u, 1).filter((x) => x.team !== u.team)) addMomentum(b, e, -10); },
   },
   prime_time: {
     name: 'Prime Time',
-    desc: 'Une fois, sous 40 % PV : boit une Prime, soigne 25. Aérien +30 %. Peu de cœur (grit faible).',
+    desc: 'Une fois, sous 40 % PV : boit une Prime, soigne 25. Aérien +20 %. Peu de cœur (grit faible).',
     onTurnStart: (b, u) => { if (!u.memory.prime && hpRatio(u) < 0.4) { u.memory.prime = true; heal(b, u, 25); log(b, `🧃 ${u.name} boit une Prime. Hydratation légendaire.`, 'gimmick'); } },
-    modOutDamage: (b, u, t, m, dmg) => (m.type === 'aerial' ? dmg * 1.3 : dmg),
+    modOutDamage: (b, u, t, m, dmg) => (m.type === 'aerial' ? dmg * 1.2 : dmg),
   },
   pipebomb: {
     name: 'Pipe Bomb',
-    desc: 'Début de tour : les ennemis à 2 cases perdent 8 momentum, +3 chaleur.',
-    onTurnStart: (b, u) => { const es = unitsWithin(b, u, 2).filter((e) => e.team !== u.team); for (const e of es) addMomentum(b, e, -8); if (es.length) addHeat(b, 3); },
+    desc: 'Début de tour : les ennemis à 2 cases perdent 10 momentum et il en récupère la moitié, +3 chaleur.',
+    onTurnStart: (b, u) => { const es = unitsWithin(b, u, 2).filter((e) => e.team !== u.team); for (const e of es) { addMomentum(b, e, -10); addMomentum(b, u, 5); } if (es.length) addHeat(b, 3); },
   },
   immovable: {
     name: 'Inamovible',
@@ -217,9 +219,9 @@ export const GIMMICKS = {
   },
   anxiety: {
     name: 'Cowboy anxieux',
-    desc: '-5 momentum par tour. Quand il se relève : +50 momentum et +3 FOR permanents (Cowboy Shit).',
-    onTurnStart: (b, u) => addMomentum(b, u, -5),
-    onStandUp: (b, u) => { addMomentum(b, u, 50); u.stats.str += 3; log(b, `🤠 ${u.name} : COWBOY SHIT !`, 'gimmick'); },
+    desc: 'Il doute quand il mène : -8 momentum par tour au-dessus de 50, jusqu’à ce qu’il se relève une première fois. Ensuite : +50 momentum, +3 FOR et plus aucun doute (Cowboy Shit).',
+    onTurnStart: (b, u) => { if (!u.memory.cowboy && u.momentum > 50) addMomentum(b, u, -8); },
+    onStandUp: (b, u) => { u.memory.cowboy = true; addMomentum(b, u, 50); u.stats.str += 3; log(b, `🤠 ${u.name} : COWBOY SHIT !`, 'gimmick'); },
   },
   lucha: {
     name: 'Lucha Libre',
