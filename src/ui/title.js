@@ -5,6 +5,7 @@ import { WRESTLERS, WRESTLERS_BY_ID, STARTER_CHOICES } from '../data/wrestlers.j
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
 import { load } from '../game/state.js';
+import { showTutorial } from './tutorial.js';
 
 export function showTitle(root, app) {
   clear(root);
@@ -13,6 +14,7 @@ export function showTitle(root, app) {
     h('button', { class: 'btn primary big', onclick: () => showSetup(root, app) }, '🆕 Nouvelle saison'),
     saved ? h('button', { class: 'btn big', onclick: () => app.continueCampaign() }, `▶ Continuer (${saved.promoName}, épisode ${Math.min(saved.showIndex + 1, 8)})`) : null,
     h('button', { class: 'btn big', onclick: () => showExhibition(root, app) }, '🥊 Match d’exhibition'),
+    h('button', { class: 'btn big', onclick: () => showTutorial(root, {}) }, '📖 Comment jouer'),
   );
   root.append(h('div', { class: 'title' },
     h('h1', {}, 'Parodie Pro Wrestling', h('span', {}, 'Tactics')),

@@ -87,8 +87,8 @@ test('échelle de momentum : un mouvement coûte son palier et en rapporte s’i
   assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer toujours disponible');
   const r = executeAction(b, s, 'bodyslam', { unit: j });
   assert.ok(r.ok);
-  if (r.hit) assert.equal(s.momentum, 30 + MOVES.bodyslam.momentum, 'un mouvement de classe ne coûte rien et rapporte');
-  else assert.equal(s.momentum, 30);
+  if (r.hit) assert.ok(s.momentum >= 30 + MOVES.bodyslam.momentum, 'un mouvement de classe ne coûte rien et rapporte');
+  else assert.equal(s.momentum, 30, 'un coup raté ne coûte rien non plus');
   // Signature et finisher, eux, consomment la jauge.
   s.acted = false; s.momentum = 100;
   const f = executeAction(b, s, 'attitude_adjustment', { unit: j });
@@ -245,4 +245,59 @@ test('les renforts arrivent au tour prévu', () => {
   endPlayerPhase(b); runEnemyPhase(b); // tour 2
   endPlayerPhase(b); runEnemyPhase(b); // tour 3 → renfort
   assert.ok(b.units.filter((u) => u.team === 'enemy').length >= 3);
+});
+
+test('les trois actes changent les règles du match', async () => {
+  const { matchPhase, PHASES } = await import('../src/engine/phases.js');
+  const b = mk('singles', ['jean_sina'], ['jobber_1']);
+  assert.equal(matchPhase(b).key, 'early', 'ouverture au premier tour');
+  b.turn = 6; b.heat = 50;
+  assert.equal(matchPhase(b).key, 'mid', 'corps du match ensuite');
+  b.heat = 80;
+  assert.equal(matchPhase(b).key, 'late', 'une foule chaude fait basculer en main event');
+  b.heat = 20; b.turn = 12;
+  assert.equal(matchPhase(b).key, 'late', 'un match long aussi');
+  assert.ok(PHASES.late.dmg > PHASES.early.dmg, 'la fin frappe plus fort que le début');
+  assert.ok(PHASES.early.momentum > PHASES.late.momentum, 'le début construit le momentum');
+  assert.ok(PHASES.late.flashy > PHASES.early.flashy, 'les gros mouvements paient surtout à la fin');
+});
+
+test('les combos se déclenchent sur les bonnes conditions et cumulent', async () => {
+  const { activeCombos, comboDamageMult } = await import('../src/engine/battle.js');
+  const b = mk('singles', ['derby_allin'], ['jobber_1']);
+  const d = findP(b, 'derby_allin'), j = findE(b, 'jobber_1');
+  place(d, 5, 4); place(j, 6, 4);
+  assert.equal(activeCombos(b, d, j, MOVES.punch).length, 0, 'aucun combo sans mise en place');
+  j.statuses.dazed = 2;
+  const c1 = activeCombos(b, d, j, MOVES.punch);
+  assert.ok(c1.some((c) => c.id === 'stagger'), 'cible étourdie : suite logique');
+  place(d, 3, 2); place(j, 4, 3);
+  const c2 = activeCombos(b, d, j, MOVES.moonsault);
+  assert.ok(c2.some((c) => c.id === 'highspot'), 'plongeon depuis le coin : high spot');
+  assert.ok(comboDamageMult(c2) > 1, 'les combos augmentent les dégâts');
+  assert.ok(comboDamageMult([{ dmg: 2 }, { dmg: 2 }, { dmg: 2 }]) <= 1.8, 'le cumul est plafonné');
+  d.memory.lastHit = { uid: j.uid, type: 'strike' };
+  assert.ok(activeCombos(b, d, j, MOVES.hurricanrana).some((c) => c.id === 'chain'), 'changer de famille de coup : enchaînement');
+});
+
+test('arrêt de l’arbitre : un adversaire sans cœur qui retombe ne se relève plus', () => {
+  const b = mk('singles', ['jean_sina'], ['jobber_1']);
+  const j = findE(b, 'jobber_1');
+  j.grit = 0;
+  b.api.applyDamage(j, 999, findP(b, 'jean_sina'), {});
+  assert.ok(j.eliminated && j.elimReason === 'stoppage');
+  assert.equal(b.result.winner, 'player');
+});
+
+test('chaque match expose plusieurs routes de victoire', async () => {
+  const { winRoutes } = await import('../src/engine/rules.js');
+  const singles = winRoutes(mk('singles', ['brian_danielsson'], ['jobber_1'])).map((r) => r.id);
+  for (const id of ['pin', 'stoppage', 'submission', 'countout', 'dq']) assert.ok(singles.includes(id), `match simple : ${id}`);
+  const royal = winRoutes(mk('battle_royal', ['jean_sina'], ['jobber_1'])).map((r) => r.id);
+  assert.ok(royal.includes('toss'), 'bataille royale : par-dessus la corde');
+  assert.ok(!royal.includes('pin'), 'bataille royale : pas de tombé');
+  const cage = winRoutes(mk('cage', ['jean_sina'], ['jobber_1'])).map((r) => r.id);
+  assert.ok(cage.includes('escape') && cage.includes('pin'), 'cage : évasion et tombé');
+  const ladder = winRoutes(mk('ladder', ['jean_sina'], ['jobber_1'])).map((r) => r.id);
+  assert.ok(ladder.includes('belt'), 'échelle : ceinture');
 });

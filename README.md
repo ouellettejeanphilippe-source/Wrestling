@@ -77,6 +77,49 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 
 - **Étourdissement** : un coup qui étourdit dure jusqu'à votre tour suivant, ce qui permet des enchaînements
   (doigt dans l'œil puis Elbow Drop, coup de pied retourné puis finisher, étourdir puis jeter par-dessus la corde).
+
+## Les trois actes d'un match
+
+La phase se déduit de l'état du match (tour, chaleur de la foule, usure des corps), pas d'un minuteur, et elle est
+affichée en haut de l'écran avec ce qu'elle récompense.
+
+| Acte | Rôle | Effets |
+| --- | --- | --- |
+| 🔔 **Ouverture** | Build-up | Dégâts -15 %, momentum +35 %, chaleur -30 %, gros mouvements -15 % (personne n'y croit encore), tombés plus durs |
+| 🔥 **Corps du match** | Prendre l'avantage | Valeurs normales, soumissions +8 % d'abandon : c'est le moment d'user, de marquer et de contrôler le terrain |
+| 🏆 **Main event** | Tout donner | Dégâts +15 %, mouvements spectaculaires +15 %, chaleur +40 %, tombés +12 % |
+
+## Combos
+
+Ils se déclenchent tout seuls quand les conditions sont réunies, s'annoncent dans le journal et se cumulent
+(multiplicateur plafonné). Ils sont visibles à l'avance sur chaque mouvement et dans la prévision de combat.
+
+| Combo | Condition |
+| --- | --- |
+| 💫 Suite logique | Frapper une cible étourdie |
+| 🔴 Poitrine en feu | Frapper une cible marquée 3 fois (chops) |
+| 🦅 High spot | Plonger depuis un coin |
+| 🪢 Rebond des cordes | Attaquer depuis les cordes |
+| 🔨 Au sol et martelé | Frapper une cible au sol |
+| ☠️ Séquence de finition | Finisher sur une cible encore sonnée |
+| 📣 La foule est debout | Attaquer avec 80+ de chaleur |
+| 🪑 Décor complice | Frapper une cible acculée à un obstacle |
+| 🔗 Enchaînement | Alterner les familles de coups sur la même cible |
+| 💪 Différence de force | Prise sur un adversaire nettement moins fort |
+
+## Plusieurs façons de gagner
+
+Le panneau « Comment gagner » liste en permanence les routes ouvertes et leur état : tombé, **arrêt de l'arbitre**
+(un adversaire sans cœur qui retombe ne se relève plus), soumission, compte à l'extérieur, disqualification adverse,
+par-dessus la troisième corde, échelle, évasion de cage, survie, élimination totale. Sur une saison simulée, les
+victoires se répartissent réellement entre toutes ces routes.
+
+## Tutoriel
+
+Cinq pages accessibles depuis l'écran titre (« Comment jouer ») et le bouton Aide en match, affichées automatiquement
+au premier match : les trois actes, l'échelle de momentum, les combos, les routes de victoire, et trois approches
+possibles (rouleau compresseur, voltigeur, technicien) présentées comme des exemples et non comme la bonne façon de
+jouer.
 - **Au sol** : à 0 PV un lutteur tombe et perd un tour. C'est là qu'on le **couvre**. Il peut se dégager (kick-out),
   mais chaque kick-out et chaque relevé use son **cœur ❤️**. Un finisher donne un tombé immédiat et +30 %.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).
@@ -119,6 +162,7 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 index.html, styles.css        interface (DOM pur)
 src/main.js                   navigation entre écrans
 src/engine/  grid.js          terrain, aréna 14×10, déplacement (Dijkstra)
+             phases.js        les trois actes du match et leurs modificateurs
              units.js         création d'unités, liste de mouvements par palier
              battle.js        état de match, actions, dégâts, tombés, soumissions, whip, armes/DQ, tag, escalade, phases
              ai.js            IA : évalue chaque tuile atteignable × chaque action × chaque cible
@@ -130,10 +174,11 @@ src/data/    wrestlers.js     roster parodique
              gimmicks.js      passifs (hooks appelés par le moteur)
              matchTypes.js    types de matchs, armes
              directives.js    directives du Network / spots des scripts
+             combos.js        enchaînements nommés et leurs conditions
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              script.js        évaluation des directives et des scripts (étoiles)
-src/ui/      title.js hub.js match.js cards.js dom.js
+src/ui/      title.js hub.js match.js cards.js avatar.js tutorial.js dom.js
 tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne
 ```
 
