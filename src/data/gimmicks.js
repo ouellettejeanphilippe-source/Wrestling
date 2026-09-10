@@ -82,7 +82,7 @@ export const GIMMICKS = {
     },
   },
   best_bout: {
-    name: 'Meilleure machine à matchs',
+    name: 'Best Bout Machine',
     desc: 'Chaque coup réussi consécutif : +8 % dégâts (max 5). Un raté remet à zéro.',
     onHit: (b, u) => { u.memory.combo = Math.min(5, (u.memory.combo || 0) + 1); },
     onMiss: (b, u) => { u.memory.combo = 0; },

@@ -20,7 +20,7 @@ export const SEASON = {
       matches: [
         { id: 'ep2a', script: { summary: 'Votre lutteur gagne, mais le Network veut du bois cassé et de l’acier.', finish: { winner: 'player', method: 'pin' }, beats: ['table', 'weapons', 'kickout_drama'] }, title: 'Hardcore du sous-sol', type: 'hardcore', teamSize: 1, enemies: ['jon_moxie'], directives: ['table', 'weapons'], reward: { money: 500, fans: 140 },
           desc: 'Un chien enragé, quatre armes, deux tables. Bonne chance.' },
-        { id: 'ep2b', script: { summary: 'Moxie doit garder son aura hardcore : votre équipe perd (n’importe comment), après une table et beaucoup de bumps.', finish: { winner: 'enemy', method: 'any' }, beats: ['table', 'sells', 'heat'] }, title: 'Tag hardcore', type: 'hardcore', teamSize: 2, enemies: ['jon_moxie', 'dannemaison'], directives: ['table', 'clean_sweep'], reward: { money: 550, fans: 160 },
+        { id: 'ep2b', script: { summary: 'Jon Moxie doit garder son aura hardcore : votre équipe perd (n’importe comment), après une table et beaucoup de bumps.', finish: { winner: 'enemy', method: 'any' }, beats: ['table', 'sells', 'heat'] }, title: 'Tag hardcore', type: 'hardcore', teamSize: 2, enemies: ['jon_moxie', 'dannemaison'], directives: ['table', 'clean_sweep'], reward: { money: 550, fans: 160 },
           desc: 'Deux contre deux, tout est permis. Attention aux malédictions.' },
       ],
     },
@@ -30,7 +30,7 @@ export const SEASON = {
       matches: [
         { id: 'ep3a', script: { summary: 'Victoire propre par tombé après un hot tag et un retour du héros.', finish: { winner: 'player', method: 'pin' }, beats: ['hot_tag', 'comeback', 'kickout_drama'] }, title: 'Les Fraudeurs', type: 'tag', teamSize: 2, enemies: ['mjg', 'seth_rollmops'], directives: ['hot_tag', 'no_weapons'], reward: { money: 600, fans: 180 },
           desc: 'Deux tricheurs professionnels. Faites des tags propres et gagnez proprement.' },
-        { id: 'ep3b', script: { summary: 'Mami et la Vipère montent en puissance : votre équipe perd par tombé après avoir encaissé un finisher.', finish: { winner: 'enemy', method: 'pin' }, beats: ['hot_tag', 'sells', 'took_finisher'] }, title: 'Mami et la Vipère', type: 'tag', teamSize: 2, enemies: ['rhea_ripplay', 'randy_python'], directives: ['hot_tag', 'comeback'], reward: { money: 700, fans: 220 },
+        { id: 'ep3b', script: { summary: 'Rhea Rippley et Randy Horton montent en puissance : votre équipe perd par tombé après avoir encaissé un finisher.', finish: { winner: 'enemy', method: 'pin' }, beats: ['hot_tag', 'sells', 'took_finisher'] }, title: 'Mami et la Vipère', type: 'tag', teamSize: 2, enemies: ['rhea_ripplay', 'randy_python'], directives: ['hot_tag', 'comeback'], reward: { money: 700, fans: 220 },
           desc: 'Une équipe brutale. Gardez vos distances de la Vipère quand elle a du momentum.' },
       ],
     },

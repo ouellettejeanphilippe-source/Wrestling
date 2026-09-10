@@ -42,6 +42,11 @@ Mouvements = base (tous) + classe (3) + spécialité (2) + signature (50 momentu
 | --- | --- |
 | 💪 Force, 🪽 Voltigeur, 🧠 Technicien, 🥊 Bagarreur, 🎤 Vedette | 🦅 Aérien, 🔗 Soumission, 🪑 Hardcore, 🦵 Frappeur, 😈 Tricheur, 🗿 Colosse, ⚡ Vitesse, 📣 Micro |
 
+Le roster : John Sena, Darby All-In, Bryan Danielsonne, Stone Cold Steve Boston, Orange Casually, Cody Roads,
+Kenny Oméga-3, Will Ospray, Becky Lunch, Rey Mysterioso, Bulk Hogan, Stung, Hangman Adam Paige, CM Funk, Toni Stormy,
+Chris Jerico, Randy Horton, Maxwell Jacob Fraude (MJF), Rhea Rippley, Jon Moxie, Günter, Seth Rollings, Swerve Strickly,
+Logan Pawl, Danhowsen, Fray Wyatt, Andrei le Géant, The Undertacker, Roman Rains et The Roc (+ jobbers et envahisseurs).
+
 Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (refuse la première chute),
 *Sorti de nulle part* (contre RKO), *Repose en paix* (se redresse à 50 %), *Mains dans les poches* (esquive),
 *Meilleure machine à matchs* (combo), *La Liste*, *Très gentil très méchant* (malédiction), *Laisse-moi entrer*
