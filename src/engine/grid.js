@@ -15,7 +15,53 @@ export const TERRAIN = {
 };
 
 export const key = (x, y) => `${x},${y}`;
-export const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+// ---------------------------------------------------------------- gabarits
+// Un lutteur occupe un carré de `size` cases, ancré en haut à gauche sur (x, y).
+// Les colosses (weight 'super') tiennent sur 2×2 : ils bloquent plus de terrain,
+// se font encadrer plus facilement, et ne rentrent pas partout.
+export const unitSize = (u) => (u && u.size) || 1;
+export function cellsOf(u) {
+  const s = unitSize(u), out = [];
+  for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) out.push({ x: u.x + dx, y: u.y + dy });
+  return out;
+}
+export const occupies = (u, x, y) => {
+  const s = unitSize(u);
+  return x >= u.x && x < u.x + s && y >= u.y && y < u.y + s;
+};
+// Écart entre deux segments sur un axe : 0 s'ils se chevauchent, 1 s'ils se touchent.
+const axisGap = (a0, al, b0, bl) => Math.max(0, a0 - (b0 + bl - 1), b0 - (a0 + al - 1));
+// Distance de Manhattan entre deux gabarits (donc « === 1 » = corps à corps,
+// quelle que soit la taille des deux lutteurs).
+export function manhattan(a, b) {
+  const as = unitSize(a), bs = unitSize(b);
+  if (as === 1 && bs === 1) return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  return axisGap(a.x, as, b.x, bs) + axisGap(a.y, as, b.y, bs);
+}
+
+// Le gabarit de `unit` tient-il en (x, y) ? Renvoie null si non, sinon le coût de
+// terrain (le plus cher des cases couvertes : un colosse à cheval sur les cordes
+// paie le prix des cordes).
+export function fitCost(grid, units, unit, x, y, opts = {}) {
+  const s = unitSize(unit);
+  const ghost = !!(unit.flags && unit.flags.ghost);
+  let cost = 0;
+  for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) {
+    const nx = x + dx, ny = y + dy;
+    if (!inBounds(grid, nx, ny)) return null;
+    const t = terrainAt(grid, nx, ny);
+    if (!t.passable) return null;
+    cost = Math.max(cost, t.cost);
+    for (const o of units) {
+      if (o === unit || o.eliminated || !occupies(o, nx, ny)) continue;
+      if (opts.anyUnitBlocks) return null;
+      if (o.team !== unit.team && !ghost) return null;   // les adversaires bloquent le passage
+    }
+  }
+  return cost;
+}
+export const fits = (grid, units, unit, x, y, opts = {}) => fitCost(grid, units, unit, x, y, opts) !== null;
 
 export function createGrid(w, h, fill = 'floor') {
   return { w, h, tiles: Array(w * h).fill(fill), ring: null, arena: 'standard' };
@@ -77,16 +123,13 @@ export function reachable(grid, units, unit, mov, from = null) {
   const start = key(sx, sy);
   const best = new Map([[start, { cost: 0, from: null, x: sx, y: sy }]]);
   const frontier = [{ x: sx, y: sy, cost: 0 }];
-  const ghost = !!(unit.flags && unit.flags.ghost);
   while (frontier.length) {
     frontier.sort((a, b) => a.cost - b.cost);
     const cur = frontier.shift();
     for (const [nx, ny] of neighbors(grid, cur.x, cur.y)) {
-      const t = terrainAt(grid, nx, ny);
-      if (!t.passable) continue;
-      const occ = units.find((u) => !u.eliminated && u.x === nx && u.y === ny);
-      if (occ && occ.team !== unit.team && !ghost) continue;
-      const c = cur.cost + t.cost;
+      const step = fitCost(grid, units, unit, nx, ny);   // gabarit complet, terrain et adversaires
+      if (step == null) continue;
+      const c = cur.cost + step;
       if (c > mov) continue;
       const k = key(nx, ny);
       if (!best.has(k) || best.get(k).cost > c) {
@@ -95,8 +138,10 @@ export function reachable(grid, units, unit, mov, from = null) {
       }
     }
   }
+  // une case reste « atteignable mais bloquée » si on ne peut pas s'y arrêter
   for (const [k, v] of best) {
-    if (k !== start && units.some((u) => !u.eliminated && u !== unit && key(u.x, u.y) === k)) v.blocked = true;
+    if (k === start) continue;
+    if (!fits(grid, units, unit, v.x, v.y, { anyUnitBlocks: true })) v.blocked = true;
   }
   return best;
 }

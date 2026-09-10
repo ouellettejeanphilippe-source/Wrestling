@@ -160,7 +160,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const item = battle.items.find((i) => i.x === x && i.y === y);
         if (item) cell.append(h('span', { class: 'item', title: item.weapon.name }, item.weapon.icon));
         const u = unitAt(battle, x, y);
-        if (u) {
+        if (u && (u.x !== x || u.y !== y)) cell.classList.add('unit-body');   // reste du gabarit
+        if (u && u.x === x && u.y === y) {
           const tok = unitToken(u);
           if (ui.sel === u) tok.classList.add('selected');
           if (ui.acting === u) tok.classList.add('acting');
@@ -217,8 +218,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (battle.rules.tag && u.legal) icons.push('⭐');
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
-    const cls = `unit team-${u.team}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
-    return h('div', { class: cls, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}` },
+    const size = u.size || 1;
+    const cls = `unit team-${u.team}${size > 1 ? ` size-${size}` : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
+    return h('div', { class: cls, 'data-size': size, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${size > 1 ? ' · colosse (2×2 cases)' : ''}` },
       h('span', { class: 'unit-shadow' }),
       avatar(def, 0, { fill: true, view: 'full', bg: 'none', facing: u.team === 'player' ? 1 : -1 }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),

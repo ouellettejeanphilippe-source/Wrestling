@@ -28,6 +28,18 @@ function parse(hex) {
 const dark = (hex, a = 0.35) => mix(hex, '#000000', a);
 const light = (hex, a = 0.3) => mix(hex, '#ffffff', a);
 
+// Rampe de quatre tons par matière. La lumière vient d'en haut à gauche :
+// « hi » sur les faces éclairées, « sh » sur les faces tournées à droite,
+// « deep » dans les creux (aisselles, sous la mâchoire, plis).
+function ramp(hex) {
+  return {
+    hi: mix(light(hex, 0.34), hex, 0.15),
+    base: hex,
+    sh: mix(hex, '#2a1c3a', 0.3),
+    deep: mix(hex, '#170f24', 0.55),
+  };
+}
+
 // -- moteur de dessin ---------------------------------------------------------
 function canvas() {
   const outline = [], fill = [];
@@ -39,6 +51,15 @@ function canvas() {
       if (w <= 0 || h <= 0 || !c) return;
       if (o) outline.push(rect(x - 1, y - 1, w + 2, h + 2, INK));
       fill.push(rect(x, y, w, h, c));
+    },
+    // volume d'un bloc : liseré clair à gauche, ombre à droite, creux en bas
+    shade(x, y, w, h, r, opts = {}) {
+      const l = opts.light === false ? 0 : opts.light || 1;
+      const sh = opts.shade === false ? 0 : opts.shade || 1;
+      if (l) this.px(x, y, l, h, r.hi);
+      if (sh) this.px(x + w - sh, y, sh, h, r.sh);
+      if (opts.top) this.px(x, y, w, opts.top, r.hi);
+      if (opts.bottom) this.px(x, y + h - opts.bottom, w, opts.bottom, r.deep);
     },
     raw(s) { fill.push(s); },
     rawBack(s) { outline.push(s); },
@@ -59,6 +80,7 @@ export function spriteSvg(def, opts = {}) {
   const boots = dark(attire, 0.5);
 
   const c = canvas();
+  const R = { skin: ramp(skin), attire: ramp(attire), accent: ramp(accent), hair: ramp(hair), boots: ramp(boots) };
   const big = f.has('big') || def.weight === 'super';
   const heavy = big || def.weight === 'heavy';
   const tw = big ? 18 : heavy ? 16 : 14;          // largeur du torse
@@ -70,16 +92,21 @@ export function spriteSvg(def, opts = {}) {
   c.px(17, 30, 4, 4, skin, true);
   c.px(11, 33, 3, 3, skin, true);                   // mollets
   c.px(18, 33, 3, 3, skin, true);
-  c.px(14, 30, 1, 6, dark(skin, 0.3));              // intérieur des cuisses
-  c.px(17, 30, 1, 6, dark(skin, 0.3));
+  c.shade(11, 30, 4, 6, R.skin);                    // cuisse gauche : éclairée à gauche
+  c.shade(17, 30, 4, 6, R.skin, { light: 0 });      // cuisse droite : dans l'ombre du corps
+  c.px(14, 30, 1, 5, R.skin.deep);                  // entrejambe
+  c.px(17, 30, 1, 5, R.skin.deep);
+  c.px(12, 34, 2, 1, R.skin.sh); c.px(18, 34, 2, 1, R.skin.sh);   // pli du genou
   c.px(10, 35, 5, 5, boots, true);
   c.px(17, 35, 5, 5, boots, true);
-  c.px(10, 35, 5, 1, light(boots, 0.35));
-  c.px(17, 35, 5, 1, light(boots, 0.35));
+  c.shade(10, 35, 5, 5, R.boots, { top: 1 });
+  c.shade(17, 35, 5, 5, R.boots, { top: 1, light: 0 });
+  c.px(10, 39, 5, 1, R.boots.deep); c.px(17, 39, 5, 1, R.boots.deep);   // semelle
 
   // ---- bas / short ----------------------------------------------------------
   c.px(tx + 1, 26, tw - 2, 6, attire, true);
-  c.px(tx + 1, 26, tw - 2, 1, light(attire, 0.35));
+  c.shade(tx + 1, 26, tw - 2, 6, R.attire, { top: 1, bottom: 1 });
+  c.px(tx + 2, 31, 3, 1, R.attire.sh); c.px(tx + tw - 5, 31, 3, 1, R.attire.sh);   // ourlet
   if (f.has('singlet')) { c.px(tx + 2, 27, 2, 4, accent); c.px(tx + tw - 4, 27, 2, 4, accent); }
 
   // ---- torse : épaules larges, taille rentrée (silhouette de catcheur) ------
@@ -87,16 +114,24 @@ export function spriteSvg(def, opts = {}) {
   const wx = tx + 1, ww = tw - 2;                   // taille, un pixel plus étroite de chaque côté
   c.px(tx, 17, tw, 7, torso, true);                 // épaules + poitrine
   c.px(wx, 23, ww, 4, torso, true);                 // taille
-  c.px(tx, 17, tw, 1, light(torso, 0.3));           // lumière sur les trapèzes
-  c.px(tx + 1, 22, tw - 2, 1, dark(torso, 0.18));   // ligne sous les pectoraux
-  c.px(wx, 25, ww, 2, dark(torso, 0.22));
+  const RT = ramp(torso);
+  c.shade(tx, 17, tw, 7, RT, { top: 1 });           // lumière sur les trapèzes, ombre à droite
+  c.shade(wx, 23, ww, 4, RT, { bottom: 1 });
+  c.px(tx + 1, 22, tw - 2, 1, RT.sh);               // ligne sous les pectoraux
   if (torso === skin) {                             // pectoraux / abdos
-    c.px(tx + 2, 19, Math.floor(tw / 2) - 3, 2, light(skin, 0.16));
-    c.px(tx + Math.ceil(tw / 2) + 1, 19, Math.floor(tw / 2) - 3, 2, light(skin, 0.16));
-    c.px(15, 21, 2, 5, skinDark);                   // sillon central
-    c.px(wx + 1, 24, 1, 2, skinDark); c.px(wx + ww - 2, 24, 1, 2, skinDark);
+    c.px(tx + 2, 19, Math.floor(tw / 2) - 3, 2, RT.hi);
+    c.px(tx + Math.ceil(tw / 2) + 1, 19, Math.floor(tw / 2) - 3, 1, RT.hi);
+    c.px(15, 21, 2, 5, RT.sh);                      // sillon central
+    c.px(13, 23, 1, 1, RT.sh); c.px(18, 23, 1, 1, RT.sh);
+    c.px(wx + 1, 24, 1, 2, RT.sh); c.px(wx + ww - 2, 24, 1, 2, RT.sh);
+    c.px(tx + 1, 18, 1, 2, RT.hi);                  // éclat sur l'épaule gauche
   }
-  if (f.has('singlet')) { c.px(tx + 2, 17, 3, 6, attire); c.px(wx + 1, 23, 3, 4, attire); c.px(tx + tw - 5, 17, 3, 6, attire); c.px(wx + ww - 4, 23, 3, 4, attire); }
+  c.px(tx, 23, 1, 1, RT.deep); c.px(tx + tw - 1, 23, 1, 1, RT.deep);   // creux des aisselles
+  if (f.has('singlet')) {
+    c.px(tx + 2, 17, 3, 6, attire); c.px(wx + 1, 23, 3, 4, attire);
+    c.px(tx + tw - 5, 17, 3, 6, attire); c.px(wx + ww - 4, 23, 3, 4, attire);
+    c.px(tx + 2, 17, 1, 6, R.attire.hi); c.px(tx + tw - 3, 17, 1, 6, R.attire.sh);
+  }
   if (f.has('vest')) { c.px(tx, 17, 3, 6, '#191723'); c.px(wx, 23, 3, 4, '#191723'); c.px(tx + tw - 3, 17, 3, 6, '#191723'); c.px(wx + ww - 3, 23, 3, 4, '#191723'); }
   if (f.has('jacket')) { c.px(tx, 17, 3, 6, dark(accent, 0.35)); c.px(wx, 23, 3, 4, dark(accent, 0.35)); c.px(tx + tw - 3, 17, 3, 6, dark(accent, 0.35)); c.px(wx + ww - 3, 23, 3, 4, dark(accent, 0.35)); }
   if (f.has('suit')) { c.px(15, 17, 2, 6, WHITE); c.px(15, 18, 2, 4, '#c1272d'); }
@@ -112,7 +147,11 @@ export function spriteSvg(def, opts = {}) {
     c.px(ax, 17, 4, 4, skin, true);                 // épaule / biceps
     c.px(ax + (i ? 0 : 1), 21, 3, 5, skin, true);   // avant-bras
     c.px(ax + (i ? 0 : 1), 26, 3, 3, skin, true);   // main
-    c.px(ax + (i ? 0 : 3), 17, 1, 4, skinDark);
+    // le bras gauche prend la lumière, le droit reste dans l'ombre du torse
+    c.shade(ax, 17, 4, 4, R.skin, i ? { light: 0, shade: 1 } : { light: 1, shade: 1 });
+    c.shade(ax + (i ? 0 : 1), 21, 3, 5, R.skin, i ? { light: 0 } : {});
+    c.px(ax + (i ? 0 : 1), 26, 3, 1, R.skin.sh);    // poignet
+    c.px(ax + (i ? 2 : 1), 20, 1, 1, R.skin.sh);    // pli du coude
     if (f.has('tattoo_arms')) { c.px(ax + 1, 20, 2, 1, '#2f4f3a'); c.px(ax + 1, 22, 2, 1, '#2f4f3a'); }
     if (f.has('wristbands')) c.px(ax, 25, 4, 2, accent);
     if (f.has('gloves')) c.px(ax, 25, 4, 4, '#191723');
@@ -129,11 +168,20 @@ export function spriteSvg(def, opts = {}) {
   if (f.has('ring')) c.px(armX[1] + 1, 28, 1, 1, '#ffd34d');
 
   // ---- cou & tête -----------------------------------------------------------
-  c.px(14, 15, 4, 3, skinDark, true);
-  c.px(11, 5, 10, 11, skin, true);
+  c.px(14, 15, 4, 3, skin, true);
+  c.px(14, 15, 4, 2, R.skin.deep);                  // le cou reste dans l'ombre du menton
+  // crâne en trois bandes : les coins tombent, ça arrondit la silhouette
+  c.px(12, 4, 8, 1, skin, true);
+  c.px(11, 5, 10, 10, skin, true);
+  c.px(12, 15, 8, 1, skin, true);
   c.px(10, 8, 1, 4, skin, true);                    // oreilles
   c.px(21, 8, 1, 4, skin, true);
-  c.px(11, 14, 10, 2, skinDark);                    // mâchoire
+  c.px(11, 5, 1, 9, R.skin.hi);                     // joue éclairée
+  c.px(20, 5, 1, 10, R.skin.sh);                    // côté dans l'ombre
+  c.px(19, 11, 1, 4, R.skin.sh);                    // creux de la joue droite
+  c.px(12, 4, 6, 1, R.skin.hi);                     // haut du crâne
+  c.px(13, 14, 6, 1, R.skin.sh);                    // sous la mâchoire
+  c.px(10, 8, 1, 4, R.skin.sh); c.px(21, 8, 1, 4, R.skin.sh);
 
   // ---- peintures & masques (recouvrent le visage) ---------------------------
   const painted = f.has('paint_full') || f.has('paint_evil') || f.has('fiend_mask') || f.has('mask');
@@ -155,34 +203,43 @@ export function spriteSvg(def, opts = {}) {
     if (f.has('sunglasses')) { c.px(11, 8, 10, 3, '#191723'); c.px(12, 9, 2, 1, '#3d3b52'); }
     else if (f.has('goggles')) { c.px(11, 8, 10, 3, '#2f8fd0', true); c.px(12, 9, 3, 1, light('#2f8fd0', 0.6)); }
     else {
-      c.px(13, 9, 2, 2, INK); c.px(17, 9, 2, 2, INK);      // yeux
-      c.px(13, 10, 1, 1, WHITE); c.px(17, 10, 1, 1, WHITE); // éclat
+      c.px(12, 8, 8, 1, R.skin.sh);                        // ombre portée de l'arcade
+      c.px(12, 9, 3, 2, WHITE); c.px(17, 9, 3, 2, WHITE);   // blanc de l'œil
+      c.px(13, 9, 2, 2, INK); c.px(17, 9, 2, 2, INK);       // pupilles
+      c.px(13, 9, 1, 1, mix(INK, WHITE, 0.45));             // éclat
       if (f.has('eyebrow')) { c.px(12, 7, 3, 1, hair); c.px(17, 6, 3, 2, hair); }
       else { c.px(12, 7, 3, 1, hair); c.px(17, 7, 3, 1, hair); }
     }
-    c.px(15, 11, 2, 1, skinDark);                          // nez
-    c.px(14, 13, 4, 1, dark(skin, 0.45));                  // bouche
+    c.px(15, 11, 2, 1, R.skin.sh); c.px(17, 11, 1, 1, R.skin.deep);   // nez et son ombre
+    c.px(14, 13, 4, 1, R.skin.deep);                       // bouche
+    c.px(14, 12, 4, 1, R.skin.hi);                         // lèvre supérieure éclairée
   } else if (f.has('paint_evil') || f.has('paint_full')) {
     if (f.has('sunglasses')) c.px(11, 8, 10, 3, '#191723');
   }
 
   // ---- pilosité -------------------------------------------------------------
-  if (f.has('beard_big')) { c.px(10, 11, 12, 6, hair, true); c.px(14, 12, 4, 2, dark(skin, 0.45)); }
-  else if (f.has('beard')) { c.px(11, 12, 10, 4, hair, true); c.px(14, 13, 4, 1, dark(skin, 0.45)); }
+  if (f.has('beard_big')) { c.px(10, 11, 12, 6, hair, true); c.px(10, 11, 5, 1, R.hair.hi); c.px(19, 11, 3, 6, R.hair.sh); c.px(14, 12, 4, 2, dark(skin, 0.45)); }
+  else if (f.has('beard')) { c.px(11, 12, 10, 4, hair, true); c.px(11, 12, 4, 1, R.hair.hi); c.px(19, 12, 2, 4, R.hair.sh); c.px(14, 13, 4, 1, dark(skin, 0.45)); }
   else if (f.has('goatee')) c.px(14, 13, 4, 4, hair, true);
   else if (f.has('stubble')) { c.px(11, 13, 10, 3, hair.length ? mix(hair, skin, 0.55) : skinDark); c.px(14, 13, 4, 1, dark(skin, 0.45)); }
   if (f.has('mustache')) c.px(13, 12, 6, 1, hair);
   if (f.has('lip_ring')) c.px(14, 14, 1, 1, '#c9ccd6');
 
   // ---- cheveux --------------------------------------------------------------
-  if (f.has('long_hair')) { c.px(10, 4, 12, 4, hair, true); c.px(9, 6, 2, 10, hair, true); c.px(21, 6, 2, 10, hair, true); }
-  if (f.has('short_hair')) { c.px(11, 3, 10, 3, hair, true); c.px(10, 5, 1, 3, hair); c.px(21, 5, 1, 3, hair); }
+  if (f.has('long_hair')) {
+    c.px(10, 4, 12, 4, hair, true); c.px(9, 6, 2, 10, hair, true); c.px(21, 6, 2, 10, hair, true);
+    c.px(11, 4, 4, 1, R.hair.hi); c.px(19, 4, 3, 4, R.hair.sh); c.px(21, 8, 2, 8, R.hair.sh); c.px(9, 6, 1, 9, R.hair.hi);
+  }
+  if (f.has('short_hair')) {
+    c.px(11, 3, 10, 3, hair, true); c.px(10, 5, 1, 3, hair); c.px(21, 5, 1, 3, hair);
+    c.px(12, 3, 4, 1, R.hair.hi); c.px(19, 3, 2, 3, R.hair.sh);
+  }
   if (f.has('messy_hair')) { c.px(11, 3, 10, 3, hair, true); c.px(11, 1, 2, 2, hair, true); c.px(15, 0, 2, 3, hair, true); c.px(19, 1, 2, 2, hair, true); }
   if (f.has('curly_hair')) { c.px(11, 2, 10, 4, hair, true); c.px(9, 4, 3, 3, hair, true); c.px(20, 4, 3, 3, hair, true); c.px(13, 0, 6, 2, hair, true); }
   if (f.has('mohawk')) { c.px(14, 0, 4, 6, hair, true); c.px(15, 0, 2, 2, light(hair, 0.4)); }
   if (f.has('horseshoe')) { c.px(10, 5, 2, 8, hair, true); c.px(20, 5, 2, 8, hair, true); }
   if (f.has('half_shaved')) { c.px(16, 3, 6, 4, hair, true); c.px(21, 6, 2, 8, hair, true); }
-  if (f.has('bald')) c.px(13, 5, 5, 1, light(skin, 0.4));
+  if (f.has('bald')) { c.px(13, 5, 4, 1, R.skin.hi); c.px(14, 4, 2, 1, WHITE); }
 
   // ---- couvre-chefs ---------------------------------------------------------
   if (f.has('cap')) { c.px(11, 2, 10, 4, accent, true); c.px(11, 5, 12, 2, accent, true); c.px(11, 2, 10, 1, light(accent, 0.35)); }

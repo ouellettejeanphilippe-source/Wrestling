@@ -307,6 +307,7 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .unit.team-player .avatar-wrap { filter: drop-shadow(2px 0 0 var(--blue)) drop-shadow(-2px 0 0 var(--blue)) drop-shadow(0 -2px 0 var(--blue)); }
 .unit.team-enemy .avatar-wrap { filter: drop-shadow(2px 0 0 var(--red)) drop-shadow(-2px 0 0 var(--red)) drop-shadow(0 -2px 0 var(--red)); }
 .unit.selected { transform: scale(1.1); z-index: 6; }
+.view-top .unit.size-2 { right: calc(-1 * (var(--cell) + 2px)); bottom: calc(-1 * (var(--cell) + 2px)); }
 .unit.selected .avatar-wrap { filter: drop-shadow(2px 0 0 var(--gold)) drop-shadow(-2px 0 0 var(--gold)) drop-shadow(0 -2px 0 var(--gold)) drop-shadow(0 2px 0 var(--gold)); }
 .unit.acting { z-index: 7; }
 .unit.acting .avatar-wrap { animation: shake 0.18s steps(2) infinite; filter: drop-shadow(2px 0 0 var(--red)) drop-shadow(-2px 0 0 var(--red)); }
@@ -318,6 +319,9 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .unit .mini.hp div { height: 100%; background: var(--green); }
 .unit .mini.mom div { height: 100%; background: var(--gold); }
 .unit .sicons { position: absolute; top: -4px; right: -6px; font-size: 0.66rem; background: var(--ink); border: 2px solid var(--panel3); padding: 0 3px; line-height: 1.3; white-space: nowrap; z-index: 4; }
+
+/* les cases couvertes par un gabarit 2×2 (le sprite, lui, n'est dessiné qu'une fois) */
+.cell.unit-body::before { content: ''; position: absolute; inset: 0; background: #ffffff08; pointer-events: none; }
 
 /* ---------------- textes qui giclent (façon onomatopée) */
 .float {
@@ -625,6 +629,14 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 /* En iso, un lutteur debout masque les cases derrière lui : seul le bas du
    sprite (sur sa propre case) capte les clics, le haut les laisse passer. */
 .view-iso .unit { inset: -70% -20% 0; pointer-events: none; }
+/* un colosse tient sur 2×2 : sprite deux fois plus grand, recentré sur le bloc */
+.view-iso .unit.size-2 {
+  transform: translate(calc((var(--cell) + 2px) / 2), calc((var(--cell) + 2px) / 2)) var(--iso-out) scale(1.9);
+}
+.view-iso .unit.size-2.selected {
+  transform: translate(calc((var(--cell) + 2px) / 2), calc((var(--cell) + 2px) / 2)) var(--iso-out) scale(2.05);
+}
+.view-iso .unit.size-2::after { height: 24%; }
 .view-iso .unit::after {
   content: ''; position: absolute; left: 10%; right: 10%; bottom: 0; height: 34%;
   pointer-events: auto; cursor: pointer;

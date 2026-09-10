@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, unitSize, occupies } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -70,6 +70,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   playerTeam.forEach((def, i) => {
     const [x, y] = pSpawns[i] || pSpawns[pSpawns.length - 1];
     const u = createUnit(def, 'player', x, y, { bonus: playerBonuses[def.id] || {}, uid: `p${i}-${def.id}` });
+    placeUnit(battle, u, x, y);
     battle.units.push(u);
   });
   (match.enemies || []).forEach((e, i) => {
@@ -77,7 +78,9 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     const def = WRESTLERS_BY_ID[spec.id];
     if (!def) throw new Error(`Lutteur inconnu : ${spec.id}`);
     const [x, y] = eSpawns[i] || eSpawns[eSpawns.length - 1];
-    battle.units.push(createUnit(def, 'enemy', x, y, { boost: spec.boost || match.boost || {}, uid: `e${i}-${def.id}` }));
+    const u = createUnit(def, 'enemy', x, y, { boost: spec.boost || match.boost || {}, uid: `e${i}-${def.id}` });
+    placeUnit(battle, u, x, y);
+    battle.units.push(u);
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
 
@@ -90,6 +93,22 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   for (const u of battle.units) if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
   startPhase(battle, 'player');
   return battle;
+}
+
+// Un gabarit 2×2 ne tient pas forcément sur le point d'apparition prévu : on
+// cherche la case libre la plus proche où il rentre.
+function placeUnit(battle, unit, x, y) {
+  unit.x = x; unit.y = y;
+  if (fits(battle.grid, battle.units, unit, x, y, { anyUnitBlocks: true })) return true;
+  for (let r = 1; r <= 6; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+      if (fits(battle.grid, battle.units, unit, x + dx, y + dy, { anyUnitBlocks: true })) {
+        unit.x = x + dx; unit.y = y + dy; return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- stats & portées
@@ -592,6 +611,12 @@ function irishWhip(battle, unit, target, move) {
   return { hit: true };
 }
 
+const footprintAt = (unit, x, y) => {
+  const s = unitSize(unit), out = [];
+  for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) out.push({ x: x + dx, y: y + dy });
+  return out;
+};
+
 export function pushUnit(battle, target, dx, dy, dist, source) {
   const g = battle.grid;
   let x = target.x, y = target.y, moved = 0;
@@ -601,7 +626,13 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
     if (!inBounds(g, nx, ny)) break;
     const t = terrainAt(g, nx, ny);
     const tileName = tileAt(g, nx, ny);
-    const occ = unitAt(battle, nx, ny);
+    // pour un colosse, c'est tout le gabarit qui doit tenir sur la case d'arrivée
+    let occ = null;
+    for (const cell of footprintAt(target, nx, ny)) { occ = unitAt(battle, cell.x, cell.y); if (occ && occ !== target) break; occ = null; }
+    if (!occ && unitSize(target) > 1 && !fits(g, battle.units, target, nx, ny)) {
+      log(battle, `${target.name} est trop massif pour passer par là.`);
+      break;
+    }
     if (occ) {
       log(battle, `${target.name} percute ${occ.name} !`);
       applyDamage(battle, occ, 6, source, { move: { type: 'collision' } });
