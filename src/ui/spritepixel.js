@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, OVERLAYS } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -111,7 +111,10 @@ function layersForBack(def) {
 const isGiant = (def) => def.weight === 'super' || (def.size && def.size !== 1);
 
 function compose(def, back, down) {
-  const base = down ? BASE_DOWN : isGiant(def) ? BASE_GIANT : back ? BASE_BACK : BASE_FRONT;
+  const base = down ? BASE_DOWN
+    : isGiant(def) ? BASE_GIANT
+      : def.body === 'fem' && !back ? BASE_FEM
+        : back ? BASE_BACK : BASE_FRONT;
   const grid = base.map((r) => [...r]);
   if (isGiant(def) && !down) return grid;   // le colosse a son propre dessin, sans couches
   // Au sol, la tête n'est plus au même endroit : les couches de tête ne
