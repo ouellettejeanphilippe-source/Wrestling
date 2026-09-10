@@ -21,6 +21,6 @@ export function avatar(def, size = 48, opts = {}) {
     title: def.name,
   });
   if (opts.bg === 'none') el.classList.add('bare');
-  el.innerHTML = spriteSvg(def, { view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir });
+  el.innerHTML = spriteSvg(def, { view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir, pose: opts.pose });
   return el;
 }

@@ -393,7 +393,7 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .unit.acting .avatar-wrap { animation: shake 0.18s steps(2) infinite; filter: drop-shadow(2px 0 0 var(--red)) drop-shadow(-2px 0 0 var(--red)); }
 @keyframes shake { 0% { transform: translateX(-3%); } 100% { transform: translateX(3%); } }
 .unit.acted { filter: grayscale(0.9) brightness(0.6); }
-.unit.down .avatar-wrap { transform: rotate(78deg) translateY(12%); animation: none; }
+.unit.down .avatar-wrap { animation: none; }
 .unit .mini { position: absolute; left: 10%; right: 10%; height: 5px; background: var(--ink); border: 1px solid var(--ink); z-index: 3; }
 .unit .mini.hp { bottom: 3px; } .unit .mini.mom { bottom: -3px; }
 .unit .mini.hp div { height: 100%; background: var(--green); }
@@ -748,7 +748,8 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   pointer-events: auto; cursor: pointer;
 }
 .view-iso .unit.selected { transform: var(--iso-out) scale(1.08); }
-.view-iso .unit.down { transform: var(--iso-out) rotate(74deg) scale(0.9); }
+/* Au sol, le sprite est dessiné couché : plus besoin de le faire pivoter. */
+.view-iso .unit.down { transform: var(--iso-out) scale(0.95); }
 .view-iso .unit.down .avatar-wrap { transform: none; }
 .view-iso .unit-shadow { bottom: 26%; left: 24%; right: 24%; height: 9%; transform: var(--iso-in); }
 .view-iso .unit-marker {

@@ -312,7 +312,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${big ? ` · gabarit ${uw}×${uh} cases` : ''}`,
     },
       h('span', { class: 'unit-shadow' }),
-      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: screenFacing(u.facing, boardRot()) }),
+      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: screenFacing(u.facing, boardRot()), pose: u.down ? 'down' : null }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,

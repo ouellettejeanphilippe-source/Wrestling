@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, OVERLAYS } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, OVERLAYS } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -24,6 +24,8 @@ const POSE = {
 // flotte au milieu d'une boîte à moitié vide.
 const ART_TOP = 2, ART_USED = 37;
 const VIEWBOX = { full: `0 ${ART_TOP} ${ART_W} ${ART_USED}`, bust: '9 1 15 15' };
+// Le lutteur au sol s'étale : son cadrage prend toute la largeur, plus bas.
+const VIEWBOX_DOWN = `0 ${ART_TOP} ${ART_W} ${ART_USED}`;
 
 const SKIN = { light: '#f2c79b', tan: '#d79a68', brown: '#a96c3d', dark: '#7c4b28', pale: '#f8e2d2' };
 const INK = '#140d1c';
@@ -77,8 +79,11 @@ function layersFor(def) {
   return out;
 }
 
-function compose(def, back) {
-  const grid = (back ? BASE_BACK : BASE_FRONT).map((r) => [...r]);
+function compose(def, back, down) {
+  const grid = (down ? BASE_DOWN : back ? BASE_BACK : BASE_FRONT).map((r) => [...r]);
+  // Au sol, la tête n'est plus au même endroit : les couches de tête ne
+  // s'appliquent pas, seule la palette distingue les lutteurs.
+  if (down) return grid;
   // De dos, on ne voit ni visage ni barbe : seules les couches de tête comptent.
   for (const layer of layersFor(def)) {
     if (back && layer !== OVERLAYS.mask && layer !== OVERLAYS.cap) continue;
@@ -91,7 +96,7 @@ export function spriteSvg(def, opts = {}) {
   const view = opts.view === 'bust' ? 'bust' : 'full';
   const dir = POSE[opts.dir] ? opts.dir : 'se';
   const pose = POSE[dir];
-  const grid = compose(def, pose.art === 'back');
+  const grid = compose(def, pose.art === 'back', opts.pose === 'down');
   const P = palette(def);
 
   let body = '';
