@@ -34,6 +34,7 @@ export function addStatus(battle, unit, name, n, max = 99) {
   if (unit.statuses[name] <= 0) delete unit.statuses[name];
 }
 export function setStatus(battle, unit, name, n) {
+  if (name === 'dazed' && unit.flags && unit.flags.noDaze) return;
   unit.statuses[name] = Math.max(unit.statuses[name] || 0, n);
 }
 export const hasStatus = (unit, name) => (unit.statuses[name] || 0) > 0;

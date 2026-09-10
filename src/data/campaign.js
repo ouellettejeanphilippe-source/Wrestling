@@ -40,8 +40,8 @@ export const SEASON = {
       matches: [
         { id: 'ep4a', script: { summary: 'Vos lutteurs vident le ring et gagnent la bataille royale.', finish: { winner: 'player', method: 'any' }, beats: ['toss_three', 'heat'] }, title: 'Bataille royale à 7', type: 'battle_royal', teamSize: 3, enemies: ['jobber_1', 'jobber_2', 'logan_pole', 'dannemaison'], directives: ['toss_three', 'no_loss'], reward: { money: 700, fans: 240 },
           desc: 'Trois des vôtres contre quatre. Poussez-les dans les cordes, puis jetez-les.' },
-        { id: 'ep4b', script: { summary: 'Le Général doit dominer : votre équipe se fait éliminer après avoir vendu ses chops.', finish: { winner: 'enemy', method: 'any' }, beats: ['sells', 'long'] }, title: 'Bataille royale des poids lourds', type: 'battle_royal', teamSize: 2, enemies: ['hulk_gogane', 'gunter', 'jobber_2'], directives: ['no_loss', 'heat'], reward: { money: 800, fans: 280 },
-          desc: 'Des colosses difficiles à faire passer par-dessus les cordes. Usez-les d’abord.' },
+        { id: 'ep4b', script: { summary: 'Le Général doit dominer : votre équipe se fait éliminer après avoir vendu ses chops.', finish: { winner: 'enemy', method: 'any' }, beats: ['sells', 'long'] }, title: 'Bataille royale des poids lourds', type: 'battle_royal', teamSize: 3, enemies: ['hulk_gogane', 'gunter', 'jobber_2'], directives: ['no_loss', 'heat'], reward: { money: 800, fans: 280 },
+          desc: 'Des colosses difficiles à faire passer par-dessus les cordes. Usez-les ou étourdissez-les d’abord.' },
       ],
     },
     {

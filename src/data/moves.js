@@ -6,7 +6,7 @@
 // effects : { daze, push, welt, listed, drainMomentum, heat, selfMomentum, ignoreDef, selfDamageOnMiss, breakTable, illegal, charge }
 export const MOVES = {
   // ---- Base ---------------------------------------------------------------
-  punch: { tier: 'base', name: 'Coup de poing', type: 'strike', stat: 'str', power: 6, acc: 95, range: [1, 1], momentum: 10, desc: 'Un bon vieux coup. Fiable.' },
+  punch: { tier: 'base', name: 'Coup de poing', type: 'strike', stat: 'str', power: 7, acc: 95, range: [1, 1], momentum: 10, desc: 'Un bon vieux coup. Fiable.' },
   grapple: { tier: 'base', name: 'Prise de base', type: 'grapple', stat: 'str', power: 10, acc: 85, range: [1, 1], momentum: 12, desc: 'Une prise simple mais efficace.' },
   taunt: { tier: 'base', name: 'Provoquer', type: 'taunt', range: [0, 0], momentum: 30, desc: '+30 momentum, chauffe la foule. Effets bonus selon le gimmick.' },
   whip: { tier: 'base', name: 'Irish Whip', type: 'special', stat: 'str', acc: 90, range: [1, 1], momentum: 5, desc: "Projette l'adversaire 2 cases. Cordes = étourdi, coin/marches/table = gros dégâts." },
@@ -27,14 +27,14 @@ export const MOVES = {
   armbar: { tier: 'class', name: 'Clé de bras', type: 'submission', stat: 'tec', power: 8, acc: 85, range: [1, 1], momentum: 14, desc: 'Soumission : peut faire abandonner une cible affaiblie. Rope break si près des cordes.' },
 
   // ---- Classe : Bagarreur (brawler) ---------------------------------------
-  haymaker: { tier: 'class', name: 'Haymaker', type: 'strike', stat: 'str', power: 11, acc: 80, range: [1, 1], momentum: 12, desc: 'Un crochet dévastateur.' },
-  chop: { tier: 'class', name: 'Chop', type: 'strike', stat: 'str', power: 8, acc: 90, range: [1, 1], momentum: 10, effects: { welt: 1 }, desc: 'WOOO ! Laisse une marque : -1 DEF cumulable (max 4).' },
-  headbutt: { tier: 'class', name: 'Coup de tête', type: 'strike', stat: 'str', power: 12, acc: 90, range: [1, 1], momentum: 12, effects: { selfDamage: 3 }, desc: 'Fait mal aux deux.' },
+  haymaker: { tier: 'class', name: 'Haymaker', type: 'strike', stat: 'str', power: 12, acc: 85, range: [1, 1], momentum: 12, desc: 'Un crochet dévastateur.' },
+  chop: { tier: 'class', name: 'Chop', type: 'strike', stat: 'str', power: 9, acc: 90, range: [1, 1], momentum: 14, effects: { welt: 2 }, desc: 'WOOO ! Laisse deux marques : -1 DEF chacune, cumulables (max 4).' },
+  headbutt: { tier: 'class', name: 'Coup de tête', type: 'strike', stat: 'str', power: 14, acc: 90, range: [1, 1], momentum: 12, effects: { selfDamage: 2 }, desc: 'Fait mal aux deux.' },
 
   // ---- Classe : Vedette (showman) -----------------------------------------
   pose: { tier: 'class', name: 'Pose de champion', type: 'taunt', range: [0, 0], momentum: 40, effects: { heat: 10 }, desc: '+40 momentum et +10 chaleur.' },
-  eyepoke: { tier: 'class', name: 'Doigt dans l’œil', type: 'strike', stat: 'tec', power: 3, acc: 100, range: [1, 1], momentum: 8, effects: { daze: 1 }, desc: 'Peu de dégâts, étourdit toujours.' },
-  elbowdrop: { tier: 'class', name: 'Elbow Drop', type: 'strike', stat: 'str', power: 12, acc: 100, range: [1, 1], momentum: 15, requires: { targetDown: true }, effects: { heat: 5 }, desc: 'Sur une cible au sol. Ne rate jamais.' },
+  eyepoke: { tier: 'class', name: 'Doigt dans l’œil', type: 'strike', stat: 'tec', power: 7, acc: 100, range: [1, 1], momentum: 8, effects: { daze: 1 }, desc: 'Ne rate jamais et étourdit toujours. Prépare l’Elbow Drop.' },
+  elbowdrop: { tier: 'class', name: 'Elbow Drop', type: 'strike', stat: 'str', power: 15, acc: 100, range: [1, 1], momentum: 15, requires: { targetDownOrDazed: true }, effects: { heat: 5 }, desc: 'Sur une cible au sol ou étourdie. Ne rate jamais.' },
 
   // ---- Spécialité : Aérien -------------------------------------------------
   crossbody: { tier: 'specialty', name: 'Crossbody', type: 'aerial', stat: 'agi', power: 12, acc: 80, range: [1, 3], momentum: 15, requires: { turnbuckle: true }, desc: 'Plongeon depuis un coin, portée 3.' },
@@ -71,7 +71,7 @@ export const MOVES = {
   // ---- Signatures & finishers (par lutteur) --------------------------------
   superman_punch: { tier: 'signature', name: 'Superman Punch', type: 'strike', stat: 'str', power: 14, acc: 85, range: [1, 2], momentum: 15 },
   spear: { tier: 'finisher', name: 'Spear', type: 'grapple', stat: 'str', power: 24, acc: 85, range: [1, 1], effects: { charge: true }, desc: '+8 dégâts si vous avez bougé d’au moins 3 cases ce tour.' },
-  five_knuckle: { tier: 'signature', name: 'Five Knuckle Shuffle', type: 'strike', stat: 'str', power: 10, acc: 100, range: [1, 1], requires: { targetDown: true }, effects: { selfMomentum: 40, heat: 10 }, desc: 'Sur une cible au sol. Tu peux pas le voir. +40 momentum.' },
+  five_knuckle: { tier: 'signature', name: 'Five Knuckle Shuffle', type: 'strike', stat: 'str', power: 10, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { selfMomentum: 40, heat: 10 }, desc: 'Sur une cible au sol. Tu peux pas le voir. +40 momentum.' },
   attitude_adjustment: { tier: 'finisher', name: 'Attitude Adjustment', type: 'grapple', stat: 'str', power: 22, acc: 85, range: [1, 1] },
   old_school: { tier: 'signature', name: 'Old School', type: 'aerial', stat: 'str', power: 14, acc: 80, range: [1, 2], requires: { turnbuckle: true } },
   tombstone: { tier: 'finisher', name: 'Tombstone Piledriver', type: 'grapple', stat: 'str', power: 23, acc: 80, range: [1, 1], effects: { finishedBonus: 0.15 }, desc: 'Le tombé qui suit est presque garanti.' },
@@ -80,9 +80,9 @@ export const MOVES = {
   thesz_press: { tier: 'signature', name: 'Lou Thesz Press', type: 'strike', stat: 'str', power: 13, acc: 90, range: [1, 1], effects: { daze: 1 } },
   stunner: { tier: 'finisher', name: 'Stunner', type: 'grapple', stat: 'str', power: 21, acc: 90, range: [1, 1], effects: { daze: 1 } },
   rock_bottom: { tier: 'signature', name: 'Rock Bottom', type: 'grapple', stat: 'str', power: 18, acc: 85, range: [1, 1] },
-  peoples_elbow: { tier: 'finisher', name: 'Coude du Peuple', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDown: true }, effects: { heat: 30 }, desc: 'Le mouvement le plus électrisant du divertissement sportif. Sur cible au sol.' },
+  peoples_elbow: { tier: 'finisher', name: 'Coude du Peuple', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { heat: 30 }, desc: 'Le mouvement le plus électrisant du divertissement sportif. Sur cible au sol ou étourdie.' },
   hulk_boot: { tier: 'signature', name: 'Big Boot du Hulkster', type: 'strike', stat: 'str', power: 15, acc: 85, range: [1, 1], effects: { daze: 1 } },
-  legdrop: { tier: 'finisher', name: 'Leg Drop atomique', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDown: true }, effects: { heat: 15 } },
+  legdrop: { tier: 'finisher', name: 'Leg Drop atomique', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { heat: 15 } },
   v_trigger: { tier: 'signature', name: 'V-Trigger', type: 'strike', stat: 'agi', power: 15, acc: 85, range: [1, 2], effects: { daze: 1 } },
   one_winged_angel: { tier: 'finisher', name: 'Ange à Une Aile', type: 'grapple', stat: 'tec', power: 25, acc: 80, range: [1, 1] },
   salt_of_earth: { tier: 'signature', name: 'Sel de la Terre', type: 'submission', stat: 'tec', power: 10, acc: 85, range: [1, 1], effects: { tapBonus: 0.1 } },
@@ -91,7 +91,7 @@ export const MOVES = {
   orange_punch: { tier: 'finisher', name: 'Orange Punch', type: 'strike', stat: 'str', power: 20, acc: 90, range: [1, 1] },
   cody_cutter: { tier: 'signature', name: 'Cody Cutter', type: 'grapple', stat: 'agi', power: 15, acc: 85, range: [1, 1] },
   cross_roads: { tier: 'finisher', name: 'Cross Roads', type: 'grapple', stat: 'tec', power: 22, acc: 85, range: [1, 1] },
-  teeth: { tier: 'signature', name: 'Dents dans la bouche', type: 'strike', stat: 'tec', power: 6, acc: 100, range: [1, 1], unlock: 40, cost: 25, effects: { daze: 2, heat: 8 }, desc: 'Étourdit 2 tours. Très gentil. Très méchant.' },
+  teeth: { tier: 'signature', name: 'Dents dans la bouche', type: 'strike', stat: 'tec', power: 6, acc: 100, range: [1, 1], unlock: 40, cost: 20, effects: { daze: 2, heat: 8 }, desc: 'Étourdit 2 tours. Très gentil. Très méchant.' },
   very_evil_ddt: { tier: 'finisher', name: 'DDT très méchant', type: 'grapple', stat: 'tec', power: 18, acc: 85, range: [1, 1] },
   derby_crossbody: { tier: 'signature', name: 'Crossbody suicidaire', type: 'aerial', stat: 'agi', power: 16, acc: 80, range: [1, 3], requires: { turnbuckle: true } },
   coffin_drop: { tier: 'finisher', name: 'Coffin Drop', type: 'aerial', stat: 'agi', power: 24, acc: 75, range: [1, 3], requires: { turnbuckle: true }, effects: { selfDamage: 8, selfDamageOnMiss: 15 } },
@@ -106,15 +106,15 @@ export const MOVES = {
   general_sleeper: { tier: 'signature', name: 'Sleeper du Général', type: 'submission', stat: 'tec', power: 10, acc: 85, range: [1, 1] },
   imperial_powerbomb: { tier: 'finisher', name: 'Powerbomb Impériale', type: 'grapple', stat: 'str', power: 25, acc: 80, range: [1, 1] },
   buckle_bomb: { tier: 'signature', name: 'Buckle Bomb', type: 'grapple', stat: 'str', power: 15, acc: 80, range: [1, 1], effects: { push: 2, daze: 1 }, desc: 'Projette 2 cases (idéal vers un coin) et étourdit.' },
-  stomp: { tier: 'finisher', name: 'Le Stomp', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDown: true } },
+  stomp: { tier: 'finisher', name: 'Le Stomp', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDownOrDazed: true } },
   oscutter: { tier: 'signature', name: 'Oscutter', type: 'grapple', stat: 'agi', power: 15, acc: 85, range: [1, 2] },
   hidden_blade: { tier: 'finisher', name: 'Lame Cachée', type: 'strike', stat: 'str', power: 20, acc: 90, range: [1, 1], effects: { ignoreDef: 0.5 }, desc: 'Ignore 50 % de la DEF.' },
   swerve_stomp: { tier: 'signature', name: 'Swerve Stomp', type: 'aerial', stat: 'agi', power: 16, acc: 80, range: [1, 3], requires: { turnbuckle: true } },
-  house_call: { tier: 'finisher', name: 'House Call', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDown: true } },
+  house_call: { tier: 'finisher', name: 'House Call', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDownOrDazed: true } },
   hip_attack: { tier: 'signature', name: 'Hip Attack', type: 'strike', stat: 'str', power: 13, acc: 90, range: [1, 1], unlock: 50, cost: 30, effects: { push: 1, heat: 5 } },
   storm_zero: { tier: 'finisher', name: 'Storm Zero', type: 'grapple', stat: 'tec', power: 22, acc: 85, range: [1, 1] },
   lucky_punch: { tier: 'signature', name: 'Coup chanceux', type: 'strike', stat: 'str', power: 12, acc: 80, range: [1, 1], unlock: 50, cost: 30, effects: { daze: 1 } },
-  frog_splash: { tier: 'finisher', name: 'Frog Splash', type: 'aerial', stat: 'agi', power: 24, acc: 85, range: [1, 3], requires: { turnbuckle: true, targetDown: true } },
+  frog_splash: { tier: 'finisher', name: 'Frog Splash', type: 'aerial', stat: 'agi', power: 24, acc: 85, range: [1, 3], requires: { turnbuckle: true, targetDownOrDazed: true } },
   anaconda: { tier: 'signature', name: 'Anaconda Vise', type: 'submission', stat: 'tec', power: 12, acc: 85, range: [1, 1] },
   gts: { tier: 'finisher', name: 'Go To Sleep', type: 'grapple', stat: 'str', power: 22, acc: 85, range: [1, 1], effects: { daze: 1 } },
   colossal_chop: { tier: 'signature', name: 'Chop colossal', type: 'strike', stat: 'str', power: 16, acc: 85, range: [1, 1], effects: { welt: 2 } },
@@ -141,10 +141,10 @@ export const MOVE_TIER_LABEL = { base: 'Base', class: 'Classe', specialty: 'Spé
 // Les provocations (type taunt) sont toujours gratuites. Un mouvement peut surcharger unlock / cost.
 export const MOVE_TIERS = {
   base: { unlock: 0, cost: 0 },
-  class: { unlock: 25, cost: 10 },
-  specialty: { unlock: 45, cost: 20 },
-  finisher: { unlock: 100, cost: 100 },
+  class: { unlock: 25, cost: 0 },
+  specialty: { unlock: 45, cost: 0 },
   signature: { unlock: 60, cost: 40 },
+  finisher: { unlock: 100, cost: 100 },
 };
 export function moveUnlock(m) { return m.type === 'taunt' ? 0 : (m.unlock ?? (MOVE_TIERS[m.tier] || MOVE_TIERS.base).unlock); }
 export function moveCost(m) { return m.type === 'taunt' ? 0 : (m.cost ?? (MOVE_TIERS[m.tier] || MOVE_TIERS.base).cost); }
