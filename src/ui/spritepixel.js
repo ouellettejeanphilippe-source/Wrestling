@@ -1,0 +1,122 @@
+// ---------------------------------------------------------------------------
+// RENDU DES PLANCHES DESSINÉES À LA MAIN
+//
+// Prend une planche de spriteart.js (un caractère = un pixel), y superpose les
+// couches d'identité du lutteur (coiffure, masque, casquette, barbe, lunettes),
+// puis remplace chaque caractère par la couleur correspondante DANS SA PALETTE :
+// c'est le palette swap, la méthode des jeux 2D pour habiller tout un roster
+// avec un seul dessin.
+//
+// Le rendu fusionne les pixels voisins de même couleur en un seul rectangle,
+// pour garder un SVG léger même avec une planche complète.
+// ---------------------------------------------------------------------------
+export { facingTo } from '../engine/grid.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, OVERLAYS } from './spriteart.js';
+
+export const SPRITE_W = ART_W;
+export const SPRITE_H = ART_H;
+export const DIRECTIONS = ['se', 'sw', 'ne', 'nw'];
+const POSE = {
+  se: { art: 'front', mirror: false }, sw: { art: 'front', mirror: true },
+  ne: { art: 'back', mirror: false }, nw: { art: 'back', mirror: true },
+};
+// Le dessin occupe les lignes 2 à 38 : on recadre dessus, sinon le sprite
+// flotte au milieu d'une boîte à moitié vide.
+const ART_TOP = 2, ART_USED = 37;
+const VIEWBOX = { full: `0 ${ART_TOP} ${ART_W} ${ART_USED}`, bust: '9 1 15 15' };
+
+const SKIN = { light: '#f2c79b', tan: '#d79a68', brown: '#a96c3d', dark: '#7c4b28', pale: '#f8e2d2' };
+const INK = '#140d1c';
+const WHITE = '#f8f4ee';
+
+const parse = (hex) => {
+  let s = String(hex || '#888').replace('#', '');
+  if (s.length === 3) s = s.split('').map((c) => c + c).join('');
+  return [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) || 0);
+};
+const mix = (hex, target, amount) => {
+  const a = parse(hex), b = parse(target);
+  return `#${a.map((n, i) => Math.round(n + (b[i] - n) * amount)).map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+};
+
+// Trois tons par matière : c'est le registre des sprites 16 bits, et c'est ce
+// qui garde la silhouette lisible à la taille d'une case.
+function palette(def) {
+  const L = def.look || {};
+  const skin = SKIN[L.skin] || L.skin || SKIN.light;
+  const hair = L.hair || '#3b2a1a';
+  const attire = L.attire || def.color || '#5a5a6e';
+  const accent = L.accent || mix(attire, '#ffffff', 0.45);
+  const boots = mix(attire, '#000000', 0.55);
+  return {
+    '.': null, K: INK,
+    1: mix(skin, '#3a1c10', 0.45), 2: mix(skin, '#7a3c1c', 0.3), 3: skin,
+    4: mix(skin, '#fff2d8', 0.34), 5: mix(skin, '#ffffff', 0.6),
+    h: mix(hair, '#140d1c', 0.45), H: hair, G: mix(hair, '#ffe0a8', 0.35),
+    a: mix(attire, '#140d1c', 0.42), A: attire, B: mix(attire, '#ffffff', 0.35),
+    n: mix(accent, '#140d1c', 0.42), N: accent,
+    b: mix(boots, '#000000', 0.5), V: boots, W: mix(boots, '#ffffff', 0.3),
+    e: WHITE, E: mix(hair, '#0b1b3a', 0.55), m: mix(skin, '#8c2f28', 0.55),
+    w: WHITE, o: '#191423',
+  };
+}
+
+// Ordre des couches : la coiffure d'abord, puis ce qui la couvre.
+const LAYER_ORDER = ['bald', 'long_hair', 'beard', 'mask', 'cap', 'sunglasses'];
+function layersFor(def) {
+  const f = new Set((def.look || {}).features || []);
+  const out = [];
+  for (const name of LAYER_ORDER) {
+    if (!OVERLAYS[name]) continue;
+    if (name === 'beard' && !(f.has('beard') || f.has('beard_big') || f.has('goatee'))) continue;
+    if (name === 'cap' && !(f.has('cap') || f.has('bandana') || f.has('headband'))) continue;
+    if (name === 'mask' && !(f.has('mask') || f.has('fiend_mask'))) continue;
+    if (!['beard', 'cap', 'mask'].includes(name) && !f.has(name)) continue;
+    out.push(OVERLAYS[name]);
+  }
+  return out;
+}
+
+function compose(def, back) {
+  const grid = (back ? BASE_BACK : BASE_FRONT).map((r) => [...r]);
+  // De dos, on ne voit ni visage ni barbe : seules les couches de tête comptent.
+  for (const layer of layersFor(def)) {
+    if (back && layer !== OVERLAYS.mask && layer !== OVERLAYS.cap) continue;
+    layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
+  }
+  return grid;
+}
+
+export function spriteSvg(def, opts = {}) {
+  const view = opts.view === 'bust' ? 'bust' : 'full';
+  const dir = POSE[opts.dir] ? opts.dir : 'se';
+  const pose = POSE[dir];
+  const grid = compose(def, pose.art === 'back');
+  const P = palette(def);
+
+  let body = '';
+  for (let y = 0; y < ART_H; y++) {
+    let x = 0;
+    while (x < ART_W) {
+      const color = P[grid[y][x]];
+      if (!color) { x++; continue; }
+      let end = x;
+      while (end + 1 < ART_W && P[grid[y][end + 1]] === color) end++;
+      body += `<rect x="${x}" y="${y}" width="${end - x + 1}" height="1" fill="${color}"/>`;
+      x = end + 1;
+    }
+  }
+
+  const size = opts.size;
+  const dim = size === undefined ? ''
+    : size === 'fill' ? 'width="100%" height="100%"'
+      : `width="${size}" height="${size * (view === 'full' ? ART_USED / ART_W : 1)}"`;
+  const mirror = pose.mirror || opts.facing === -1;
+  const flip = mirror ? ` transform="translate(${ART_W} 0) scale(-1 1)"` : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEWBOX[view]}" ${dim} shape-rendering="crispEdges" class="sprite sprite-${view}" preserveAspectRatio="xMidYMax meet"><g${flip}>${body}</g></svg>`;
+}
+
+export function spriteBadgeSvg(def, opts = {}) {
+  const bg = opts.bg || def.color || '#3d3b52';
+  return `<span class="sprite-badge" style="--badge-bg:${bg}">${spriteSvg(def, { ...opts, view: 'bust', size: undefined })}</span>`;
+}

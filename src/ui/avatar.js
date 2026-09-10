@@ -1,7 +1,7 @@
-// Compatibilité : l'ancien portrait « bonhomme rond » est remplacé par les sprites
-// pixel (voir sprite.js). On garde la même signature pour tout le reste de l'UI.
+// Enrobage DOM des sprites. Le dessin vient des planches dessinées à la main
+// (spritepixel.js + spriteart.js) ; la signature ne bouge pas pour le reste de l'UI.
 import { h } from './dom.js';
-import { spriteSvg } from './sprite.js';
+import { spriteSvg } from './spritepixel.js';
 
 export { spriteSvg };
 
