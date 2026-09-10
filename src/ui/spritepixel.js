@@ -63,20 +63,46 @@ function palette(def) {
   };
 }
 
-// Ordre des couches : la coiffure d'abord, puis ce qui la couvre.
-const LAYER_ORDER = ['bald', 'long_hair', 'beard', 'mask', 'cap', 'sunglasses'];
+// Ordre des couches : le corps d'abord, puis la tête, puis ce qui la couvre,
+// et enfin ce que le lutteur tient. Chaque couche a la même règle : le '.'
+// laisse voir le dessous, tout le reste écrase.
+const LAYER_ORDER = [
+  'shirt', 'singlet', 'vest', 'jacket',              // torse
+  'bald', 'long_hair',                                // crâne
+  'beard', 'goatee', 'mustache',                      // pilosité
+  'paint_full', 'paint_half', 'mask',                 // visage
+  'cap', 'bandana', 'cowboy_hat', 'hood',             // couvre-chef
+  'sunglasses',                                       // yeux
+  'bat', 'beer',                                      // objets tenus
+];
+// Certaines caractéristiques du roster partagent un même dessin.
+const ALIASES = {
+  beard: ['beard', 'beard_big', 'stubble'],
+  cap: ['cap', 'headband'],
+  mask: ['mask', 'fiend_mask'],
+  paint_full: ['paint_full', 'paint_evil'],
+  vest: ['vest', 'suit'],
+  bat: ['bat', 'skateboard'],
+  beer: ['beer', 'bottle', 'teeth_jar'],
+};
 function layersFor(def) {
   const f = new Set((def.look || {}).features || []);
   const out = [];
   for (const name of LAYER_ORDER) {
-    if (!OVERLAYS[name]) continue;
-    if (name === 'beard' && !(f.has('beard') || f.has('beard_big') || f.has('goatee'))) continue;
-    if (name === 'cap' && !(f.has('cap') || f.has('bandana') || f.has('headband'))) continue;
-    if (name === 'mask' && !(f.has('mask') || f.has('fiend_mask'))) continue;
-    if (!['beard', 'cap', 'mask'].includes(name) && !f.has(name)) continue;
-    out.push(OVERLAYS[name]);
+    const art = OVERLAYS[name];
+    if (!art) continue;
+    const keys = ALIASES[name] || [name];
+    if (!keys.some((k) => f.has(k))) continue;
+    out.push(art);
   }
   return out;
+}
+// De dos, seul ce qui se voit par derrière subsiste.
+const BACK_LAYERS = new Set(['shirt', 'singlet', 'vest', 'jacket', 'mask', 'cap', 'bandana', 'cowboy_hat', 'hood', 'long_hair', 'bat']);
+function layersForBack(def) {
+  const f = new Set((def.look || {}).features || []);
+  return LAYER_ORDER.filter((n) => BACK_LAYERS.has(n) && OVERLAYS[n]
+    && (ALIASES[n] || [n]).some((k) => f.has(k))).map((n) => OVERLAYS[n]);
 }
 
 // Choix de l'archétype de corps. Le colosse est dessiné plus grand dans le même
@@ -92,8 +118,7 @@ function compose(def, back, down) {
   // s'appliquent pas, seule la palette distingue les lutteurs.
   if (down) return grid;
   // De dos, on ne voit ni visage ni barbe : seules les couches de tête comptent.
-  for (const layer of layersFor(def)) {
-    if (back && layer !== OVERLAYS.mask && layer !== OVERLAYS.cap) continue;
+  for (const layer of (back ? layersForBack(def) : layersFor(def))) {
     layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
   }
   return grid;
