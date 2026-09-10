@@ -80,6 +80,16 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 | ⏱️ Survie | tenir N tours face aux renforts |
 | ⚔️ Confrontation | éliminer tous les adversaires |
 
+## Interface de match (façon Fire Emblem)
+
+- Sélectionner un lutteur affiche sa **portée de déplacement (bleu)** et sa **portée d'attaque (rouge)** ; survoler un
+  adversaire affiche sa **zone de menace**.
+- Après le déplacement, un **menu contextuel** apparaît près du lutteur : Attaquer, Tombé, Provoquer, Spécial, Attendre.
+- Avant de confirmer une cible, une **prévision de combat** montre précision, dégâts estimés, critique, PV après le
+  coup, risques (contre, DQ) — cliquer la cible confirme, Échap annule.
+- Barre d'équipe avec **portraits** (SVG générés, un « bonhomme » par lutteur), PV et momentum ; bannière de tour ;
+  journal de commentaires.
+
 ## Hub de promotion (entre les shows)
 
 - **Le show** : 2 matchs bookables, adversaires, directives/scripts, récompenses ; choix de l'équipe.

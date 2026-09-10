@@ -1,5 +1,7 @@
 // Cartes de lutteurs (hub, titre) et fiche d'unité (match).
 import { h, bar } from './dom.js';
+import { avatar } from './avatar.js';
+import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { MOVES, MOVE_TIER_LABEL } from '../data/moves.js';
@@ -10,7 +12,8 @@ export const STAT_LABELS = { str: 'FOR', agi: 'AGI', tec: 'TEC', cha: 'CHA', def
 const ALIGN = { face: 'Face (gentil)', heel: 'Heel (méchant)', tweener: 'Tweener' };
 
 export function chip(def, size = '') {
-  return h('span', { class: `chip ${size}`, style: { '--c': def.color } }, def.initials);
+  const d = def.look ? def : WRESTLERS_BY_ID[def.id] || def;
+  return avatar(d, size === 'big' ? 56 : 30, { class: `chip ${size}` });
 }
 
 export function wrestlerCard(def, opts = {}) {

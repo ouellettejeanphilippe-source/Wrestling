@@ -1,85 +1,112 @@
-// Écran de match : grille, sélection, actions, phase ennemie animée, résultat.
+// Écran de match façon Fire Emblem / Banner Saga : portées visibles, menu contextuel près du lutteur,
+// prévision de combat avant confirmation, barre d'équipe avec portraits, bannière de tour.
 import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase } from '../engine/battle.js';
-import { TERRAIN, tileAt, key } from '../engine/grid.js';
+import { avatar } from './avatar.js';
+import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
+import { TERRAIN, tileAt, key, manhattan } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
-import { MOVE_TIER_LABEL } from '../data/moves.js';
-import { DIRECTIVES } from '../data/directives.js';
+import { MOVES, MOVE_TIER_LABEL } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 
 const TIER_ORDER = ['base', 'class', 'specialty', 'signature', 'finisher', 'script'];
-const TIER_LABELS = { ...MOVE_TIER_LABEL, script: 'Script (coulisses)' };
+const TIER_LABELS = { ...MOVE_TIER_LABEL, script: 'Script' };
+const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weapon']);
+const TILE_HELP = {
+  floor: 'Plancher : hors du ring. Compte de l’arbitre dans les matchs avec règles.',
+  ring: 'Tapis du ring.',
+  rope: 'Cordes : coût 2 pour y entrer. Y être projeté étourdit. Rope break possible pour les soumissions. Bataille royale : on peut y être jeté par-dessus.',
+  turnbuckle: 'Coin : coût 2. Plongeons aériens +25 % depuis ici. Y être projeté = 10 dégâts + étourdi. Cage : point d’escalade.',
+  ramp: 'Rampe d’entrée : hors du ring. Les renforts arrivent par ici.',
+  table: 'Table des commentateurs : projetez-y quelqu’un pour 25 dégâts et un moment mémorable.',
+  debris: 'Table brisée. Rien à voir ici, circulez.',
+  barricade: 'Barricade : infranchissable. Y être projeté = 10 dégâts.',
+  steps: 'Marches d’acier : coût 2. Y être projeté = 12 dégâts.',
+  ladder: 'Échelle : grimpez deux tours de suite sans subir de dégâts pour la ceinture.',
+  cage: 'Mur de la cage : infranchissable. Y être projeté = 15 dégâts.',
+  void: '',
+};
+const CATS = [
+  { id: 'attack', icon: '⚔️', name: 'Attaquer', match: (a) => ATTACK_TYPES.has(a.type) },
+  { id: 'pin', icon: '🤝', name: 'Tombé', match: (a) => a.type === 'pin' },
+  { id: 'taunt', icon: '📣', name: 'Provoquer', match: (a) => a.type === 'taunt' },
+  { id: 'special', icon: '🎯', name: 'Spécial', match: (a) => ['special', 'toss', 'climb', 'tag', 'pickup', 'sell', 'job'].includes(a.type) },
+  { id: 'wait', icon: '⏳', name: 'Attendre', match: (a) => a.type === 'wait' },
+];
 
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
-  const ui = { sel: null, mode: 'idle', action: null, reach: null, hover: null, busy: false, resultShown: false };
+  const ui = { sel: null, mode: 'idle', cat: null, action: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
   clear(root);
   const el = {
-    top: h('div', { class: 'match-top' }),
+    top: h('div', { class: 'm-top' }),
     board: h('div', { class: 'board', style: { gridTemplateColumns: `repeat(${g.w}, var(--cell))` } }),
-    side: h('aside', { class: 'side' }),
-    log: h('div', { class: 'log' }),
+    popover: h('div', { class: 'popover', hidden: true }),
+    tileInfo: h('div', { class: 'tile-info' }),
+    right: h('aside', { class: 'm-right' }),
+    party: h('div', { class: 'partybar' }),
+    log: h('details', { class: 'm-log', open: true }),
+    banner: h('div', { class: 'turn-banner', hidden: true }),
   };
-  root.append(h('div', { class: 'match' }, el.top, h('div', { class: 'match-body' }, h('div', { class: 'board-wrap' }, el.board, el.log), el.side)));
+  const boardWrap = h('div', { class: 'board-wrap' }, el.board, el.popover, el.tileInfo);
+  root.append(h('div', { class: 'match' }, el.top, h('div', { class: 'm-stage' }, h('div', { class: 'm-center' }, boardWrap, el.party, el.log), el.right), el.banner));
+  document.addEventListener('keydown', onKey);
+  showBanner('🔔 DING DING DING !', 'start');
   render();
 
-  // ------------------------------------------------------------ rendu
+  // ------------------------------------------------------------ rendu global
   function render() {
-    renderTop(); renderBoard(); renderSide(); renderLog(); flushEvents();
-    if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 900); }
+    renderTop(); renderBoard(); renderPopover(); renderRight(); renderParty(); renderLog(); flushEvents();
+    if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
   }
 
   function renderTop() {
     clear(el.top);
     const r = battle.rules;
     const phase = battle.result ? 'Terminé' : battle.phase === 'player' ? 'Votre tour' : 'Tour adverse';
-    const survive = r.victory === 'survive' ? ` · Survivre : tour ${Math.min(battle.turn, battle.match.turns)}/${battle.match.turns}` : '';
+    const survive = r.victory === 'survive' ? ` · Survivre ${Math.min(battle.turn, battle.match.turns)}/${battle.match.turns}` : '';
     el.top.append(
-      h('div', { class: 'match-title' },
-        h('div', {}, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` — ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Mode Scénarios' : ''}`)),
-        h('div', {}, `Tour ${battle.turn}${survive} · `, h('b', { class: battle.phase }, phase), battle.refDistracted > 0 ? h('span', { class: 'muted' }, ' · 👀 arbitre distrait') : null),
-        h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
-      ),
-      renderObjectives(),
-      h('button', { class: 'btn small ghost quit', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) onQuit(); } }, 'Quitter'),
+      h('div', { class: `phase-badge ${battle.phase}` }, h('b', {}, `Tour ${battle.turn}`), h('span', {}, phase + survive)),
+      h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
+      h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
+      h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
   }
 
   function renderObjectives() {
     const r = battle.rules;
-    const box = h('div', { class: 'objectives' });
-    box.append(h('div', { class: 'obj-rule' }, h('b', {}, 'Règles : '), r.desc));
+    const items = [];
     if (battle.mode === 'scenario' && battle.script) {
       const ev = evaluateScript(battle, battle.script);
-      box.append(h('div', { class: 'obj-script' }, h('b', {}, '🎬 Script : '), battle.script.summary));
-      box.append(h('div', { class: `obj-item ${battle.result ? (ev.finishOk ? 'done' : 'fail') : ''}` }, `${battle.result ? (ev.finishOk ? '✅' : '❌') : '📜'} Finish : ${describeFinish(battle.script.finish)}`));
-      for (const b of ev.beats) {
-        const pending = b.final && !battle.result;
-        box.append(h('div', { class: `obj-item ${b.done && !pending ? 'done' : ''}` }, `${pending ? (b.done ? '⏳' : '⬜') : b.done ? '✅' : '⬜'} ${b.name} — ${b.desc}`));
-      }
-      box.append(h('div', { class: 'obj-item muted' }, `Note en direct : ${starsText(ev.stars)}`));
+      items.push(h('div', { class: 'obj-script' }, '🎬 ', battle.script.summary));
+      items.push(h('div', { class: `obj-item ${battle.result ? (ev.finishOk ? 'done' : 'fail') : ''}` }, `${battle.result ? (ev.finishOk ? '✅' : '❌') : '📜'} Finish : ${describeFinish(battle.script.finish)}`));
+      for (const b of ev.beats) { const pending = b.final && !battle.result; items.push(h('div', { class: `obj-item ${b.done && !pending ? 'done' : ''}` }, `${pending ? (b.done ? '⏳' : '⬜') : b.done ? '✅' : '⬜'} ${b.name} — ${b.desc}`)); }
+      items.push(h('div', { class: 'obj-item muted' }, `Note en direct : ${starsText(ev.stars)}`));
     } else if (matchDef && matchDef.directives && matchDef.directives.length) {
-      box.append(h('div', { class: 'obj-script' }, h('b', {}, '📺 Directives du Network (bonus) :')));
-      for (const d of evaluateDirectives(battle, matchDef.directives)) {
-        const pending = d.final && !battle.result;
-        box.append(h('div', { class: `obj-item ${d.done && !pending ? 'done' : ''}` }, `${pending ? (d.done ? '⏳' : '⬜') : d.done ? '✅' : '⬜'} ${d.name} — ${d.desc} (+${d.reward.fans} fans, +${d.reward.money} $)`));
-      }
+      for (const d of evaluateDirectives(battle, matchDef.directives)) { const pending = d.final && !battle.result; items.push(h('div', { class: `obj-item ${d.done && !pending ? 'done' : ''}` }, `${pending ? (d.done ? '⏳' : '⬜') : d.done ? '✅' : '⬜'} ${d.name} — ${d.desc} (+${d.reward.fans} fans, +${d.reward.money} $)`)); }
     }
-    return box;
+    return h('details', { class: 'objectives', open: ui.mode === 'idle' && !ui.inspect && !ui.hover },
+      h('summary', {}, `🎯 Objectif : ${r.name}`, items.length ? h('span', { class: 'muted' }, ` · ${items.length - (battle.mode === 'scenario' ? 2 : 0)} bonus`) : null),
+      h('div', { class: 'obj-rule' }, r.desc), items);
   }
 
+  // ------------------------------------------------------------ plateau
   function renderBoard() {
     clear(el.board);
     const reach = ui.mode === 'move' ? ui.reach : null;
+    const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
+    const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
     for (let y = 0; y < g.h; y++) {
       for (let x = 0; x < g.w; x++) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
-        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onmouseenter: () => onHover(x, y), onmouseleave: () => onHover(null) , title: TERRAIN[tile].name });
+        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onmouseenter: () => onHover(x, y), onmouseleave: () => onHover(null) });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
+        else if (atk && atk.has(k)) cell.classList.add('atk');
+        if (threat && threat.has(k)) cell.classList.add('threat');
         if (targets && targets.has(k)) {
           cell.classList.add('target');
           const t = targets.get(k);
@@ -89,13 +116,48 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const item = battle.items.find((i) => i.x === x && i.y === y);
         if (item) cell.append(h('span', { class: 'item', title: item.weapon.name }, item.weapon.icon));
         const u = unitAt(battle, x, y);
-        if (u) { const tok = unitToken(u); if (ui.sel === u) tok.classList.add('selected'); cell.append(tok); }
+        if (u) { const tok = unitToken(u); if (ui.sel === u) tok.classList.add('selected'); if (ui.acting === u) tok.classList.add('acting'); cell.append(tok); }
         el.board.append(cell);
       }
     }
   }
 
+  function threatRange(enemy) {
+    const set = new Set();
+    if (enemy.down) return set;
+    const reach = getReachable(battle, enemy);
+    const range = maxAttackRange(enemy);
+    for (const v of reach.values()) {
+      if (v.blocked) continue;
+      for (let dx = -range; dx <= range; dx++) for (let dy = -range; dy <= range; dy++) {
+        if (Math.abs(dx) + Math.abs(dy) > range || (dx === 0 && dy === 0)) continue;
+        set.add(key(v.x + dx, v.y + dy));
+      }
+      set.add(key(v.x, v.y));
+    }
+    return set;
+  }
+  function maxAttackRange(u) {
+    let r = 1;
+    for (const m of u.moves) { const mv = MOVES[m]; if (!mv || !ATTACK_TYPES.has(mv.type)) continue; if (mv.requires && mv.requires.turnbuckle && !u.flags.ignoreTurnbuckle) continue; if (mv.cost && u.momentum < mv.cost) continue; r = Math.max(r, mv.range[1]); }
+    return r;
+  }
+  function attackRangeFrom(reach, u) {
+    const set = new Set();
+    const range = maxAttackRange(u);
+    for (const v of reach.values()) {
+      if (v.blocked && !(v.x === u.x && v.y === u.y)) continue;
+      for (let dx = -range; dx <= range; dx++) for (let dy = -range; dy <= range; dy++) {
+        if (Math.abs(dx) + Math.abs(dy) > range || (dx === 0 && dy === 0)) continue;
+        const k = key(v.x + dx, v.y + dy);
+        if (!reach.has(k) || reach.get(k).blocked) set.add(k);
+      }
+    }
+    return set;
+  }
+
   function unitToken(u) {
+    const def = WRESTLERS_BY_ID[u.id];
     const icons = [];
     if (u.statuses.dazed) icons.push('😵');
     if (u.statuses.cursed) icons.push('🕯️');
@@ -105,47 +167,110 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
     const cls = `unit team-${u.team}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
-    return h('div', { class: cls, style: { '--c': u.color }, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}` },
-      h('span', { class: 'ini' }, u.initials),
+    return h('div', { class: cls, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}` },
+      avatar(def, 0, { fill: true, bg: u.team === 'player' ? '#1e3a5f' : '#5a1e1e', stroke: 'transparent' }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
     );
   }
 
-  function renderSide() {
-    clear(el.side);
-    if (ui.sel) el.side.append(unitCard(battle, ui.sel, { class: 'selected' }));
-    el.inspect = h('div', { class: 'inspect' });
-    el.side.append(el.inspect);
-    renderInspect();
-    if (!ui.sel) {
-      el.side.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez sur un de vos lutteurs pour le sélectionner. Déplacez-le (cases bleues), puis choisissez une action.' : 'Tour adverse…'));
-      el.side.append(h('div', { class: 'roster-mini' }, living(battle).map((u) => h('div', { class: `rm team-${u.team}${u.acted && u.team === 'player' ? ' acted' : ''}`, onclick: () => { if (u.team === 'player' && canSelect(u)) select(u); } }, h('span', { class: 'chip', style: { '--c': u.color } }, u.initials), ` ${u.name} `, h('small', {}, `${u.hp}/${u.maxHp} PV · ${u.momentum} mom.${u.down ? ' · au sol' : ''}`)))));
-    }
-    if (ui.sel && !battle.result) el.side.append(renderActions());
-    const controls = h('div', { class: 'controls' });
-    if (ui.sel && ui.sel.moved && !ui.sel.acted) controls.append(h('button', { class: 'btn ghost', onclick: () => { undoMove(battle, ui.sel); select(ui.sel); } }, '↩ Annuler le déplacement'));
-    if (ui.mode === 'target') controls.append(h('button', { class: 'btn ghost', onclick: () => { ui.mode = 'action'; ui.action = null; render(); } }, '← Retour'));
-    if (ui.sel) controls.append(h('button', { class: 'btn ghost', onclick: deselect }, 'Désélectionner'));
-    if (!battle.result) controls.append(h('button', { class: 'btn primary', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, '⏭ Fin du tour'));
-    el.side.append(controls);
-  }
-
-  function renderActions() {
+  // ------------------------------------------------------------ menu contextuel (popover)
+  function renderPopover() {
+    const pop = el.popover;
+    clear(pop);
+    if (!ui.sel || ui.mode !== 'menu' || battle.result) { pop.hidden = true; return; }
     const u = ui.sel;
     const actions = listActions(battle, u);
+    if (u.onlyPin) {
+      const pin = actions.find((a) => a.id === 'pin');
+      pop.append(h('div', { class: 'pop-title' }, '☠️ Finisher réussi !'));
+      pop.append(h('button', { class: 'pop-btn hot', disabled: !pin || !pin.ok, onclick: () => pin && chooseAction(pin) }, '🤝 COUVRIR !', h('small', {}, pin && pin.targets[0] ? `${Math.round(pin.targets[0].chance * 100)} %` : pin ? pin.reason : '')));
+      pop.append(h('button', { class: 'pop-btn', onclick: () => doAction('wait', null) }, '⏳ Ne pas couvrir'));
+    } else {
+      for (const c of CATS) {
+        const list = actions.filter(c.match);
+        if (!list.length) continue;
+        const okList = list.filter((a) => a.ok);
+        const btn = h('button', { class: `pop-btn ${okList.length ? '' : 'off'}`, disabled: !okList.length, onclick: () => openCategory(c, list) },
+          `${c.icon} ${c.name}`, h('small', {}, c.id === 'wait' ? 'Récupère 4 PV' : c.id === 'pin' && okList[0] ? `${Math.round(okList[0].targets[0].chance * 100)} %` : okList.length ? `${okList.length} option${okList.length > 1 ? 's' : ''}` : list[0].reason));
+        pop.append(btn);
+      }
+    }
+    if (u.moved && !u.acted) pop.append(h('button', { class: 'pop-btn ghost', onclick: () => { undoMove(battle, u); select(u); } }, '↩ Annuler le déplacement'));
+    pop.append(h('button', { class: 'pop-btn ghost', onclick: deselect }, '✖ Fermer'));
+    pop.hidden = false;
+    placePopover(u);
+  }
+  function placePopover(u) {
+    const cell = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`);
+    if (!cell) return;
+    const b = el.board.getBoundingClientRect(), c = cell.getBoundingClientRect();
+    const left = c.right - b.left + 8, top = c.top - b.top - 8;
+    const flip = u.x >= g.w - 4;
+    el.popover.style.left = flip ? `${c.left - b.left - 8}px` : `${left}px`;
+    el.popover.style.transform = flip ? 'translateX(-100%)' : '';
+    el.popover.style.top = `${Math.max(0, Math.min(top, b.height - 260))}px`;
+  }
+
+  function openCategory(c, list) {
+    const ok = list.filter((a) => a.ok);
+    if (c.id === 'wait') { doAction('wait', null); return; }
+    if (c.id === 'pin') { chooseAction(ok[0]); return; }
+    if (ok.length === 1 && c.id === 'taunt') { chooseAction(ok[0]); return; }
+    ui.cat = c; ui.mode = 'list'; render();
+  }
+
+  // ------------------------------------------------------------ panneau droit
+  function renderRight() {
+    clear(el.right);
+    const u = ui.sel;
+    if (ui.mode === 'list' && u) {
+      const actions = listActions(battle, u).filter(ui.cat.match);
+      el.right.append(h('div', { class: 'panel-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
+      el.right.append(renderActionList(u, actions));
+      el.right.append(unitCard(battle, u, { class: 'selected compact' }));
+      return;
+    }
+    if (ui.mode === 'target' && u) {
+      el.right.append(h('div', { class: 'panel-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); } }, '← Retour'), h('b', {}, ui.action.name)));
+      const hoverTarget = ui.hover && ui.action.targets.find((t) => t.unit === ui.hover);
+      const only = ui.action.targets.length === 1 ? ui.action.targets[0] : null;
+      const t = hoverTarget || only;
+      if (t) el.right.append(renderForecast(u, t));
+      else el.right.append(h('div', { class: 'hint' }, 'Survolez une cible (cases rouges) pour voir la prévision, cliquez pour confirmer.'));
+      if (ui.action.desc) el.right.append(h('div', { class: 'muted small' }, ui.action.desc));
+      return;
+    }
+    if (u) {
+      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Déplacement · 🟥 portée d’attaque. Cliquez une case bleue, ou le lutteur lui-même pour agir sur place.' : 'Choisissez une action dans le menu près du lutteur.'));
+      el.right.append(unitCard(battle, u, { class: 'selected' }));
+    }
+    const insp = ui.hover && ui.hover !== u ? ui.hover : ui.inspect && ui.inspect !== u ? ui.inspect : null;
+    if (insp) el.right.append(h('div', { class: 'inspect-label' }, insp.team === 'enemy' ? '🔍 Adversaire (zone de menace en rouge)' : '🔍 Inspection'), unitCard(battle, insp));
+    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez un de vos lutteurs (plateau ou barre du bas). Survolez un adversaire pour voir sa zone de menace.' : 'Tour adverse…'));
+    el.right.append(renderObjectives());
+    if (!battle.result) el.right.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${living(battle, 'player').filter((x) => !x.acted && !x.down).length} à jouer)`));
+  }
+
+  function renderActionList(u, actions) {
     const box = h('div', { class: 'actions' });
-    if (ui.mode === 'target') box.append(h('div', { class: 'hint' }, `Choisissez une cible pour ${ui.action.name} (cases rouges).`));
-    if (u.onlyPin) box.append(h('div', { class: 'hint hot' }, 'Finisher réussi : couvrez immédiatement !'));
     for (const tier of TIER_ORDER) {
       const list = actions.filter((a) => (a.tier || 'base') === tier);
       if (!list.length) continue;
       const group = h('div', { class: `agroup tier-${tier}` }, h('div', { class: 'tier-label' }, TIER_LABELS[tier]));
       for (const a of list) {
-        const cost = a.cost ? h('span', { class: `cost ${u.momentum >= a.cost ? 'ok' : 'no'}` }, `⚡${a.cost}`) : null;
-        const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'} ${ui.action && ui.action.id === a.id ? 'active' : ''}`, disabled: !a.ok || ui.busy, title: a.desc, onclick: () => chooseAction(a) },
-          h('span', { class: 'act-name' }, a.name, cost), h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
+        const m = a.move;
+        const meta = [];
+        if (m && m.power != null) meta.push(`💥 ${m.power}`);
+        if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
+        if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
+        if (a.cost) meta.push(`⚡ ${a.cost}`);
+        const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
+        const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'}`, disabled: !a.ok || ui.busy, onclick: () => chooseAction(a) },
+          h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
+          meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
+          h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
         group.append(btn);
       }
       box.append(group);
@@ -153,18 +278,70 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return box;
   }
 
-  function renderInspect() {
-    if (!el.inspect) return;
-    clear(el.inspect);
-    const inspect = ui.hover && ui.hover !== ui.sel ? ui.hover : null;
-    if (inspect) el.inspect.append(h('div', { class: 'inspect-label' }, 'Inspection'), unitCard(battle, inspect));
+  function renderForecast(u, t) {
+    const a = ui.action;
+    const tgt = t.unit;
+    const box = h('div', { class: 'forecast' });
+    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56), h('b', {}, unit.name),
+      h('div', { class: 'fc-hp' }, `PV ${unit.hp}`, after != null ? h('span', { class: after < unit.hp ? 'dn' : 'up' }, ` → ${after}`) : null),
+      bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
+    let mid = [], afterT = null, afterU = null;
+    if (a.move && ATTACK_TYPES.has(a.type)) {
+      const hit = hitChance(battle, u, tgt, a.move);
+      const { dmg } = computeDamage(battle, u, tgt, a.move, { noRng: true });
+      const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
+      afterT = Math.max(0, tgt.hp - dmg);
+      mid = [['Précision', `${hit} %`], ['Dégâts', `~${dmg}`], ['Critique', `${crit} %`]];
+      if (dmg >= tgt.hp && !tgt.down) mid.push(['Résultat', '💫 AU SOL']);
+      if (a.type === 'submission') mid.push(['Abandon', 'possible si affaibli']);
+      if (a.move.tier === 'finisher') mid.push(['Finisher', 'tombé immédiat +30 %']);
+      if (tgt.gimmick === 'outta_nowhere' && tgt.momentum >= 50) mid.push(['⚠️ Risque', 'contre RKO 35 %']);
+      if (a.move.effects && a.move.effects.illegal && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
+      if (a.type === 'weapon' && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
+      if (a.move.effects && a.move.effects.selfDamage) afterU = u.hp - a.move.effects.selfDamage;
+    } else if (a.type === 'pin') mid = [['Tombé', `${Math.round(t.chance * 100)} %`], ['Cœur adverse', '❤️'.repeat(tgt.grit) || '—'], ['Si kick-out', 'cœur -1, +15 momentum']];
+    else if (a.type === 'toss') mid = [['Par-dessus la corde', `${Math.round(t.chance * 100)} %`]];
+    else if (a.id === 'whip') mid = [['Précision', `${t.hit} %`], ['Projection', whipPreview(u, tgt)]];
+    else if (a.type === 'tag') mid = [['Tag', `${tgt.name} devient légal`], ['Bonus', '+15 % PV, +30 momentum']];
+    else if (a.type === 'job') mid = [['Script', 'votre lutteur perd volontairement']];
+    else if (a.move && a.move.effects && a.move.effects.drainMomentum) mid = [['Momentum adverse', `-${a.move.effects.drainMomentum}`]];
+    box.append(side(u, afterU), h('div', { class: 'fc-mid' }, h('div', { class: 'fc-name' }, a.name), mid.map(([k, v]) => h('div', { class: 'fc-row' }, h('span', {}, k), h('b', {}, v)))), side(tgt, afterT));
+    box.append(h('div', { class: 'hint center' }, 'Cliquez la cible pour confirmer'));
+    return box;
+  }
+  function whipPreview(u, tgt) {
+    const dx = Math.sign(tgt.x - u.x), dy = Math.sign(tgt.y - u.y);
+    for (let i = 1; i <= 2; i++) {
+      const tile = tileAt(g, tgt.x + dx * i, tgt.y + dy * i);
+      if (unitAt(battle, tgt.x + dx * i, tgt.y + dy * i)) return 'collision (6 dégâts chacun)';
+      if (tile === 'table') return '💥 TABLE ! 25 dégâts';
+      if (tile === 'cage') return 'cage : 15 dégâts';
+      if (tile === 'barricade') return 'barricade : 10 dégâts';
+      if (tile === 'steps') return 'marches : 12 dégâts';
+      if (tile === 'turnbuckle') return 'coin : 10 dégâts + étourdi';
+      if (tile === 'rope') return battle.rules.toss && ['rope', 'turnbuckle'].includes(tileAt(g, tgt.x, tgt.y)) ? 'par-dessus la corde ?' : 'cordes : étourdi';
+      if (TERRAIN[tile].outside && !TERRAIN[tileAt(g, tgt.x, tgt.y)].outside && battle.rules.toss) return 'par-dessus la corde !';
+    }
+    return 'recule de 2 cases';
+  }
+
+  // ------------------------------------------------------------ barre d'équipe / journal
+  function renderParty() {
+    clear(el.party);
+    const mk = (u) => {
+      const def = WRESTLERS_BY_ID[u.id];
+      const st = [u.down ? '💫' : '', u.statuses.dazed ? '😵' : '', u.statuses.finished ? '☠️' : '', u.weapon ? u.weapon.icon : '', battle.rules.tag && u.legal ? '⭐' : ''].join('');
+      return h('div', { class: `pm team-${u.team}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}${u.eliminated ? ' out' : ''}${ui.sel === u ? ' sel' : ''}`, onclick: () => { if (u.eliminated) return; if (u.team === 'player' && canSelect(u)) select(u); else { ui.inspect = u; render(); } }, onmouseenter: () => { ui.hover = u; renderRight(); renderBoard(); }, onmouseleave: () => { ui.hover = null; renderRight(); renderBoard(); } },
+        avatar(def, 44), h('div', { class: 'pm-info' }, h('b', {}, u.name), bar(u.hp, u.maxHp, 'hpbar', `${u.hp}`), bar(u.momentum, 100, 'mombar', `${u.momentum}`)), h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
+    };
+    el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Votre équipe'), battle.units.filter((u) => u.team === 'player').map(mk)));
+    el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Adversaires'), battle.units.filter((u) => u.team === 'enemy').map(mk)));
   }
 
   function renderLog() {
     clear(el.log);
-    const entries = battle.log.slice(-14).reverse();
-    el.log.append(h('div', { class: 'log-title' }, '📝 Commentaires'));
-    for (const e of entries) el.log.append(h('div', { class: `le ${e.cls || ''}` }, h('span', { class: 'lt' }, `T${e.turn}`), ' ', e.text));
+    el.log.append(h('summary', {}, '📝 Commentaires'));
+    for (const e of battle.log.slice(-10).reverse()) el.log.append(h('div', { class: `le ${e.cls || ''}` }, h('span', { class: 'lt' }, `T${e.turn}`), ' ', e.text));
   }
 
   function flushEvents() {
@@ -188,19 +365,36 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       setTimeout(() => f.remove(), 1400);
     }
   }
+  function floatAt(u, text, cls = 'act') {
+    const cell = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`);
+    if (!cell) return;
+    const f = h('span', { class: `float ${cls}` }, text);
+    cell.append(f);
+    setTimeout(() => f.remove(), 1400);
+  }
+  function showBanner(text, cls = '') {
+    el.banner.textContent = text; el.banner.className = `turn-banner ${cls}`; el.banner.hidden = false;
+    setTimeout(() => { el.banner.hidden = true; }, 1100);
+  }
 
   // ------------------------------------------------------------ interactions
   const canSelect = (u) => u.team === 'player' && !u.acted && !u.down && !u.eliminated && battle.phase === 'player';
   function select(u) {
-    ui.sel = u; ui.action = null;
-    if (u.moved || u.onlyPin) { ui.mode = 'action'; ui.reach = null; }
-    else { ui.mode = 'move'; ui.reach = getReachable(battle, u); }
+    ui.sel = u; ui.action = null; ui.cat = null; ui.inspect = null;
+    if (u.moved || u.onlyPin) { ui.mode = 'menu'; ui.reach = null; ui.atkRange = null; }
+    else { ui.mode = 'move'; ui.reach = getReachable(battle, u); ui.atkRange = attackRangeFrom(ui.reach, u); }
     render();
   }
-  function deselect() { ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.reach = null; render(); }
+  function deselect() { ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.cat = null; ui.reach = null; ui.atkRange = null; render(); }
   function onHover(x, y) {
     const u = x == null ? null : unitAt(battle, x, y);
-    if (u !== ui.hover) { ui.hover = u; renderInspect(); }
+    const tile = x == null ? null : tileAt(g, x, y);
+    if (tile !== ui.hoverTile) { ui.hoverTile = tile; el.tileInfo.textContent = tile && TILE_HELP[tile] ? `${TERRAIN[tile].name} — ${TILE_HELP[tile]}` : ''; }
+    if (u !== ui.hover) {
+      ui.hover = u;
+      renderRight();
+      if (ui.mode === 'idle') renderBoard();
+    }
   }
   function onCell(x, y) {
     if (ui.busy || battle.result || battle.phase !== 'player') return;
@@ -208,30 +402,30 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (ui.mode === 'target') {
       const t = ui.action.targets.find((t) => t.unit && t.unit.x === x && t.unit.y === y);
       if (t) doAction(ui.action.id, { unit: t.unit });
-      else { ui.mode = 'action'; ui.action = null; render(); }
+      else { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
       return;
     }
     if (ui.mode === 'move') {
-      if (u === ui.sel) { ui.mode = 'action'; render(); return; }
+      if (u === ui.sel) { ui.mode = 'menu'; render(); return; }
       const n = ui.reach.get(key(x, y));
-      if (n && !n.blocked) { moveUnit(battle, ui.sel, x, y); ui.mode = 'action'; ui.reach = null; render(); return; }
+      if (n && !n.blocked) { moveUnit(battle, ui.sel, x, y); ui.mode = 'menu'; ui.reach = null; ui.atkRange = null; render(); return; }
       if (u && canSelect(u)) { select(u); return; }
+      if (u && u.team === 'enemy') { ui.inspect = u; render(); return; }
       deselect(); return;
     }
-    if (ui.mode === 'action') {
-      if (u && canSelect(u) && u !== ui.sel) select(u);
-      else if (!u && !ui.sel.moved) { ui.mode = 'move'; ui.reach = getReachable(battle, ui.sel); render(); }
+    if (ui.mode === 'menu' || ui.mode === 'list') {
+      if (u && canSelect(u) && u !== ui.sel) { select(u); return; }
+      if (u === ui.sel) { ui.mode = 'menu'; render(); return; }
+      if (!u && !ui.sel.moved) { ui.mode = 'move'; ui.reach = getReachable(battle, ui.sel); ui.atkRange = attackRangeFrom(ui.reach, ui.sel); render(); }
       return;
     }
     if (u && canSelect(u)) select(u);
+    else if (u) { ui.inspect = u; render(); }
+    else if (ui.inspect) { ui.inspect = null; render(); }
   }
   function chooseAction(a) {
-    if (!a.ok || ui.busy) return;
-    if (ui.mode === 'move') { ui.mode = 'action'; ui.reach = null; }
-    if (a.targets.length && a.targets[0].unit) {
-      if (a.targets.length === 1) { doAction(a.id, { unit: a.targets[0].unit }); return; }
-      ui.mode = 'target'; ui.action = a; render(); return;
-    }
+    if (!a || !a.ok || ui.busy) return;
+    if (a.targets.length && a.targets[0].unit) { ui.mode = 'target'; ui.action = a; render(); return; }
     doAction(a.id, null);
   }
   function doAction(id, target) {
@@ -239,25 +433,39 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const r = executeAction(battle, u, id, target);
     if (!r.ok) { toast(r.reason, 'warn'); return; }
     if (r.countered) toast('CONTRÉ !', 'warn');
-    if (u.onlyPin && !battle.result) { ui.mode = 'action'; ui.action = null; render(); return; }
+    if (u.onlyPin && !battle.result) { ui.mode = 'menu'; ui.action = null; ui.cat = null; render(); return; }
     deselect();
   }
+  function onKey(e) {
+    if (e.key !== 'Escape' || ui.busy) return;
+    if (ui.mode === 'target') { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
+    else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
+    else if (ui.sel) deselect();
+  }
+  function cleanup() { document.removeEventListener('keydown', onKey); }
+
   async function endTurn() {
     if (ui.busy || battle.result || battle.phase !== 'player') return;
-    ui.busy = true; ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.reach = null;
-    endPlayerPhase(battle); render();
-    await sleep(500);
+    ui.busy = true; ui.sel = null; ui.mode = 'idle'; ui.action = null; ui.reach = null; ui.atkRange = null; ui.inspect = null;
+    endPlayerPhase(battle);
+    showBanner('TOUR ADVERSE', 'enemy');
+    render();
+    await sleep(700);
     for (const step of enemySteps(battle)) {
+      ui.acting = step.unit;
       render();
-      await sleep(step.type === 'move' ? 380 : 750);
+      if (step.type === 'action') { const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id; floatAt(step.unit, name); }
+      await sleep(step.type === 'move' ? 420 : 800);
       if (battle.result) break;
     }
-    if (!battle.result) endEnemyPhase(battle);
+    ui.acting = null;
+    if (!battle.result) { endEnemyPhase(battle); showBanner(`VOTRE TOUR — ${battle.turn}`, 'player'); }
     ui.busy = false; render();
   }
 
   // ------------------------------------------------------------ résultat
   function showResult() {
+    cleanup();
     const res = battle.result;
     const summary = onFinish ? onFinish(battle) : null;
     const won = res.winner === 'player';
