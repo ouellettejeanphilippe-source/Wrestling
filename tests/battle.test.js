@@ -66,10 +66,29 @@ test('portée et prérequis des mouvements filtrent les cibles', () => {
   assert.ok(!acts.find((a) => a.id === 'moonsault').ok, 'moonsault exige un coin');
   place(d, 3, 2); place(j, 4, 3);
   acts = listActions(b, d);
-  assert.ok(acts.find((a) => a.id === 'moonsault').ok, 'moonsault depuis le coin à portée 2');
+  assert.ok(!acts.find((a) => a.id === 'moonsault').ok, 'moonsault verrouillé sans momentum (palier classe)');
+  d.momentum = 30;
+  acts = listActions(b, d);
+  assert.ok(acts.find((a) => a.id === 'moonsault').ok, 'moonsault depuis le coin à portée 2 avec 30 momentum');
+  assert.ok(!acts.find((a) => a.id === 'crossbody').ok, 'spécialité verrouillée sous 45');
   assert.ok(!acts.find((a) => a.id === 'coffin_drop').ok, 'finisher sans momentum');
   d.momentum = 100;
   assert.ok(listActions(b, d).find((a) => a.id === 'coffin_drop').ok);
+  assert.ok(listActions(b, d).find((a) => a.id === 'crossbody').ok);
+});
+
+test('échelle de momentum : un mouvement coûte son palier et en rapporte s’il touche', () => {
+  const b = mk('singles', ['jean_sina'], ['jobber_1']);
+  const s = findP(b, 'jean_sina'), j = findE(b, 'jobber_1');
+  place(s, 5, 4); place(j, 6, 4);
+  s.momentum = 30;
+  assert.ok(listActions(b, s).find((a) => a.id === 'bodyslam').ok, 'classe débloquée à 25');
+  assert.ok(!listActions(b, s).find((a) => a.id === 'kneestrike').ok, 'spécialité verrouillée à 30');
+  assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer toujours disponible');
+  const r = executeAction(b, s, 'bodyslam', { unit: j });
+  assert.ok(r.ok);
+  if (r.hit) assert.equal(s.momentum, 30 - 10 + MOVES.bodyslam.momentum);
+  else assert.equal(s.momentum, 20);
 });
 
 test('un lutteur à 0 PV est au sol, peut être couvert, puis se relève', () => {

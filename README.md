@@ -60,7 +60,20 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 
 - **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les cordes et les coins coûtent
   2 de mouvement ; les ennemis bloquent le passage.
-- **Momentum** (0–100) : gagné en frappant, en encaissant, en provoquant. Signature = 50, finisher = 100.
+- **Momentum** (0–100) : gagné en frappant, en encaissant, en provoquant (+5 par tour). Il **débloque les paliers de
+  mouvements** et se dépense à l'usage :
+
+  | Palier | Débloqué à | Coût à l'usage |
+  | --- | --- | --- |
+  | Base (coup de poing, prise, Irish Whip, provoquer) | 0 | 0 |
+  | Classe | 25 | 10 |
+  | Spécialité | 45 | 20 |
+  | Signature | 60 | 40 |
+  | Finisher | 100 | 100 |
+
+  Un coup qui touche rapporte son propre momentum (10 à 20), donc les mouvements de classe s'autofinancent à peu près,
+  les spécialités grignotent la jauge, et signature/finisher sont de gros investissements. Les provocations sont
+  toujours gratuites.
 - **Au sol** : à 0 PV un lutteur tombe et perd un tour. C'est là qu'on le **couvre**. Il peut se dégager (kick-out),
   mais chaque kick-out et chaque relevé use son **cœur ❤️**. Un finisher donne un tombé immédiat et +30 %.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).

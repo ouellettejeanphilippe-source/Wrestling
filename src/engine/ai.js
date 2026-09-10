@@ -60,6 +60,7 @@ function scoreAction(battle, unit, pos, a, tg) {
       if (t.down && !(m.requires && m.requires.targetDown)) s *= 0.6;
       if (t.climb > 0) s += 200;
       if (rules.tag && !unit.legal) s -= 60;
+      s -= (a.cost || 0) * 0.35;
       return s;
     }
   }

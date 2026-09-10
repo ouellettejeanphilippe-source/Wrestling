@@ -1,6 +1,6 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
 import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena } from './grid.js';
-import { MOVES } from '../data/moves.js';
+import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { MATCH_TYPES, WEAPONS } from '../data/matchTypes.js';
@@ -140,9 +140,10 @@ export function listActions(battle, unit, pos = null) {
   for (const mid of unit.moves) {
     const m = MOVES[mid];
     if (!m) continue;
-    const a = { id: mid, name: m.name, tier: m.tier, type: m.type, desc: m.desc || '', cost: m.cost || 0, move: m, targets: [], ok: true, reason: '' };
+    const unlock = moveUnlock(m), cost = moveCost(m);
+    const a = { id: mid, name: m.name, tier: m.tier, type: m.type, desc: m.desc || '', cost, unlock, move: m, targets: [], ok: true, reason: '' };
     const req = m.requires || {};
-    if (m.cost && unit.momentum < m.cost) { a.ok = false; a.reason = `Momentum ${m.cost} requis`; }
+    if (unit.momentum < Math.max(unlock, cost)) { a.ok = false; a.reason = `🔒 Momentum ${Math.max(unlock, cost)} requis (vous : ${unit.momentum})`; }
     else if (req.turnbuckle && !onTb && !unit.flags.ignoreTurnbuckle) { a.ok = false; a.reason = 'Doit être sur un coin'; }
     else if (req.attackerOnRope && !onRope) { a.ok = false; a.reason = 'Doit être sur les cordes'; }
     if (m.type === 'taunt') a.targets = [{ self: true }];
@@ -316,7 +317,7 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
 }
 
 export function resolveAttack(battle, attacker, target, move) {
-  if (move.cost) attacker.momentum = Math.max(0, attacker.momentum - move.cost);
+  attacker.momentum = Math.max(0, attacker.momentum - moveCost(move));
   if (!target.down && gim(target).onAttacked && gim(target).onAttacked(battle, target, attacker, move)) {
     checkWin(battle);
     return { countered: true };

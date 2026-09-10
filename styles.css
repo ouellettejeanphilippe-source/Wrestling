@@ -266,3 +266,10 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   .tab { white-space: nowrap; }
   .title h1 { font-size: 2rem; }
 }
+
+/* paliers de momentum */
+.mombar.ticks { background-image: linear-gradient(90deg, transparent calc(25% - 1px), #ffffffaa calc(25% - 1px), #ffffffaa calc(25% + 1px), transparent calc(25% + 1px)), linear-gradient(90deg, transparent calc(45% - 1px), #ffffffaa calc(45% - 1px), #ffffffaa calc(45% + 1px), transparent calc(45% + 1px)), linear-gradient(90deg, transparent calc(60% - 1px), #ffffffaa calc(60% - 1px), #ffffffaa calc(60% + 1px), transparent calc(60% + 1px)); }
+.mombar.ticks .bar-fill { position: relative; z-index: 0; }
+.mombar.ticks::after { content: ''; position: absolute; inset: 0; background-image: inherit; pointer-events: none; }
+.agroup.locked { opacity: 0.55; }
+.unit .mini.mom { background-image: linear-gradient(90deg, transparent 24%, #fff9 24%, #fff9 26%, transparent 26%, transparent 44%, #fff9 44%, #fff9 46%, transparent 46%, transparent 59%, #fff9 59%, #fff9 61%, transparent 61%); }
