@@ -4,7 +4,7 @@ import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
 import { GIMMICKS } from '../data/gimmicks.js';
-import { MOVES, MOVE_TIER_LABEL } from '../data/moves.js';
+import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { movesFor } from '../engine/units.js';
 import { getStats, moveRange } from '../engine/battle.js';
 
@@ -32,7 +32,7 @@ export function wrestlerCard(def, opts = {}) {
   const moveList = h('div', { class: 'movelist' }, tiers.map((t) => {
     const ms = moves.filter((m) => MOVES[m].tier === t);
     if (!ms.length) return null;
-    return h('div', { class: `movetier tier-${t}` }, h('span', { class: 'tier-label' }, MOVE_TIER_LABEL[t] + (t === 'class' ? ` (${cls.name})` : t === 'specialty' ? ` (${spec.name})` : '')), h('span', {}, ms.map((m) => MOVES[m].name).join(' · ')));
+    return h('div', { class: `movetier tier-${t}` }, h('span', { class: 'tier-label' }, MOVE_TIER_LABEL[t] + (t === 'class' ? ` (${cls.name})` : t === 'specialty' ? ` (${spec.name})` : '') + (MOVE_TIERS[t].unlock ? ` ⚡${MOVE_TIERS[t].unlock}+` : '')), h('span', {}, ms.map((m) => MOVES[m].name).join(' · ')));
   }));
   return h('div', { class: `wcard ${opts.class || ''}` },
     h('div', { class: 'wcard-head' }, chip(def, 'big'), h('div', {}, h('div', { class: 'wname' }, def.name), h('div', { class: 'wnick' }, `« ${def.nick} »`), h('div', { class: 'wink' }, `Clin d’œil : ${def.wink}`))),
@@ -64,7 +64,7 @@ export function unitCard(battle, u, opts = {}) {
     h('div', { class: 'wcard-head' }, chip(u), h('div', {}, h('div', { class: 'wname' }, u.name), h('div', { class: 'wnick' }, `« ${u.nick} » · ${cls.icon} ${cls.name} / ${spec.icon} ${spec.name}`))),
     h('div', { class: 'ubars' },
       h('div', {}, h('span', { class: 'lbl' }, 'PV'), bar(u.hp, u.maxHp, 'hpbar', `${u.hp}/${u.maxHp}`)),
-      h('div', {}, h('span', { class: 'lbl' }, 'Momentum'), bar(u.momentum, 100, 'mombar', `${u.momentum}/100`)),
+      h('div', {}, h('span', { class: 'lbl' }, 'Momentum'), bar(u.momentum, 100, 'mombar ticks', `${u.momentum}/100`)),
       h('div', {}, h('span', { class: 'lbl' }, 'Cœur'), h('span', { class: 'hearts' }, '❤️'.repeat(u.grit) + '🖤'.repeat(Math.max(0, u.maxGrit - u.grit)))),
     ),
     h('div', { class: 'ustats' }, ['str', 'agi', 'tec', 'def', 'cha'].map((k) => h('span', {}, h('b', {}, STAT_LABELS[k]), ` ${s[k]}`, diff(k))), h('span', {}, h('b', {}, 'MOV'), ` ${moveRange(battle, u)}`)),

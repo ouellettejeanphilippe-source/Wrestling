@@ -7,11 +7,11 @@ import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
 import { TERRAIN, tileAt, key, manhattan } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
-import { MOVES, MOVE_TIER_LABEL } from '../data/moves.js';
+import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 
 const TIER_ORDER = ['base', 'class', 'specialty', 'signature', 'finisher', 'script'];
-const TIER_LABELS = { ...MOVE_TIER_LABEL, script: 'Script' };
+const TIER_LABELS = { base: 'Base', class: `Classe · ⚡${MOVE_TIERS.class.unlock}+`, specialty: `Spécialité · ⚡${MOVE_TIERS.specialty.unlock}+`, signature: `Signature · ⚡${MOVE_TIERS.signature.unlock}+`, finisher: `Finisher · ⚡${MOVE_TIERS.finisher.unlock}`, script: 'Script' };
 const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weapon']);
 const TILE_HELP = {
   floor: 'Plancher : hors du ring. Compte de l’arbitre dans les matchs avec règles.',
@@ -282,14 +282,16 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const tier of TIER_ORDER) {
       const list = actions.filter((a) => (a.tier || 'base') === tier);
       if (!list.length) continue;
-      const group = h('div', { class: `agroup tier-${tier}` }, h('div', { class: 'tier-label' }, TIER_LABELS[tier]));
+      const locked = list.every((a) => !a.ok && a.reason && a.reason.startsWith('🔒'));
+      const group = h('div', { class: `agroup tier-${tier} ${locked ? 'locked' : ''}` }, h('div', { class: 'tier-label' }, TIER_LABELS[tier], locked ? ' 🔒' : ''));
       for (const a of list) {
         const m = a.move;
         const meta = [];
         if (m && m.power != null) meta.push(`💥 ${m.power}`);
         if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
         if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
-        if (a.cost) meta.push(`⚡ ${a.cost}`);
+        if (a.cost) meta.push(`⚡ -${a.cost}`);
+        if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
         const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
         const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'}`, disabled: !a.ok || ui.busy, onclick: () => chooseAction(a) },
           h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
@@ -323,6 +325,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       if (a.move.effects && a.move.effects.illegal && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
       if (a.type === 'weapon' && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
       if (a.move.effects && a.move.effects.selfDamage) afterU = u.hp - a.move.effects.selfDamage;
+      mid.push(['Momentum', `${u.momentum} → ${Math.min(100, Math.max(0, u.momentum - (a.cost || 0)) + (a.move.momentum || 0))}`]);
     } else if (a.type === 'pin') mid = [['Tombé', `${Math.round(t.chance * 100)} %`], ['Cœur adverse', '❤️'.repeat(tgt.grit) || '—'], ['Si kick-out', 'cœur -1, +15 momentum']];
     else if (a.type === 'toss') mid = [['Par-dessus la corde', `${Math.round(t.chance * 100)} %`]];
     else if (a.id === 'whip') mid = [['Précision', `${t.hit} %`], ['Projection', whipPreview(u, tgt)]];
