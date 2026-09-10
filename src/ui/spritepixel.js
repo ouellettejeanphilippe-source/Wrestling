@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, OVERLAYS } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, OVERLAYS } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -79,8 +79,15 @@ function layersFor(def) {
   return out;
 }
 
+// Choix de l'archétype de corps. Le colosse est dessiné plus grand dans le même
+// cadre : sa taille vient du dessin, pas d'un agrandissement — les pixels
+// gardent donc exactement la même taille que ceux des autres lutteurs.
+const isGiant = (def) => def.weight === 'super' || (def.size && def.size !== 1);
+
 function compose(def, back, down) {
-  const grid = (down ? BASE_DOWN : back ? BASE_BACK : BASE_FRONT).map((r) => [...r]);
+  const base = down ? BASE_DOWN : isGiant(def) ? BASE_GIANT : back ? BASE_BACK : BASE_FRONT;
+  const grid = base.map((r) => [...r]);
+  if (isGiant(def) && !down) return grid;   // le colosse a son propre dessin, sans couches
   // Au sol, la tête n'est plus au même endroit : les couches de tête ne
   // s'appliquent pas, seule la palette distingue les lutteurs.
   if (down) return grid;

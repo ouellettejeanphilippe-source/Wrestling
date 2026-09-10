@@ -141,10 +141,18 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
-      boardWrap.classList.contains('view-iso') ? h('button', { class: 'btn small ghost', title: 'Tourner la caméra d’un quart de tour (touche R)', onclick: () => rotateBoard(1) }, '↻') : null,
+
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
+    // Le bouton de rotation n'a de sens qu'en vue isométrique. On l'ajoute à
+    // part : append() écrirait « null » si on lui passait une branche vide.
+    if (boardWrap.classList.contains('view-iso')) {
+      el.top.insertBefore(
+        h('button', { class: 'btn small ghost', title: 'Tourner la caméra d’un quart de tour (touche R, Maj+R dans l’autre sens)', onclick: () => rotateBoard(1) }, '↻ Tourner'),
+        el.top.lastChild.previousSibling,
+      );
+    }
   }
 
   function renderObjectives() {

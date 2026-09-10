@@ -738,7 +738,9 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .view-iso .unit.big {
   --off-x: calc((var(--uw, 1) - 1) * (var(--cell) + 2px) / 2);
   --off-y: calc((var(--uh, 1) - 1) * (var(--cell) + 2px) / 2);
-  --uscale: calc((var(--uw, 1) + var(--uh, 1)) / 2 * 0.9);
+  /* Pas d'agrandissement : un colosse est dessiné plus grand dans son propre
+     cadre, sinon ses pixels seraient deux fois plus gros que ceux des autres. */
+  --uscale: 1;
   transform: translate(var(--off-x), var(--off-y)) var(--iso-out) scale(var(--uscale));
 }
 .view-iso .unit.big.selected { transform: translate(var(--off-x), var(--off-y)) var(--iso-out) scale(calc(var(--uscale) * 1.07)); }
