@@ -307,8 +307,9 @@ export const idleOf = (def) => {
   const k = (def.look || {}).idle;
   return IDLE_MOTION[k] ? k : 'breathe';
 };
-// Une animation n'a une seconde image que si son geste en demande une.
-export const idleHasFrames = (def) => !!IDLE_FRAMES[idleOf(def)];
+// Combien d'images dessinées pour ce repos. 1 = aucune, le sprite ne bouge
+// qu'en CSS. Au-delà, l'appelant empile autant de SVG et les fait défiler.
+export const idleFrameCount = (def) => (IDLE_FRAMES[idleOf(def)] || [null]).length;
 
 function compose(def, back, down, frame, bust) {
   const kind = archetypeOf(def);
@@ -337,13 +338,6 @@ function compose(def, back, down, frame, bust) {
     stamp(grid, st.art);
   }
   if (!back && FACES[L.face]) stamp(grid, FACES[L.face]);
-  // La seconde image du repos se pose comme une posture : après l'anatomie,
-  // avant les vêtements, pour qu'une manche suive la main si elle passe dans
-  // sa tranche de lignes.
-  if (frame === 1 && !back) {
-    const extra = IDLE_FRAMES[idleOf(def)];
-    if (extra) stamp(grid, extra);
-  }
   const f = featuresOf(def);
   // Le crâne dégarni n'est pas un dessin : on rend simplement les cheveux à
   // la peau, donc la silhouette du crâne reste exactement la même.
@@ -362,6 +356,16 @@ function compose(def, back, down, frame, bust) {
     if (spec.keys.some((k) => f.has(k))) wear(grid, kind, spec);
   }
   for (const layer of layersFor(def, back)) stamp(grid, layer);
+  // L'image du repos passe EN DERNIER : ces gestes-là se jouent devant le
+  // visage, et les couches de tête sont posées après tout le reste. Placée
+  // avant elles, la main de Cena disparaissait sous la casquette et les
+  // cheveux — il ne restait qu'un bout de poignet sous la joue.
+  // L'image 0 fait partie de la suite : un geste continu n'a pas de moment
+  // où la main n'est nulle part.
+  if (!back && !bust) {
+    const seq = IDLE_FRAMES[idleOf(def)];
+    if (seq && seq[frame]) stamp(grid, seq[frame]);
+  }
   return grid;
 }
 

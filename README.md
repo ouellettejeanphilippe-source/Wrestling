@@ -192,7 +192,7 @@ de tapis.
   | `stance` | la posture : les bras sont effacés puis redessinés | `cross`, `hips`, `fists`, `wide`, `pocket`, `flex`, `triomphe`, `micro`, `salut` |
   | `face` | l'expression, en trois lignes | `scowl`, `grin`, `smirk`, `shout`, `blank`, `brow` |
   | `features` | vêtements et accessoires posés par-dessus | `bandana`, `mask`, `jacket`, `bat`, `beer`… |
-  | `idle` | l'animation de repos | `breathe`, `bounce`, `sway`, `still`, `cantsee`, `stroke` |
+  | `idle` | l'animation de repos | `breathe`, `bounce`, `sway`, `still` (mouvement CSS) ; `cantsee` (4 images), `stroke` (3 images) |
 
   Les vêtements ne sont pas des dessins séparés : ils **repeignent la peau** sur une tranche de lignes, bornée par la
   table des colonnes du torse, donc un t-shirt tombe juste sur le maigre comme sur le colosse. La découpe des bras se
@@ -200,6 +200,10 @@ de tapis.
   `full` (corps entier, pions du plateau) et `bust` (portrait, cartes et listes).
 - **Aucune image externe** : tout est généré à la volée, donc ajouter un lutteur ne demande aucun fichier d'art —
   seulement une ligne de `look`.
+- **Repos animé** : tout le monde bouge en CSS (respiration, balancement, petits bonds). Les gestes qui *sont* le
+  personnage ont en plus une **suite d'images dessinées** — la main de John Sena qui balaie devant son visage,
+  Chris Jerico qui lisse sa barbe. Les images sont empilées et défilent en `steps()`, chacune visible pendant sa
+  tranche du cycle ; pas de minuterie JavaScript, donc dix pions restent en phase.
 - **Habillage** : voyant « ON AIR » sur le bandeau de régie, guirlande de loges sur l'écran titre, menu contextuel
   coiffé d'un clap de cinéma (qui sert de poignée à la feuille d'actions sur mobile), onomatopées à contour épais pour
   les dégâts, bannière de tour en balayage diagonal.

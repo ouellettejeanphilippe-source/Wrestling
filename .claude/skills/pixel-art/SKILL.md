@@ -121,10 +121,24 @@ tache : deux pixels cerclés d'encre, c'est de l'encre.
 C'est souvent ce qui manque quand « c'est correct mais pas beau ».
 
 Deux mécanismes, de coûts très différents. Le **mouvement** déplace tout le
-sprite en CSS — gratuit, et il suffit pour l'essentiel d'un roster. La
-**seconde image** change le dessin lui-même ; elle se réserve aux gestes qui
-*sont* le personnage. `steps()` partout : une interpolation continue donne un
-glissement sous-pixel qui trahit le pixel art.
+sprite en CSS — gratuit, et il suffit pour l'essentiel d'un roster. Les
+**images dessinées** changent le dessin lui-même ; elles se réservent aux
+gestes qui *sont* le personnage. `steps()` partout : une interpolation
+continue donne un glissement sous-pixel qui trahit le pixel art.
+
+**Un geste dessiné est une SUITE d'images, jamais deux.** Avec une seule image
+en plus, la main apparaît et disparaît : ça clignote, ça ne balaie pas. Trois
+ou quatre images, l'image 0 comprise — un geste continu n'a pas de moment où
+la main n'est nulle part. Le coût n'est pas le dessin, c'est la relecture :
+quatre images à juger à la taille réelle, c'est quatre fois le travail.
+
+Les images sont empilées et le CSS les fait défiler, chacune visible pendant
+sa tranche du cycle. Pas de `setInterval` par pion : dix pions dérivent les uns
+par rapport aux autres et le coût monte.
+
+Ce que ce mécanisme ne sait pas faire : un **cycle inégal**. Un clignement des
+yeux dure 100 ms toutes les 4 secondes, pas un quart du cycle — il lui faudrait
+son propre rapport cyclique, donc sa propre animation.
 
 Un repos « immobile » reste une respiration minuscule, jamais zéro.
 
@@ -189,6 +203,17 @@ se dessine donc comme une posture, jamais comme un corps de plus.
   posture qui lève ce bras laisse la batte flotter à côté du corps — et la
   couche, posée après, mange le bras. Symptôme : Stung au micro avec sa batte
   en travers de l'avant-bras.
+- **Poser l'image de repos avant les couches de tête.** Les casquettes, les
+  cheveux et les masques sont dessinés en dernier : une main devant le visage
+  passait dessous et il n'en restait qu'un bout de poignet sous la joue. Les
+  gestes de repos se posent **après tout le reste**.
+- **Une main aussi large que le crâne.** Elle n'efface pas le visage, elle le
+  remplace : le sprite devient une tête vide. La paume fait la moitié de la
+  largeur du crâne, et il lui faut un ton clair au milieu — deux aplats de
+  peau côte à côte ne se distinguent que par leur contour, et un contour ne
+  suffit pas.
+- **Garder le coude fixe pendant que la main bouge.** L'avant-bras se
+  retrouve coupé en deux morceaux décalés. Tout le bras glisse ensemble.
 - **Juger une planche à l'œil au lieu de lire la grille composée.** Les deux
   fautes ci-dessus étaient invisibles au rendu et évidentes en texte. Rendre
   la grille après composition — base + posture + visage + vêtements — et la

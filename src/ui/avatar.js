@@ -1,7 +1,7 @@
 // Enrobage DOM des sprites. Le dessin vient des planches dessinées à la main
 // (spritepixel.js + spriteart.js) ; la signature ne bouge pas pour le reste de l'UI.
 import { h } from './dom.js';
-import { spriteSvg, idleOf, idleHasFrames } from './spritepixel.js';
+import { spriteSvg, idleOf, idleFrameCount } from './spritepixel.js';
 
 export { spriteSvg };
 
@@ -24,13 +24,24 @@ export function avatar(def, size = 48, opts = {}) {
   const draw = (frame) => spriteSvg(def, {
     view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir, pose: opts.pose, frame,
   });
-  // Animé, le sprite porte sa classe de mouvement, et une seconde image
-  // empilée par-dessus quand son repos en demande une : les deux alternent en
-  // CSS, sans que le JS ait à battre la mesure.
+  // Animé, le sprite porte sa classe de mouvement. Quand son repos a des
+  // images dessinées, on les empile toutes et le CSS les fait défiler : chaque
+  // SVG s'affiche pendant sa tranche du cycle, décalée par son retard. Le JS
+  // ne bat pas la mesure — un setInterval par pion dérive et coûte cher quand
+  // le plateau en porte dix.
   if (opts.anim && !opts.pose) {
     const idle = idleOf(def);
+    const n = idleFrameCount(def);
     el.classList.add('anim', `idle-${idle}`);
-    el.innerHTML = idleHasFrames(def) ? `${draw(0)}${draw(1)}` : draw(0);
+    if (n > 1) {
+      el.classList.add('multi', `frames-${n}`);
+      el.innerHTML = Array.from({ length: n }, (_, i) => draw(i)).join('');
+      [...el.children].forEach((svg, i) => {
+        svg.style.animationDelay = `calc(var(--idle-t) * ${i} / ${n})`;
+      });
+    } else {
+      el.innerHTML = draw(0);
+    }
   } else {
     el.innerHTML = draw(0);
   }
