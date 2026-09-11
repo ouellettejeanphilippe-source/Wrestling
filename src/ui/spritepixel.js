@@ -33,6 +33,15 @@ const SKIN = { light: '#f2c79b', tan: '#d79a68', brown: '#a96c3d', dark: '#7c4b2
 const INK = '#241830';
 const WHITE = '#f8f4ee';
 
+// Les données du roster contiennent des couleurs à trois chiffres (#111). Le
+// navigateur les accepte, mais elles se retrouvaient telles quelles dans la
+// palette : tout ce qui lit une couleur au caractère près — mesure, contrôle,
+// export — cassait dessus. On normalise à l'entrée.
+const norm = (hex) => {
+  let t = String(hex || '#888').replace('#', '');
+  if (t.length === 3) t = t.split('').map((c) => c + c).join('');
+  return `#${t.toLowerCase()}`;
+};
 const parse = (hex) => {
   let s = String(hex || '#888').replace('#', '');
   if (s.length === 3) s = s.split('').map((c) => c + c).join('');
@@ -114,7 +123,7 @@ function shade(hex, k) {
 // Trois tons par matière : c'est le registre des sprites 16 bits, et c'est ce
 // qui garde la silhouette lisible à la taille d'une case. Chaque ton sort de
 // shade(), donc la teinte tourne au lieu de simplement s'éclaircir.
-function palette(def) {
+export function palette(def) {
   const L = def.look || {};
   const skin = SKIN[L.skin] || L.skin || SKIN.light;
   const hair = L.hair || '#3b2a1a';
@@ -123,12 +132,12 @@ function palette(def) {
   const boots = mix(attire, '#000000', 0.55);
   return {
     '.': null, K: INK,
-    1: shade(skin, -1.3), 2: shade(skin, -0.6), 3: skin,
+    1: shade(skin, -1.3), 2: shade(skin, -0.6), 3: norm(skin),
     4: shade(skin, 0.6), 5: shade(skin, 1.2),
-    h: shade(hair, -1.8), H: hair, G: shade(hair, 1.9),
-    a: shade(attire, -1.4), A: attire, B: shade(attire, 1),
-    n: shade(accent, -1.4), N: accent,
-    b: shade(boots, -1.5), V: boots, W: shade(boots, 1),
+    h: shade(hair, -1.8), H: norm(hair), G: shade(hair, 1.9),
+    a: shade(attire, -1.4), A: norm(attire), B: shade(attire, 1),
+    n: shade(accent, -1.4), N: norm(accent),
+    b: shade(boots, -1.5), V: norm(boots), W: shade(boots, 1),
     e: WHITE, E: shade(hair, -2.4), m: shade(mix(skin, '#8c2f28', 0.55), -0.4),
     w: WHITE, o: '#191423',
   };
