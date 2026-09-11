@@ -1,5 +1,5 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
-import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn } from './grid.js';
+import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange } from './battle.js';
 import { MOVES } from '../data/moves.js';
@@ -60,6 +60,7 @@ function scoreAction(battle, unit, pos, a, tg) {
       const hit = hitChance(battle, unit, t, m, { pos }) / 100;
       const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos, travel: pos.travel });
       let s = hit * dmg * 2;
+      s += spreadValue(battle, unit, pos, t, m, dmg) * hit;
       if (!t.down && dmg >= t.hp) s += 90;
       if (m.tier === 'finisher') s += 30 + (t.hp <= dmg * 1.3 ? 70 : 0);
       if (m.type === 'submission') s += hit * Math.max(0, (1 - hpRatio(t)) * 0.6 - t.grit * 0.06) * 250;
@@ -72,6 +73,33 @@ function scoreAction(battle, unit, pos, a, tg) {
       return s;
     }
   }
+}
+
+// Ce que le coup touche EN PLUS de sa cible. Sans ça l'IA voit une ligne et
+// une éclaboussure comme des coups ordinaires, et ne se place jamais pour
+// balayer deux adversaires d'un coup. Le malus allié est plus lourd que le
+// bonus ennemi : une erreur de tir sur son partenaire coûte plus cher qu'un
+// bonus manqué.
+function spreadValue(battle, unit, pos, target, move, dmg) {
+  const eff = move.effects || {};
+  if (!eff.line && !eff.splash) return 0;
+  const pris = new Set();
+  if (eff.line) {
+    const dx = Math.sign(target.x - pos.x), dy = Math.sign(target.y - pos.y);
+    if (dx || dy) for (let i = 1; i <= eff.line; i++) {
+      const u = battle.units.find((v) => !v.eliminated && occupies(v, target.x + dx * i, target.y + dy * i));
+      if (u && u !== unit && u !== target) pris.add(u);
+    }
+  }
+  if (eff.splash) {
+    for (const u of battle.units) {
+      if (u === unit || u === target || u.eliminated) continue;
+      if (manhattan(u, target) === 1) pris.add(u);
+    }
+  }
+  let s = 0;
+  for (const u of pris) s += u.team === unit.team ? -dmg * 0.9 : dmg * 0.7;
+  return s;
 }
 
 function scoreWhip(battle, unit, pos, target) {

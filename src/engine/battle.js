@@ -37,6 +37,17 @@ const HAZARD_TILES = ['table', 'steps', 'cage', 'barricade', 'turnbuckle'];
 // toujours : même au corps à corps, il reste une case voisine où se replacer.
 // Ce qu'il interdit, c'est de ne jamais bouger.
 const CHARGEABLE = new Set(['strike', 'aerial', 'grapple', 'weapon']);
+// STATISME — l'immobilité s'aggrave
+//
+// Un tour sans bouger, c'est un choix tactique. Trois de suite, c'est un
+// match qui s'enlise : le lutteur s'ankylose et la foule décroche. Le
+// compteur monte à chaque tour passé sur place et retombe à zéro dès qu'on
+// marche. Il creuse le plancher de l'élan et refroidit la salle — parce que
+// le coût d'un match statique, dans le catch, c'est le public.
+export const STATIC_MAX = 3;
+const STATIC_DMG_STEP = 0.07;                     // de plancher perdu par tour
+const STATIC_HEAT_STEP = 2;                       // de chaleur perdue par tour
+export const staticFloor = (n) => ELAN_MIN - STATIC_DMG_STEP * Math.min(STATIC_MAX, n || 0);
 export const ELAN_FULL = 4;                       // cases pour l'élan maximum
 export const ELAN_MIN = 0.85, ELAN_MAX = 1.25;
 
@@ -45,15 +56,20 @@ export function elanMult(travel, move, unit = null) {
   // Étourdi, on ne court pas : la punition serait double.
   if (unit && unit.statuses && unit.statuses.dazed) return 1;
   const t = Math.max(0, Math.min(ELAN_FULL, travel || 0));
-  return ELAN_MIN + (ELAN_MAX - ELAN_MIN) * (t / ELAN_FULL);
+  // Le plancher s'enfonce avec les tours passés sur place ; le plafond, lui,
+  // ne bouge pas — une vraie course efface l'ankylose d'un coup.
+  const floor = unit ? staticFloor(unit.static) : ELAN_MIN;
+  return floor + (ELAN_MAX - floor) * (t / ELAN_FULL);
 }
 // Ce que l'interface annonce avant de confirmer : un mot et un multiplicateur.
 export function elanLabel(travel, move, unit = null) {
   const mult = elanMult(travel, move, unit);
   if (mult === 1) return null;
   const t = Math.max(0, travel || 0);
-  const name = t === 0 ? 'Planté' : t >= ELAN_FULL ? 'Pleine course' : t >= 2 ? 'Élan' : 'Appui';
-  return { name, travel: t, mult, good: mult > 1 };
+  const stat = (unit && unit.static) || 0;
+  const name = t === 0 ? (stat >= 2 ? 'Ankylosé' : 'Planté')
+    : t >= ELAN_FULL ? 'Pleine course' : t >= 2 ? 'Élan' : 'Appui';
+  return { name, travel: t, mult, good: mult > 1, static: stat };
 }
 
 export const comboContextFor = (battle, attacker, target, move, pos) =>
@@ -517,6 +533,11 @@ export function resolveAttack(battle, attacker, target, move) {
       }
     }
   }
+  // ---------------------------------------------------- portée élargie
+  // Les coups qui ne touchent pas qu'une personne. Ils font du PLACEMENT une
+  // question défensive : rester aligné ou agglutiné coûte cher, et pas
+  // seulement pour celui qu'on visait.
+  spreadHit(battle, attacker, target, move, dmg);
   if (eff.selfDamage) applyDamage(battle, attacker, eff.selfDamage, null, { self: true, silent: true });
   let freePin = false;
   if (move.tier === 'finisher' && !target.eliminated) {
@@ -532,6 +553,56 @@ export function resolveAttack(battle, attacker, target, move) {
   if (battle.rules.tag && !attacker.legal && !attacker.eliminated) checkDq(battle, attacker, 0.25, 'attaque sans être légal');
   checkWin(battle);
   return { hit: true, dmg, crit, chance, freePin: freePin && !battle.result && !attacker.eliminated };
+}
+
+// PORTÉE ÉLARGIE : LIGNE, ZONE, RECUL
+//
+// `line: n`    le coup continue tout droit derrière la cible sur n cases.
+// `splash: f`  les voisins de la cible prennent la fraction f des dégâts.
+// `push: n`    la cible recule de n cases — déjà géré plus haut, mais c'est
+//              la même famille : ce que le coup fait à la GRILLE, pas
+//              seulement aux points de vie.
+//
+// Les dégâts secondaires ne sont pas recalculés coup par coup : ils dérivent
+// de ce qu'a encaissé la cible principale. Recalculer ferait intervenir la
+// défense et les gimmicks de chacun, donc des combos en cascade et un coût en
+// O(n²) pour un effet que personne ne peut anticiper à l'écran.
+const SPLASH_DEFAULT = 0.5, LINE_FALLOFF = 0.7;
+
+function spreadHit(battle, attacker, target, move, dmg) {
+  const eff = move.effects || {};
+  if (!eff.line && !eff.splash) return;
+  const touched = [];
+  if (eff.line) {
+    // La direction du coup, prolongée : c'est l'axe attaquant → cible.
+    const dx = Math.sign(target.x - attacker.x), dy = Math.sign(target.y - attacker.y);
+    if (dx || dy) {
+      let part = dmg;
+      for (let i = 1; i <= eff.line; i++) {
+        part = Math.round(part * LINE_FALLOFF);
+        if (part < 1) break;
+        const u = unitAt(battle, target.x + dx * i, target.y + dy * i);
+        if (!u || u === attacker || u.eliminated || touched.some((t) => t.u === u)) continue;
+        touched.push({ u, part });
+      }
+    }
+  }
+  if (eff.splash) {
+    const frac = eff.splash === true ? SPLASH_DEFAULT : eff.splash;
+    const part = Math.round(dmg * frac);
+    if (part >= 1) {
+      for (const u of unitsWithin(battle, target, 1)) {
+        if (u === attacker || u === target || u.eliminated || touched.some((t) => t.u === u)) continue;
+        touched.push({ u, part });
+      }
+    }
+  }
+  for (const { u, part } of touched) {
+    log(battle, `↳ ${u.name} est pris dans le mouvement : ${part} dégâts.`);
+    emit(battle, { type: 'splash', x: u.x, y: u.y });
+    applyDamage(battle, u, part, attacker, { move: { ...move, type: 'collision' } });
+  }
+  if (touched.length) addHeat(battle, 4);
 }
 
 export function applyDamage(battle, target, amount, source, opts = {}) {
@@ -846,6 +917,21 @@ export function startPhase(battle, team) {
   if (battle.refDistracted > 0) battle.refDistracted--;
   if (team === 'player') spawnReinforcements(battle);
   for (const u of living(battle, team)) {
+    // On lit le tour qui vient de s'écouler AVANT de le remettre à zéro. Deux
+    // cas ne comptent pas : le tout premier tour d'un lutteur — il n'a encore
+    // rien eu à décider, et createBattle ouvre déjà une phase — et un lutteur
+    // au sol, qui ne choisit pas de rester par terre.
+    if (u.hadTurn && !u.down) {
+      if (u.moved) u.static = 0;
+      else {
+        u.static = Math.min(STATIC_MAX, (u.static || 0) + 1);
+        if (u.static >= 2) {
+          addHeat(battle, -STATIC_HEAT_STEP);
+          if (u.static === 2) log(battle, `😴 ${u.name} campe sur place — la foule commence à décrocher.`);
+        }
+      }
+    }
+    u.hadTurn = true;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
       if (u.downTurns === 0) {

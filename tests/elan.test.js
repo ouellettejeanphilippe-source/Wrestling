@@ -4,7 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, moveUnit, undoMove, computeDamage, elanMult, elanLabel, getReachable,
-  activeCombos, comboContextFor, MOVE_MOMENTUM_CAP, ELAN_MIN, ELAN_MAX } from '../src/engine/battle.js';
+  activeCombos, comboContextFor, resolveAttack, endPlayerPhase, endEnemyPhase,
+  MOVE_MOMENTUM_CAP, ELAN_MIN, ELAN_MAX, STATIC_MAX, staticFloor } from '../src/engine/battle.js';
+import { MOVES } from '../src/data/moves.js';
 import { planUnit } from '../src/engine/ai.js';
 import { tileAt } from '../src/engine/grid.js';
 import { WRESTLERS_BY_ID as W } from '../src/data/wrestlers.js';
@@ -107,4 +109,86 @@ test('l’IA préfère bouger plutôt que frapper sur place', () => {
   const plan = planUnit(b, e);
   assert.ok(plan, 'l’IA doit produire un plan');
   assert.ok(plan.moveTo, 'un ennemi qui peut courir doit choisir de courir');
+});
+
+// ---------------------------------------------------------------- statisme
+// L'immobilité s'aggrave : un tour sur place est un choix, trois d'affilée
+// est un match qui s'enlise.
+
+test('le statisme creuse le plancher de l’élan, pas son plafond', () => {
+  assert.equal(staticFloor(0), ELAN_MIN);
+  assert.ok(staticFloor(1) < staticFloor(0));
+  assert.ok(staticFloor(3) < staticFloor(2));
+  assert.equal(staticFloor(9), staticFloor(STATIC_MAX), 'le creux a un fond');
+  const b = mk(['jean_sina'], ['gunter']);
+  const u = b.units[0];
+  u.static = STATIC_MAX;
+  assert.ok(elanMult(0, strike, u) < ELAN_MIN, 'planté et ankylosé fait moins mal que planté');
+  assert.equal(elanMult(4, strike, u), ELAN_MAX, 'une vraie course efface l’ankylose');
+});
+
+test('le compteur monte tour après tour et retombe dès qu’on marche', () => {
+  const b = mk(['jean_sina'], ['gunter']);
+  const u = b.units[0];
+  const tour = () => { endPlayerPhase(b); endEnemyPhase(b); };
+  assert.equal(u.static, 0);
+  tour(); assert.equal(u.static, 1);
+  tour(); assert.equal(u.static, 2);
+  tour(); assert.equal(u.static, 3);
+  tour(); assert.equal(u.static, STATIC_MAX, 'plafonné');
+  assert.ok(moveUnit(b, u, u.x + 1, u.y) || moveUnit(b, u, u.x - 1, u.y));
+  tour();
+  assert.equal(u.static, 0, 'une case suffit à repartir de zéro');
+});
+
+test('un match qui s’enlise refroidit la salle', () => {
+  const b = mk(['jean_sina'], ['gunter']);
+  b.heat = 60;
+  for (let i = 0; i < 4; i++) { endPlayerPhase(b); endEnemyPhase(b); }
+  assert.ok(b.heat < 60, `la chaleur devait baisser, elle est à ${b.heat}`);
+});
+
+test('un lutteur au sol ne se fait pas compter comme immobile', () => {
+  const b = mk(['jean_sina'], ['gunter']);
+  const u = b.units[0];
+  u.down = true; u.downTurns = 1;
+  endPlayerPhase(b); endEnemyPhase(b);
+  assert.equal(u.static, 0, 'il ne choisit pas de rester par terre');
+});
+
+// ------------------------------------------------------ portée élargie
+test('un coup en ligne touche ce qui est aligné derrière la cible', () => {
+  const b = mk(['jean_sina'], ['gunter', 'randy_python']);
+  const [u, a, c] = b.units;
+  u.x = 7; u.y = 7; a.x = 8; a.y = 7; c.x = 9; c.y = 7;   // tous alignés
+  const hp = c.hp;
+  const ligne = { ...strike, effects: { line: 1 } };
+  resolveAttack(b, u, a, ligne);
+  assert.ok(c.hp < hp, 'le troisième lutteur devait encaisser aussi');
+});
+
+test('un coup de zone touche les voisins de la cible, alliés compris', () => {
+  const b = mk(['jean_sina'], ['gunter', 'randy_python']);
+  const [u, a, c] = b.units;
+  u.x = 7; u.y = 7; a.x = 8; a.y = 7; c.x = 8; c.y = 8;   // c. est voisin de a.
+  const hp = c.hp;
+  resolveAttack(b, u, a, { ...strike, effects: { splash: 0.5 } });
+  assert.ok(c.hp < hp, 'le voisin devait être pris dans le mouvement');
+  assert.ok(a.maxHp - a.hp > c.maxHp - c.hp, 'la cible principale encaisse plus que l’éclaboussure');
+});
+
+test('un coup sans ligne ni zone ne touche que sa cible', () => {
+  const b = mk(['jean_sina'], ['gunter', 'randy_python']);
+  const [u, a, c] = b.units;
+  u.x = 7; u.y = 7; a.x = 8; a.y = 7; c.x = 9; c.y = 7;
+  const hp = c.hp;
+  resolveAttack(b, u, a, strike);
+  assert.equal(c.hp, hp);
+});
+
+test('le catalogue attache bien ligne, zone et recul à de vrais mouvements', () => {
+  const avec = (k) => Object.values(MOVES).filter((m) => m.effects && m.effects[k]).length;
+  assert.ok(avec('line') >= 2, 'au moins deux mouvements traversants');
+  assert.ok(avec('splash') >= 3, 'au moins trois mouvements de zone');
+  assert.ok(avec('push') >= 8, 'le recul doit être répandu, pas anecdotique');
 });

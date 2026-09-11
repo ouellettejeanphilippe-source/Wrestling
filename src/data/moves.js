@@ -4,6 +4,10 @@
 // stat : str | agi | tec (stat d'attaque) ; power / acc ; range [min,max] ; cost = momentum requis
 // requires : { turnbuckle, attackerOnRope, targetDown, targetOnRope, targetDazed, targetNearTable, weapon }
 // effects : { daze, push, welt, listed, drainMomentum, heat, selfMomentum, ignoreDef, selfDamageOnMiss, breakTable, illegal, charge }
+//           portée élargie — line: n (le coup continue tout droit derrière la
+//           cible), splash: f (les voisins prennent la fraction f), push: n
+//           (la cible recule). Ces trois-là font du PLACEMENT une question
+//           défensive : rester aligné ou agglutiné coûte cher.
 export const MOVES = {
   // ---- Base ---------------------------------------------------------------
   punch: { tier: 'base', name: 'Coup de poing', type: 'strike', stat: 'str', power: 7, acc: 95, range: [1, 1], momentum: 10, desc: 'Un bon vieux coup. Fiable.' },
@@ -13,7 +17,7 @@ export const MOVES = {
 
   // ---- Classe : Force (powerhouse) -----------------------------------------
   bodyslam: { tier: 'class', name: 'Body Slam', type: 'grapple', stat: 'str', power: 13, acc: 80, range: [1, 1], momentum: 15, desc: 'Soulève et écrase.' },
-  clothesline: { tier: 'class', name: 'Clothesline', type: 'strike', stat: 'str', power: 10, acc: 85, range: [1, 1], momentum: 12, effects: { daze: 1 }, desc: 'Étourdit la cible 1 tour.' },
+  clothesline: { tier: 'class', name: 'Clothesline', type: 'strike', stat: 'str', power: 10, acc: 85, range: [1, 1], momentum: 12, effects: { line: 1, push: 1, daze: 1 }, desc: 'Étourdit, repousse, et traverse : ce qui est aligné derrière encaisse aussi.' },
   powerbomb: { tier: 'class', name: 'Powerbomb', type: 'grapple', stat: 'str', power: 17, acc: 70, range: [1, 1], momentum: 18, desc: 'Puissant mais imprécis.' },
 
   // ---- Classe : Voltigeur (highflyer) -------------------------------------
@@ -46,7 +50,7 @@ export const MOVES = {
 
   // ---- Spécialité : Hardcore ----------------------------------------------
   tablespot: { tier: 'specialty', name: 'Passage à travers la table', type: 'grapple', stat: 'str', power: 20, acc: 80, range: [1, 1], momentum: 25, requires: { targetNearTable: true }, effects: { breakTable: true, heat: 20 }, desc: 'La cible doit être adjacente à une table. Gros dégâts, la table casse.' },
-  senton: { tier: 'specialty', name: 'Running Senton', type: 'grapple', stat: 'str', power: 13, acc: 85, range: [1, 1], momentum: 14, effects: { selfDamage: 2 }, desc: 'Tout le poids du corps.' },
+  senton: { tier: 'specialty', name: 'Running Senton', type: 'grapple', stat: 'str', power: 13, acc: 85, range: [1, 1], momentum: 14, effects: { splash: 0.5, selfDamage: 2 }, desc: 'Tout le poids du corps.' },
 
   // ---- Spécialité : Frappeur ----------------------------------------------
   roundhouse: { tier: 'specialty', name: 'Coup de pied retourné', type: 'strike', stat: 'agi', power: 11, acc: 85, range: [1, 1], momentum: 12, effects: { daze: 1 }, desc: 'Étourdit.' },
@@ -57,20 +61,20 @@ export const MOVES = {
   distract: { tier: 'specialty', name: 'Distraire l’arbitre', type: 'taunt', range: [0, 0], momentum: 10, effects: { distractRef: 2 }, desc: 'L’arbitre ne voit rien pendant 2 tours (armes et coups illégaux sans risque).' },
 
   // ---- Spécialité : Colosse -----------------------------------------------
-  chokeslam: { tier: 'specialty', name: 'Chokeslam', type: 'grapple', stat: 'str', power: 16, acc: 75, range: [1, 1], momentum: 16, desc: 'Par la gorge, jusqu’au tapis.' },
+  chokeslam: { tier: 'specialty', name: 'Chokeslam', type: 'grapple', stat: 'str', power: 16, acc: 75, range: [1, 1], momentum: 16, effects: { push: 1 }, desc: 'Par la gorge, jusqu’au tapis.' },
   bigboot: { tier: 'specialty', name: 'Big Boot', type: 'strike', stat: 'str', power: 11, acc: 80, range: [1, 1], momentum: 12, effects: { push: 1 }, desc: 'Repousse d’une case.' },
 
   // ---- Spécialité : Vitesse -----------------------------------------------
   baseballslide: { tier: 'specialty', name: 'Baseball Slide', type: 'strike', stat: 'agi', power: 8, acc: 90, range: [2, 2], momentum: 10, effects: { push: 1 }, desc: 'Portée exacte 2, repousse.' },
-  dive: { tier: 'specialty', name: 'Suicide Dive', type: 'aerial', stat: 'agi', power: 14, acc: 80, range: [1, 2], momentum: 16, requires: { attackerOnRope: true }, effects: { selfDamageOnMiss: 8 }, desc: 'Depuis les cordes vers l’extérieur ou l’intérieur.' },
+  dive: { tier: 'specialty', name: 'Suicide Dive', type: 'aerial', stat: 'agi', power: 14, acc: 80, range: [1, 2], momentum: 16, requires: { attackerOnRope: true }, effects: { splash: 0.5, selfDamageOnMiss: 8 }, desc: 'Depuis les cordes vers l’extérieur ou l’intérieur.' },
 
   // ---- Spécialité : Micro -------------------------------------------------
   promo: { tier: 'specialty', name: 'Promo', type: 'taunt', range: [0, 0], momentum: 20, effects: { allyMomentum: 20, heat: 8 }, desc: '+20 momentum pour vous et vos alliés à 2 cases.' },
   insult: { tier: 'specialty', name: 'Insulte', type: 'special', range: [1, 3], momentum: 10, effects: { drainMomentum: 25 }, desc: 'La cible perd 25 momentum. Portée 3.' },
 
   // ---- Signatures & finishers (par lutteur) --------------------------------
-  superman_punch: { tier: 'signature', name: 'Superman Punch', type: 'strike', stat: 'str', power: 14, acc: 85, range: [1, 2], momentum: 15 },
-  spear: { tier: 'finisher', name: 'Spear', type: 'grapple', stat: 'str', power: 24, acc: 85, range: [1, 1], effects: { charge: true }, desc: '+8 dégâts si vous avez bougé d’au moins 3 cases ce tour.' },
+  superman_punch: { tier: 'signature', name: 'Superman Punch', type: 'strike', stat: 'str', power: 14, acc: 85, range: [1, 2], momentum: 15, effects: { push: 1 } },
+  spear: { tier: 'finisher', name: 'Spear', type: 'grapple', stat: 'str', power: 24, acc: 85, range: [1, 1], effects: { line: 1, push: 1, charge: true }, desc: 'Traverse : ce qui est aligné derrière encaisse aussi. +8 dégâts après trois cases de course.' },
   five_knuckle: { tier: 'signature', name: 'Five Knuckle Shuffle', type: 'strike', stat: 'str', power: 10, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { selfMomentum: 40, heat: 10 }, desc: 'Sur une cible au sol. Tu peux pas le voir. +40 momentum.' },
   attitude_adjustment: { tier: 'finisher', name: 'Attitude Adjustment', type: 'grapple', stat: 'str', power: 22, acc: 85, range: [1, 1] },
   old_school: { tier: 'signature', name: 'Old School', type: 'aerial', stat: 'str', power: 14, acc: 80, range: [1, 2], requires: { turnbuckle: true } },
@@ -79,11 +83,11 @@ export const MOVES = {
   rko: { tier: 'finisher', name: 'RKO', type: 'grapple', stat: 'tec', power: 22, acc: 90, range: [1, 1] },
   thesz_press: { tier: 'signature', name: 'Lou Thesz Press', type: 'strike', stat: 'str', power: 13, acc: 90, range: [1, 1], effects: { daze: 1 } },
   stunner: { tier: 'finisher', name: 'Stunner', type: 'grapple', stat: 'str', power: 21, acc: 90, range: [1, 1], effects: { daze: 1 } },
-  rock_bottom: { tier: 'signature', name: 'Rock Bottom', type: 'grapple', stat: 'str', power: 18, acc: 85, range: [1, 1] },
+  rock_bottom: { tier: 'signature', name: 'Rock Bottom', type: 'grapple', stat: 'str', power: 18, acc: 85, range: [1, 1], effects: { push: 1 } },
   peoples_elbow: { tier: 'finisher', name: 'Coude du Peuple', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { heat: 30 }, desc: 'Le mouvement le plus électrisant du divertissement sportif. Sur cible au sol ou étourdie.' },
   hulk_boot: { tier: 'signature', name: 'Big Boot du Hulkster', type: 'strike', stat: 'str', power: 15, acc: 85, range: [1, 1], effects: { daze: 1 } },
   legdrop: { tier: 'finisher', name: 'Leg Drop atomique', type: 'strike', stat: 'str', power: 20, acc: 100, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { heat: 15 } },
-  v_trigger: { tier: 'signature', name: 'V-Trigger', type: 'strike', stat: 'agi', power: 15, acc: 85, range: [1, 2], effects: { daze: 1 } },
+  v_trigger: { tier: 'signature', name: 'V-Trigger', type: 'strike', stat: 'agi', power: 15, acc: 85, range: [1, 2], effects: { push: 1, daze: 1 } },
   one_winged_angel: { tier: 'finisher', name: 'Ange à Une Aile', type: 'grapple', stat: 'tec', power: 25, acc: 80, range: [1, 1] },
   salt_of_earth: { tier: 'signature', name: 'Sel de la Terre', type: 'submission', stat: 'tec', power: 10, acc: 85, range: [1, 1], effects: { tapBonus: 0.1 } },
   heatseeker: { tier: 'finisher', name: 'Heatseeker', type: 'grapple', stat: 'tec', power: 21, acc: 85, range: [1, 1] },
@@ -97,7 +101,7 @@ export const MOVES = {
   coffin_drop: { tier: 'finisher', name: 'Coffin Drop', type: 'aerial', stat: 'agi', power: 24, acc: 75, range: [1, 3], requires: { turnbuckle: true }, effects: { selfDamage: 8, selfDamageOnMiss: 15 } },
   prism_trap: { tier: 'signature', name: 'Prism Trap', type: 'submission', stat: 'tec', power: 11, acc: 85, range: [1, 1] },
   riptide: { tier: 'finisher', name: 'Riptide', type: 'grapple', stat: 'str', power: 23, acc: 85, range: [1, 1] },
-  stinger_splash: { tier: 'signature', name: 'Stinger Splash', type: 'strike', stat: 'agi', power: 14, acc: 85, range: [1, 2], requires: { targetDazedOrCorner: true }, desc: 'Cible étourdie ou dans un coin.' },
+  stinger_splash: { tier: 'signature', name: 'Stinger Splash', type: 'strike', stat: 'agi', power: 14, acc: 85, range: [1, 2], requires: { targetDazedOrCorner: true }, effects: { splash: 0.4 }, desc: 'Cible étourdie ou dans un coin.' },
   scorpion_death_drop: { tier: 'finisher', name: 'Scorpion Death Drop', type: 'grapple', stat: 'str', power: 21, acc: 85, range: [1, 1] },
   walls: { tier: 'signature', name: 'Murs de Jerico', type: 'submission', stat: 'tec', power: 13, acc: 85, range: [1, 1] },
   judas_effect: { tier: 'finisher', name: 'Effet Judas', type: 'strike', stat: 'str', power: 21, acc: 90, range: [1, 1], effects: { daze: 1 } },
@@ -110,22 +114,22 @@ export const MOVES = {
   oscutter: { tier: 'signature', name: 'Oscutter', type: 'grapple', stat: 'agi', power: 15, acc: 85, range: [1, 2] },
   hidden_blade: { tier: 'finisher', name: 'Lame Cachée', type: 'strike', stat: 'str', power: 20, acc: 90, range: [1, 1], effects: { ignoreDef: 0.5 }, desc: 'Ignore 50 % de la DEF.' },
   swerve_stomp: { tier: 'signature', name: 'Swerve Stomp', type: 'aerial', stat: 'agi', power: 16, acc: 80, range: [1, 3], requires: { turnbuckle: true } },
-  house_call: { tier: 'finisher', name: 'House Call', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDownOrDazed: true } },
+  house_call: { tier: 'finisher', name: 'House Call', type: 'strike', stat: 'agi', power: 22, acc: 95, range: [1, 1], requires: { targetDownOrDazed: true }, effects: { push: 1 } },
   hip_attack: { tier: 'signature', name: 'Hip Attack', type: 'strike', stat: 'str', power: 13, acc: 90, range: [1, 1], unlock: 50, cost: 30, effects: { push: 1, heat: 5 } },
   storm_zero: { tier: 'finisher', name: 'Storm Zero', type: 'grapple', stat: 'tec', power: 22, acc: 85, range: [1, 1] },
   lucky_punch: { tier: 'signature', name: 'Coup chanceux', type: 'strike', stat: 'str', power: 12, acc: 80, range: [1, 1], unlock: 50, cost: 30, effects: { daze: 1 } },
-  frog_splash: { tier: 'finisher', name: 'Frog Splash', type: 'aerial', stat: 'agi', power: 24, acc: 85, range: [1, 3], requires: { turnbuckle: true, targetDownOrDazed: true } },
+  frog_splash: { tier: 'finisher', name: 'Frog Splash', type: 'aerial', stat: 'agi', power: 24, acc: 85, range: [1, 3], requires: { turnbuckle: true, targetDownOrDazed: true }, effects: { splash: 0.5 } },
   anaconda: { tier: 'signature', name: 'Anaconda Vise', type: 'submission', stat: 'tec', power: 12, acc: 85, range: [1, 1] },
   gts: { tier: 'finisher', name: 'Go To Sleep', type: 'grapple', stat: 'str', power: 22, acc: 85, range: [1, 1], effects: { daze: 1 } },
   colossal_chop: { tier: 'signature', name: 'Chop colossal', type: 'strike', stat: 'str', power: 16, acc: 85, range: [1, 1], effects: { welt: 2 } },
-  ko_punch: { tier: 'finisher', name: 'Poing K.-O.', type: 'strike', stat: 'str', power: 26, acc: 80, range: [1, 1], effects: { daze: 1 } },
+  ko_punch: { tier: 'finisher', name: 'Poing K.-O.', type: 'strike', stat: 'str', power: 26, acc: 80, range: [1, 1], effects: { push: 2, daze: 1 } },
   busaiku_knee: { tier: 'signature', name: 'Genou Busaiku', type: 'strike', stat: 'agi', power: 16, acc: 85, range: [1, 2] },
   lebell_lock: { tier: 'finisher', name: 'LeBell Lock', type: 'submission', stat: 'tec', power: 18, acc: 85, range: [1, 1], effects: { tapBonus: 0.25 } },
   disarmher: { tier: 'signature', name: 'Dis-arm-her', type: 'submission', stat: 'tec', power: 12, acc: 85, range: [1, 1], effects: { tapBonus: 0.1 } },
   manhandle_slam: { tier: 'finisher', name: 'Manhandle Slam', type: 'grapple', stat: 'str', power: 21, acc: 85, range: [1, 1] },
   mandible_claw: { tier: 'signature', name: 'Griffe mandibulaire', type: 'submission', stat: 'tec', power: 11, acc: 85, range: [1, 1] },
   sister_abigail: { tier: 'finisher', name: 'Sister Abigail', type: 'grapple', stat: 'str', power: 22, acc: 85, range: [1, 1] },
-  buckshot: { tier: 'signature', name: 'Buckshot Lariat', type: 'strike', stat: 'str', power: 17, acc: 85, range: [1, 2], requires: { attackerOnRope: true }, desc: 'Depuis les cordes (slingshot).' },
+  buckshot: { tier: 'signature', name: 'Buckshot Lariat', type: 'strike', stat: 'str', power: 17, acc: 85, range: [1, 2], requires: { attackerOnRope: true }, effects: { line: 1 }, desc: 'Depuis les cordes (slingshot).' },
   deadeye: { tier: 'finisher', name: 'Deadeye', type: 'grapple', stat: 'tec', power: 22, acc: 85, range: [1, 1] },
   six_one_nine: { tier: 'signature', name: '619', type: 'strike', stat: 'agi', power: 16, acc: 90, range: [1, 2], requires: { targetOnRope: true }, effects: { daze: 1 }, desc: 'La cible doit être sur les cordes.' },
   west_coast_pop: { tier: 'finisher', name: 'West Coast Pop', type: 'aerial', stat: 'agi', power: 20, acc: 80, range: [1, 3], requires: { turnbuckle: true } },
