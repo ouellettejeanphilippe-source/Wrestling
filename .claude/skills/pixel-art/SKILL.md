@@ -140,6 +140,13 @@ interdit, mais elle sera moins bien dessinée que la générée, parce que le
 système a la régularité. Si le besoin est « mieux dessiné », corriger le
 système : ça profite à tout le monde d'un coup.
 
+Essayé, puis retiré. La planche vedette de Hogan avait le torse trois
+colonnes à droite de la tête, les hanches à mi-chemin, un bras plus écarté
+que l'autre — et pas de vue de dos. Le même personnage repassé par une
+**posture** (`triomphe`) garde les bras levés et récupère d'un coup
+l'alignement, les vêtements qui tombent juste et l'ombrage du corps. Une pose
+se dessine donc comme une posture, jamais comme un corps de plus.
+
 ## Catalogue des erreurs déjà commises
 
 À relire avant de se lancer — chacune a coûté une passe complète.
@@ -162,6 +169,18 @@ système : ça profite à tout le monde d'un coup.
   lutteur sautille d'un pixel quand il se retourne.
 - **Dessiner à la main sans réserver un budget de colonnes par masse.**
   Symptôme : le bras chevauche la tête.
+- **Supposer que le corps est centré entre deux colonnes.** Il est centré
+  **sur la colonne 11**, pas sur 11,5 : le miroir d'une colonne `x` est
+  `22 - x`. Symptôme : une posture symétrique sur le papier dont un bras se
+  soude à l'épaule et l'autre reste séparé par une colonne d'encre.
+- **Découper les bras sans reposer le contour du torse.** Le contour vivait
+  sur la colonne extérieure du bras : la coupe l'emportait avec. Symptôme :
+  un t-shirt sans bord, qui bave sur le fond, sur toutes les lignes que la
+  posture ne redessine pas.
+- **Juger une planche à l'œil au lieu de lire la grille composée.** Les deux
+  fautes ci-dessus étaient invisibles au rendu et évidentes en texte. Rendre
+  la grille après composition — base + posture + visage + vêtements — et la
+  lire ligne par ligne coûte une minute.
 
 ## Où ça vit, dans ce dépôt
 
