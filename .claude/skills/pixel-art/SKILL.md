@@ -172,11 +172,23 @@ se dessine donc comme une posture, jamais comme un corps de plus.
 - **Supposer que le corps est centré entre deux colonnes.** Il est centré
   **sur la colonne 11**, pas sur 11,5 : le miroir d'une colonne `x` est
   `22 - x`. Symptôme : une posture symétrique sur le papier dont un bras se
-  soude à l'épaule et l'autre reste séparé par une colonne d'encre.
+  soude à l'épaule et l'autre reste séparé par une colonne d'encre. Les six
+  premières postures avaient toutes la faute. Remède : ne plus jamais écrire
+  le côté droit — `sym()` le calcule.
 - **Découper les bras sans reposer le contour du torse.** Le contour vivait
   sur la colonne extérieure du bras : la coupe l'emportait avec. Symptôme :
   un t-shirt sans bord, qui bave sur le fond, sur toutes les lignes que la
   posture ne redessine pas.
+- **Empiler les deux bras d'une posture dissymétrique à la suite dans une
+  liste.** La liste est positionnelle : le second bras descend d'autant de
+  lignes que le premier en occupe. Symptôme : un bras détaché, cinq lignes
+  trop bas. Remède : déclarer la planche par NUMÉRO de ligne (`lignes({...})`).
+- **Donner un bras levé à quelqu'un qui tient quelque chose.** Les accessoires
+  de main (`bat`, `skateboard`, `beer`, `bottle`, `teeth_jar`) sont des
+  couches posées aux colonnes 16-19, lignes 9-17 : la main par défaut. Une
+  posture qui lève ce bras laisse la batte flotter à côté du corps — et la
+  couche, posée après, mange le bras. Symptôme : Stung au micro avec sa batte
+  en travers de l'avant-bras.
 - **Juger une planche à l'œil au lieu de lire la grille composée.** Les deux
   fautes ci-dessus étaient invisibles au rendu et évidentes en texte. Rendre
   la grille après composition — base + posture + visage + vêtements — et la

@@ -310,7 +310,7 @@ export const idleOf = (def) => {
 // Une animation n'a une seconde image que si son geste en demande une.
 export const idleHasFrames = (def) => !!IDLE_FRAMES[idleOf(def)];
 
-function compose(def, back, down, frame) {
+function compose(def, back, down, frame, bust) {
   const kind = archetypeOf(def);
   // De dos, seuls le colosse et le corps standard ont leur propre dessin :
   // les autres carrures se distinguent par la face, pas par l'échine.
@@ -328,7 +328,10 @@ function compose(def, back, down, frame) {
   // vêtements pour qu'un t-shirt habille les bras là où ils sont réellement.
   // De dos, tout le monde reprend la posture neutre : un bras croisé ne se
   // lit pas par derrière, et la découpe abîmerait la silhouette pour rien.
-  const st = !back && STANCES[L.stance];
+  // Le buste ne montre que la tête : un bras levé n'y entre que par la
+  // tranche, en sliver clair à côté de l'oreille. Les portraits reprennent
+  // donc la posture neutre.
+  const st = !back && !bust && STANCES[L.stance];
   if (st) {
     cutArms(grid, kind, st.cut[0], st.cut[1]);
     stamp(grid, st.art);
@@ -385,7 +388,7 @@ export function spriteSvg(def, opts = {}) {
   const view = opts.view === 'bust' ? 'bust' : 'full';
   const dir = POSE[opts.dir] ? opts.dir : 'se';
   const pose = POSE[dir];
-  const grid = compose(def, pose.art === 'back', opts.pose === 'down', opts.frame || 0);
+  const grid = compose(def, pose.art === 'back', opts.pose === 'down', opts.frame || 0, view === 'bust');
   const P = palette(def);
 
   let body = '';
