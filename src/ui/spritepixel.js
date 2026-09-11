@@ -11,7 +11,8 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, OVERLAYS, TORSO, STANCES, FACES } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, BASE_HEAVY, BASE_SLIM, BASE_BIGHEAD,
+  OVERLAYS, TORSO, STANCES, FACES, IDLE_FRAMES } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -129,9 +130,18 @@ function layersFor(def, back) {
     .map((n) => OVERLAYS[n]);
 }
 
-// Choix de l'archétype de corps.
+// Choix de la carrure. Le colosse est imposé par les règles (il occupe
+// plusieurs cases) ; les autres se déclarent dans les données, parce qu'un
+// physique de lutteur ne se déduit pas de sa classe : deux techniciens
+// peuvent être l'un sec et découpé, l'autre épais.
 const isGiant = (def) => def.weight === 'super' || (def.size && def.size !== 1);
-const archetypeOf = (def) => (isGiant(def) ? 'giant' : def.body === 'fem' ? 'fem' : 'normal');
+const BUILDS = { heavy: BASE_HEAVY, slim: BASE_SLIM, bighead: BASE_BIGHEAD };
+function archetypeOf(def) {
+  if (isGiant(def)) return 'giant';
+  if (def.body === 'fem') return 'fem';
+  const b = (def.look || {}).build;
+  return BUILDS[b] ? b : 'normal';
+}
 // Colonnes du torse à une ligne donnée. La table vient du dessin lui-même :
 // au-dessus des épaules et sous les hanches il n'y a pas de torse, donc pas
 // de vêtement à y peindre.
@@ -202,12 +212,29 @@ function stamp(grid, layer) {
   layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
 }
 
-function compose(def, back, down) {
+// Repos : un mouvement CSS pour tout le monde, et une seconde image dessinée
+// pour les quelques gestes qui font le personnage. `still` n'est pas
+// « immobile » — c'est une respiration à peine visible, parce qu'un sprite
+// vraiment figé a l'air mort.
+export const IDLE_MOTION = {
+  breathe: 1.1, bounce: 0.6, sway: 1.4, still: 2.2, cantsee: 0.7, stroke: 1.6,
+};
+export const idleOf = (def) => {
+  const k = (def.look || {}).idle;
+  return IDLE_MOTION[k] ? k : 'breathe';
+};
+// Une animation n'a une seconde image que si son geste en demande une.
+export const idleHasFrames = (def) => !!IDLE_FRAMES[idleOf(def)];
+
+function compose(def, back, down, frame) {
   const kind = archetypeOf(def);
+  // De dos, seuls le colosse et le corps standard ont leur propre dessin :
+  // les autres carrures se distinguent par la face, pas par l'échine.
   const base = down ? BASE_DOWN
     : kind === 'giant' ? (back ? BASE_GIANT_BACK : BASE_GIANT)
-      : kind === 'fem' && !back ? BASE_FEM
-        : back ? BASE_BACK : BASE_FRONT;
+      : back ? BASE_BACK
+        : kind === 'fem' ? BASE_FEM
+          : BUILDS[kind] || BASE_FRONT;
   const grid = base.map((r) => [...r]);
   // Au sol, la tête n'est plus au même endroit : seule la palette distingue
   // les lutteurs.
@@ -223,6 +250,13 @@ function compose(def, back, down) {
     stamp(grid, st.art);
   }
   if (!back && FACES[L.face]) stamp(grid, FACES[L.face]);
+  // La seconde image du repos se pose comme une posture : après l'anatomie,
+  // avant les vêtements, pour qu'une manche suive la main si elle passe dans
+  // sa tranche de lignes.
+  if (frame === 1 && !back) {
+    const extra = IDLE_FRAMES[idleOf(def)];
+    if (extra) stamp(grid, extra);
+  }
   const f = featuresOf(def);
   // Le crâne dégarni n'est pas un dessin : on rend simplement les cheveux à
   // la peau, donc la silhouette du crâne reste exactement la même.
@@ -248,7 +282,7 @@ export function spriteSvg(def, opts = {}) {
   const view = opts.view === 'bust' ? 'bust' : 'full';
   const dir = POSE[opts.dir] ? opts.dir : 'se';
   const pose = POSE[dir];
-  const grid = compose(def, pose.art === 'back', opts.pose === 'down');
+  const grid = compose(def, pose.art === 'back', opts.pose === 'down', opts.frame || 0);
   const P = palette(def);
 
   let body = '';
