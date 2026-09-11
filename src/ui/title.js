@@ -1,6 +1,6 @@
 // Écran titre : nouvelle saison (nom, mode, lutteurs de départ), continuer, exhibition.
 import { h, clear, toast } from './dom.js';
-import { wrestlerCard } from './cards.js';
+import { rosterPicker } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS, WRESTLERS_BY_ID, STARTER_CHOICES } from '../data/wrestlers.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
@@ -57,21 +57,17 @@ function showSetup(root, app) {
     return h('div', { class: `mode-card ${mode === id ? 'on' : ''}`, 'data-mode': id, onclick: () => { mode = id; modeBtns.querySelectorAll('.mode-card').forEach((c) => c.classList.toggle('on', c.dataset.mode === id)); } }, h('b', {}, title), h('p', {}, desc));
   }
   const counter = h('span', { class: 'muted' }, '0/3 choisis');
-  const cards = h('div', { class: 'cards' }, STARTER_CHOICES.map((id) => {
-    const def = WRESTLERS_BY_ID[id];
-    const card = wrestlerCard(def, { class: 'pickable' });
-    card.addEventListener('click', () => {
-      if (picked.has(id)) picked.delete(id); else if (picked.size < 3) picked.add(id); else return toast('Maximum 3 lutteurs de départ', 'warn');
-      card.classList.toggle('picked', picked.has(id));
-      counter.textContent = `${picked.size}/3 choisis`;
-    });
-    return card;
-  }));
+  const cards = rosterPicker(STARTER_CHOICES.map((id) => WRESTLERS_BY_ID[id]), {
+    max: 3, picked,
+    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); counter.textContent = `${picked.size}/3 choisis`; },
+    onFull: () => toast('Maximum 3 lutteurs de départ', 'warn'),
+  });
   root.append(h('div', { class: 'setup' },
     h('h2', {}, 'Nouvelle saison'),
     h('label', {}, 'Nom de votre promotion ', nameInput),
     h('h3', {}, 'Mode de jeu'), modeBtns,
     h('h3', {}, 'Choisissez 3 lutteurs de départ ', counter),
+    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter.'),
     cards,
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
@@ -87,15 +83,23 @@ function showExhibition(root, app) {
   const desc = h('p', { class: 'muted' }, MATCH_TYPES[typeSel.value].desc);
   typeSel.addEventListener('change', () => { desc.textContent = MATCH_TYPES[typeSel.value].desc; });
   const picked = new Set();
-  const list = h('div', { class: 'cards compact' }, WRESTLERS.filter((w) => !w.npc).map((def) => {
-    const card = wrestlerCard(def, { class: 'pickable' });
-    card.addEventListener('click', () => { if (picked.has(def.id)) picked.delete(def.id); else picked.add(def.id); card.classList.toggle('picked', picked.has(def.id)); });
-    return card;
-  }));
+  const counter = h('span', { class: 'muted' }, '0 choisi');
+  const updateCounter = () => {
+    const n = Number(sizeSel.value);
+    counter.textContent = `${picked.size}/${n} choisi${picked.size > 1 ? 's' : ''}`;
+    counter.classList.toggle('ok', picked.size === n);
+  };
+  const list = rosterPicker(WRESTLERS.filter((w) => !w.npc), {
+    picked,
+    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); updateCounter(); },
+  });
+  sizeSel.addEventListener('change', updateCounter);
+  updateCounter();
   root.append(h('div', { class: 'setup' },
     h('h2', {}, 'Match d’exhibition'),
     h('div', { class: 'row' }, h('label', {}, 'Type ', typeSel), h('label', {}, 'Format ', sizeSel)), desc,
-    h('h3', {}, 'Votre équipe (cliquez sur les cartes ; les adversaires sont tirés au hasard)'),
+    h('h3', {}, 'Votre équipe ', counter),
+    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter. Les adversaires sont tirés au hasard.'),
     list,
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
