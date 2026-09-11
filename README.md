@@ -182,12 +182,28 @@ portées dures (jamais de flou), aplats saturés, lignes de balayage et vignetta
 assumé aux jeux tactiques tokusatsu — sans copier leur palette : ici c'est violet de coulisses, or de ceinture, rouge
 de tapis.
 
-- **Sprites** (`src/ui/sprite.js`) : chaque lutteur est dessiné pixel par pixel sur une grille 32×40, en SVG à arêtes
-  franches (`shape-rendering="crispEdges"`), à partir de sa description `look` (peau, cheveux, tenue, accent,
-  `features`). Deux cadrages sur le même dessin : `full` (corps entier, pions du plateau, défilé de l'écran titre) et
-  `bust` (portrait, cartes et listes). Les silhouettes sont détourées d'un pixel d'encre, les pions respirent
-  (animation d'attente) et regardent l'adversaire (`facing`).
-- **Aucune image externe** : tout est généré à la volée, donc ajouter un lutteur ne demande aucun fichier d'art.
+- **Sprites** : grille **24×32**, en SVG à arêtes franches (`shape-rendering="crispEdges"`). Personne n'est dessiné
+  entièrement à la main — un lutteur est *composé* à partir de sa description `look` :
+
+  | couche | ce que ça change | exemples |
+  | --- | --- | --- |
+  | `build` | la carrure : le corps de base | normal, `heavy`, `slim`, `bighead`, colosse, féminin |
+  | palette | peau, cheveux, tenue, accent — cinq emplacements de couleur | `skin`, `hair`, `attire`, `accent` |
+  | `stance` | la posture : les bras sont effacés puis redessinés | `cross`, `hips`, `fists`, `wide`, `pocket`, `flex`, `triomphe`, `micro`, `salut` |
+  | `face` | l'expression, en trois lignes | `scowl`, `grin`, `smirk`, `shout`, `blank`, `brow` |
+  | `features` | vêtements et accessoires posés par-dessus | `bandana`, `mask`, `jacket`, `bat`, `beer`… |
+  | `idle` | l'animation de repos | `breathe`, `bounce`, `sway`, `still` (mouvement CSS) ; `cantsee` (4 images), `stroke` (3 images) |
+
+  Les vêtements ne sont pas des dessins séparés : ils **repeignent la peau** sur une tranche de lignes, bornée par la
+  table des colonnes du torse, donc un t-shirt tombe juste sur le maigre comme sur le colosse. La découpe des bras se
+  déduit elle aussi de cette table : une posture n'a jamais à connaître la carrure. Deux cadrages sur le même dessin :
+  `full` (corps entier, pions du plateau) et `bust` (portrait, cartes et listes).
+- **Aucune image externe** : tout est généré à la volée, donc ajouter un lutteur ne demande aucun fichier d'art —
+  seulement une ligne de `look`.
+- **Repos animé** : tout le monde bouge en CSS (respiration, balancement, petits bonds). Les gestes qui *sont* le
+  personnage ont en plus une **suite d'images dessinées** — la main de John Sena qui balaie devant son visage,
+  Chris Jerico qui lisse sa barbe. Les images sont empilées et défilent en `steps()`, chacune visible pendant sa
+  tranche du cycle ; pas de minuterie JavaScript, donc dix pions restent en phase.
 - **Habillage** : voyant « ON AIR » sur le bandeau de régie, guirlande de loges sur l'écran titre, menu contextuel
   coiffé d'un clap de cinéma (qui sert de poignée à la feuille d'actions sur mobile), onomatopées à contour épais pour
   les dégâts, bannière de tour en balayage diagonal.
@@ -223,8 +239,9 @@ src/data/    wrestlers.js     roster parodique
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
-             sprite.js        sprites pixel 32×40 générés en SVG (corps entier / buste)
-             avatar.js        enrobage DOM des sprites (vignettes, pions)
+             spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
+             spritepixel.js   palette, postures, vêtements peints sur le corps, rendu SVG
+             avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne
 ```
 

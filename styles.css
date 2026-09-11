@@ -393,8 +393,18 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
    sous-pixel qui trahit le pixel art. */
 .avatar-wrap.anim { position: relative; }
 .avatar-wrap.anim svg { position: absolute; inset: 0; }
-.avatar-wrap.anim svg + svg { animation: idle-flip var(--idle-t, 1s) steps(1, end) infinite; }
-@keyframes idle-flip { 0%, 50% { opacity: 0; } 50.01%, 100% { opacity: 1; } }
+/* Repos dessiné : les N images sont empilées, chacune visible pendant sa
+   tranche du cycle. Le retard vient du JS (i/N du cycle) ; la fenêtre de
+   visibilité dépend de N, d'où une image-clé par compte. steps(1, end)
+   partout : une interpolation continue ferait glisser le sprite entre deux
+   pixels et trahirait le dessin. */
+.avatar-wrap.anim.multi svg { opacity: 0; animation: var(--idle-cycle) var(--idle-t, 1s) steps(1, end) infinite; }
+.avatar-wrap.frames-2 { --idle-cycle: idle-f2; }
+.avatar-wrap.frames-3 { --idle-cycle: idle-f3; }
+.avatar-wrap.frames-4 { --idle-cycle: idle-f4; }
+@keyframes idle-f2 { 0%, 49.9% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes idle-f3 { 0%, 33.2% { opacity: 1; } 33.3%, 100% { opacity: 0; } }
+@keyframes idle-f4 { 0%, 24.9% { opacity: 1; } 25%, 100% { opacity: 0; } }
 
 .unit .avatar-wrap.anim { animation: var(--idle-move, idle-breathe) var(--idle-t, 1.1s) steps(2) infinite; }
 .idle-breathe { --idle-t: 1.1s; --idle-move: idle-breathe; }
@@ -675,7 +685,11 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .board { user-select: none; -webkit-user-select: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .unit .avatar-wrap, .unit .avatar-wrap.anim, .avatar-wrap.anim svg + svg, .unit.acting .avatar-wrap, .title::before, .title::after, .m-top::before { animation: none; }
+  .unit .avatar-wrap, .unit .avatar-wrap.anim, .unit.acting .avatar-wrap, .title::before, .title::after, .m-top::before { animation: none; }
+  /* Le cycle s'arrête, mais les images restent empilées : sans ça, les N sont
+     toutes visibles à la fois et la main se démultiplie devant le visage. */
+  .avatar-wrap.anim.multi svg { animation: none; opacity: 0; }
+  .avatar-wrap.anim.multi svg:first-child { opacity: 1; }
 }
 
 /* ---------------- responsive */

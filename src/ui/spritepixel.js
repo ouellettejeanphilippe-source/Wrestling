@@ -307,10 +307,11 @@ export const idleOf = (def) => {
   const k = (def.look || {}).idle;
   return IDLE_MOTION[k] ? k : 'breathe';
 };
-// Une animation n'a une seconde image que si son geste en demande une.
-export const idleHasFrames = (def) => !!IDLE_FRAMES[idleOf(def)];
+// Combien d'images dessinées pour ce repos. 1 = aucune, le sprite ne bouge
+// qu'en CSS. Au-delà, l'appelant empile autant de SVG et les fait défiler.
+export const idleFrameCount = (def) => (IDLE_FRAMES[idleOf(def)] || [null]).length;
 
-function compose(def, back, down, frame) {
+function compose(def, back, down, frame, bust) {
   const kind = archetypeOf(def);
   // De dos, seuls le colosse et le corps standard ont leur propre dessin :
   // les autres carrures se distinguent par la face, pas par l'échine.
@@ -328,19 +329,15 @@ function compose(def, back, down, frame) {
   // vêtements pour qu'un t-shirt habille les bras là où ils sont réellement.
   // De dos, tout le monde reprend la posture neutre : un bras croisé ne se
   // lit pas par derrière, et la découpe abîmerait la silhouette pour rien.
-  const st = !back && STANCES[L.stance];
+  // Le buste ne montre que la tête : un bras levé n'y entre que par la
+  // tranche, en sliver clair à côté de l'oreille. Les portraits reprennent
+  // donc la posture neutre.
+  const st = !back && !bust && STANCES[L.stance];
   if (st) {
     cutArms(grid, kind, st.cut[0], st.cut[1]);
     stamp(grid, st.art);
   }
   if (!back && FACES[L.face]) stamp(grid, FACES[L.face]);
-  // La seconde image du repos se pose comme une posture : après l'anatomie,
-  // avant les vêtements, pour qu'une manche suive la main si elle passe dans
-  // sa tranche de lignes.
-  if (frame === 1 && !back) {
-    const extra = IDLE_FRAMES[idleOf(def)];
-    if (extra) stamp(grid, extra);
-  }
   const f = featuresOf(def);
   // Le crâne dégarni n'est pas un dessin : on rend simplement les cheveux à
   // la peau, donc la silhouette du crâne reste exactement la même.
@@ -359,6 +356,16 @@ function compose(def, back, down, frame) {
     if (spec.keys.some((k) => f.has(k))) wear(grid, kind, spec);
   }
   for (const layer of layersFor(def, back)) stamp(grid, layer);
+  // L'image du repos passe EN DERNIER : ces gestes-là se jouent devant le
+  // visage, et les couches de tête sont posées après tout le reste. Placée
+  // avant elles, la main de Cena disparaissait sous la casquette et les
+  // cheveux — il ne restait qu'un bout de poignet sous la joue.
+  // L'image 0 fait partie de la suite : un geste continu n'a pas de moment
+  // où la main n'est nulle part.
+  if (!back && !bust) {
+    const seq = IDLE_FRAMES[idleOf(def)];
+    if (seq && seq[frame]) stamp(grid, seq[frame]);
+  }
   return grid;
 }
 
@@ -385,7 +392,7 @@ export function spriteSvg(def, opts = {}) {
   const view = opts.view === 'bust' ? 'bust' : 'full';
   const dir = POSE[opts.dir] ? opts.dir : 'se';
   const pose = POSE[dir];
-  const grid = compose(def, pose.art === 'back', opts.pose === 'down', opts.frame || 0);
+  const grid = compose(def, pose.art === 'back', opts.pose === 'down', opts.frame || 0, view === 'bust');
   const P = palette(def);
 
   let body = '';
