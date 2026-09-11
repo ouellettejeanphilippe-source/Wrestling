@@ -1,7 +1,7 @@
 // Enrobage DOM des sprites. Le dessin vient des planches dessinées à la main
 // (spritepixel.js + spriteart.js) ; la signature ne bouge pas pour le reste de l'UI.
 import { h } from './dom.js';
-import { spriteSvg } from './spritepixel.js';
+import { spriteSvg, idleOf, idleHasFrames } from './spritepixel.js';
 
 export { spriteSvg };
 
@@ -21,6 +21,18 @@ export function avatar(def, size = 48, opts = {}) {
     title: def.name,
   });
   if (opts.bg === 'none') el.classList.add('bare');
-  el.innerHTML = spriteSvg(def, { view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir, pose: opts.pose });
+  const draw = (frame) => spriteSvg(def, {
+    view, size: opts.fill ? 'fill' : undefined, facing: opts.facing, dir: opts.dir, pose: opts.pose, frame,
+  });
+  // Animé, le sprite porte sa classe de mouvement, et une seconde image
+  // empilée par-dessus quand son repos en demande une : les deux alternent en
+  // CSS, sans que le JS ait à battre la mesure.
+  if (opts.anim && !opts.pose) {
+    const idle = idleOf(def);
+    el.classList.add('anim', `idle-${idle}`);
+    el.innerHTML = idleHasFrames(def) ? `${draw(0)}${draw(1)}` : draw(0);
+  } else {
+    el.innerHTML = draw(0);
+  }
   return el;
 }
