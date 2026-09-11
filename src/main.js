@@ -5,6 +5,7 @@ import { mountMatch } from './ui/match.js';
 import { createBattle } from './engine/battle.js';
 import { WRESTLERS_BY_ID } from './data/wrestlers.js';
 import { newGame, load, save, clearSave, buildMatch, applyResult, playerBonuses, exhibitionMatch } from './game/state.js';
+import { setupPwa } from './pwa.js';
 
 const root = document.getElementById('app');
 const app = {
@@ -35,4 +36,5 @@ const app = {
   },
 };
 window.__app = app;
+setupPwa();
 app.toTitle();

@@ -21,6 +21,31 @@ npm test           # tests du moteur (node:test)
 **En ligne** : <https://ouellettejeanphilippe-source.github.io/Wrestling/> — chaque push sur `main` redéploie le jeu
 via `.github/workflows/pages.yml` (rien à installer, ça tourne dans le navigateur, mobile compris).
 
+## Installer le jeu (PWA)
+
+Le jeu s'installe comme une application et **se joue hors ligne** : tout est statique, et la sauvegarde vit déjà dans
+`localStorage`, donc une saison commencée dans le métro se termine dans le métro.
+
+- **Android / Chrome / Edge** : un bouton **📲 Installer le jeu** apparaît sur l'écran titre dès que le navigateur
+  signale que c'est possible.
+- **iPhone / Safari** : pas d'événement d'installation sur iOS — bouton *Partager*, puis « Sur l'écran d'accueil ».
+  L'écran titre affiche la marche à suivre.
+- **Bureau** : l'icône d'installation dans la barre d'adresse.
+
+| pièce | rôle |
+| --- | --- |
+| `manifest.webmanifest` | nom, icônes, couleurs, `display: standalone` |
+| `sw.js` | précache la coquille et tous les modules, puis sert le cache d'abord et rafraîchit derrière |
+| `src/pwa.js` | enregistrement du service worker et bouton d'installation |
+| `icons/` | icônes 192/512 + maskable, **générées par le moteur de sprites du jeu** |
+
+Tous les chemins sont **relatifs** : en ligne le jeu est servi depuis `/Wrestling/`, pas depuis la racine. Un chemin
+absolu marcherait en local et mettrait l'installation en 404 en ligne — `tests/pwa.test.js` le vérifie, en même temps
+qu'il vérifie qu'aucun module n'a été ajouté sans être précaché.
+
+Le service worker ne fait pas de `skipWaiting` : une partie en cours ne se fait pas remplacer sous les pieds du
+joueur. La nouvelle version prend la main au lancement suivant.
+
 ## Les deux modes de campagne
 
 | Mode | Vous êtes… | Objectif d'un match | Récompenses |
@@ -221,6 +246,7 @@ de tapis.
 ```
 index.html, styles.css        interface (DOM pur)
 src/main.js                   navigation entre écrans
+src/pwa.js                    service worker, bouton d'installation
 src/engine/  grid.js          terrain, aréna 14×10, déplacement (Dijkstra)
              phases.js        les trois actes du match et leurs modificateurs
              units.js         création d'unités, liste de mouvements par palier
@@ -242,7 +268,9 @@ src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
              spritepixel.js   palette, postures, vêtements peints sur le corps, rendu SVG
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne
+manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
+icons/                        icônes d'application, générées par le moteur de sprites
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique

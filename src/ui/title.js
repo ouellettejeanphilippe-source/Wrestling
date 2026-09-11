@@ -7,6 +7,31 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
 import { load } from '../game/state.js';
 import { showTutorial } from './tutorial.js';
+import { EVENT as INSTALLABLE, canInstall, promptInstall, isInstalled, needsIosHint } from '../pwa.js';
+
+// Bouton d'installation : présent seulement quand le navigateur a vraiment de
+// quoi installer. Sur iOS il n'y a pas d'événement — l'installation passe par
+// le menu de partage — donc on donne la marche à suivre au lieu d'un bouton
+// qui ne ferait rien.
+function installButton() {
+  if (isInstalled()) return null;
+  if (needsIosHint()) {
+    return h('p', { class: 'install-hint' }, 'Sur iPhone : bouton Partager, puis « Sur l’écran d’accueil » — le jeu s’installe et marche hors ligne.');
+  }
+  const btn = h('button', {
+    class: 'btn big install',
+    onclick: async () => { if (await promptInstall()) toast('Installé — le jeu marche maintenant hors ligne', 'good'); },
+  }, '📲 Installer le jeu');
+  // L'événement peut arriver avant comme après ce rendu : on lit l'état
+  // maintenant, et on se réabonne pour la suite.
+  btn.hidden = !canInstall();
+  const sync = () => {
+    if (!btn.isConnected) return window.removeEventListener(INSTALLABLE, sync);
+    btn.hidden = !canInstall();
+  };
+  window.addEventListener(INSTALLABLE, sync);
+  return btn;
+}
 
 export function showTitle(root, app) {
   clear(root);
@@ -16,6 +41,7 @@ export function showTitle(root, app) {
     saved ? h('button', { class: 'btn big', onclick: () => app.continueCampaign() }, `▶ Continuer (${saved.promoName}, épisode ${Math.min(saved.showIndex + 1, 8)})`) : null,
     h('button', { class: 'btn big', onclick: () => showExhibition(root, app) }, '🥊 Match d’exhibition'),
     h('button', { class: 'btn big', onclick: () => showTutorial(root, {}) }, '📖 Comment jouer'),
+    installButton(),
   );
   root.append(h('div', { class: 'title' },
     h('h1', {}, 'Parodie Pro Wrestling', h('span', {}, 'Tactics')),
