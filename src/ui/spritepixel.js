@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
 import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, BASE_HEAVY, BASE_SLIM, BASE_BIGHEAD,
-  OVERLAYS, TORSO, STANCES, FACES, IDLE_FRAMES } from './spriteart.js';
+  OVERLAYS, TORSO, STANCES, FACES, IDLE_FRAMES, CUSTOM } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -296,6 +296,13 @@ export const idleOf = (def) => {
 export const idleHasFrames = (def) => !!IDLE_FRAMES[idleOf(def)];
 
 function compose(def, back, down, frame) {
+  // Une vedette a sa propre planche, dessinée à la main : elle remplace le
+  // corps ET toutes ses couches. Pas de posture, pas de vêtement peint — tout
+  // est déjà dans le dessin. De dos et au sol, elle repasse par le système
+  // commun, faute d'avoir sa planche pour ces vues.
+  const star = !back && !down && CUSTOM[def.id];
+  if (star) return star.map((r) => [...r]);
+
   const kind = archetypeOf(def);
   // De dos, seuls le colosse et le corps standard ont leur propre dessin :
   // les autres carrures se distinguent par la face, pas par l'échine.
