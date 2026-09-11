@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, OVERLAYS, TORSO } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, OVERLAYS, TORSO, STANCES, FACES } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -184,6 +184,24 @@ function wear(grid, kind, spec) {
   }
 }
 
+// Retire les bras du dessin de base sur une tranche de lignes. La coupe se
+// déduit des colonnes du torse — on garde une colonne de contour de chaque
+// côté — donc elle s'adapte au poids léger comme au colosse sans qu'aucune
+// posture n'ait à connaître la carrure.
+function cutArms(grid, kind, from, to) {
+  for (let y = from; y <= to && y < ART_H; y++) {
+    const span = torsoAt(kind, y);
+    if (!span) continue;
+    for (let x = 0; x < ART_W; x++) {
+      if (x < span[0] - 1 || x > span[1] + 1) grid[y][x] = '.';
+    }
+  }
+}
+
+function stamp(grid, layer) {
+  layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
+}
+
 function compose(def, back, down) {
   const kind = archetypeOf(def);
   const base = down ? BASE_DOWN
@@ -194,6 +212,17 @@ function compose(def, back, down) {
   // Au sol, la tête n'est plus au même endroit : seule la palette distingue
   // les lutteurs.
   if (down) return grid;
+  const L = def.look || {};
+  // La posture d'abord : c'est de l'anatomie, elle doit passer AVANT les
+  // vêtements pour qu'un t-shirt habille les bras là où ils sont réellement.
+  // De dos, tout le monde reprend la posture neutre : un bras croisé ne se
+  // lit pas par derrière, et la découpe abîmerait la silhouette pour rien.
+  const st = !back && STANCES[L.stance];
+  if (st) {
+    cutArms(grid, kind, st.cut[0], st.cut[1]);
+    stamp(grid, st.art);
+  }
+  if (!back && FACES[L.face]) stamp(grid, FACES[L.face]);
   const f = featuresOf(def);
   // Le crâne dégarni n'est pas un dessin : on rend simplement les cheveux à
   // la peau, donc la silhouette du crâne reste exactement la même.
@@ -211,9 +240,7 @@ function compose(def, back, down) {
     const spec = GARMENTS[name];
     if (spec.keys.some((k) => f.has(k))) wear(grid, kind, spec);
   }
-  for (const layer of layersFor(def, back)) {
-    layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
-  }
+  for (const layer of layersFor(def, back)) stamp(grid, layer);
   return grid;
 }
 
