@@ -261,6 +261,15 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
    (comme une console tactique) — les zones vides du HUD laissent passer les clics. */
 .m-scene { position: relative; flex: 1; min-height: 0; }
 .board-wrap { position: absolute; inset: 0; overflow: visible; display: flex; flex-direction: column; justify-content: center; }
+/* Zoomé, le plateau dépasse de sa boîte : elle devient défilable, et « safe
+   center » garde le haut atteignable — un centrage flex ordinaire le rognerait. */
+.board-wrap.zoomed { overflow: auto; justify-content: safe center; overscroll-behavior: contain; cursor: grab; scrollbar-width: thin; }
+.board-wrap.zoomed.panning { cursor: grabbing; }
+.board-wrap.zoomed::-webkit-scrollbar { width: 8px; height: 8px; }
+.board-wrap.zoomed::-webkit-scrollbar-thumb { background: #ffffff24; border-radius: 4px; }
+.zoom-ctl { display: inline-flex; align-items: center; gap: 2px; }
+.zoom-ctl .btn { min-width: 26px; padding-inline: 6px; }
+.zoom-ctl .zoom-val { min-width: 52px; font-variant-numeric: tabular-nums; }
 .hud { position: absolute; z-index: 12; display: flex; flex-direction: column; gap: 7px; pointer-events: none; max-width: min(400px, 42%); }
 .hud > * { pointer-events: auto; }
 .hud-tl { top: 0; left: 0; right: 0; max-width: none; }
@@ -698,6 +707,7 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
    s'affiche droit, face caméra. Les surbrillances, elles, restent sur le tapis.
    =========================================================================== */
 .board-stage { width: max-content; max-width: 100%; align-self: center; }
+.zoomed .board-stage { max-width: none; }
 .board-wrap.view-iso {
   --iso-span: calc((var(--cols, 14) + var(--rows, 10)) * (var(--cell) + 2px));
   --iso-w: calc(var(--iso-span) * 0.7071);
