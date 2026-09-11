@@ -30,7 +30,7 @@ const VIEWBOX = { full: `0 ${ART_TOP} ${ART_W} ${ART_USED}`, bust: '7 0 10 10' }
 const VIEWBOX_DOWN = `0 ${ART_TOP} ${ART_W} ${ART_USED}`;
 
 const SKIN = { light: '#f2c79b', tan: '#d79a68', brown: '#a96c3d', dark: '#7c4b28', pale: '#f8e2d2' };
-const INK = '#140d1c';
+const INK = '#241830';
 const WHITE = '#f8f4ee';
 
 const parse = (hex) => {
@@ -100,7 +100,14 @@ function shade(hex, k) {
   // pousse une couleur déjà saturée — la peau — jusqu'au néon : les ombres
   // deviennent des coups de soleil.
   const ss = clamp01(dark ? s + (1 - s) * 0.14 * a : s * (1 - 0.06 * a));
-  const ll = clamp01(dark ? l * (1 - 0.22 * a) : l + (1 - l) * 0.25 * a);
+  // Le pas clair est plafonné : sans plafond, une matière très sombre a plus
+  // de marge vers le blanc qu'elle n'en a besoin et son reflet vire au gris.
+  // Des cheveux noirs prenaient un reflet de cheveux gris.
+  // Le plafond du reflet est ABSOLU, pas proportionnel à l'écart demandé :
+  // une matière très sombre a plus de marge vers le blanc qu'elle n'en a
+  // besoin, et son reflet vire au gris. Des cheveux noirs prenaient un reflet
+  // de cheveux gris.
+  const ll = clamp01(dark ? l * (1 - 0.30 * a) : l + Math.min((1 - l) * 0.38 * a, 0.26));
   return fromHsl(hh, ss, ll);
 }
 
@@ -118,7 +125,7 @@ function palette(def) {
     '.': null, K: INK,
     1: shade(skin, -1.3), 2: shade(skin, -0.6), 3: skin,
     4: shade(skin, 0.6), 5: shade(skin, 1.2),
-    h: shade(hair, -1.5), H: hair, G: shade(hair, 1.1),
+    h: shade(hair, -1.8), H: hair, G: shade(hair, 1.9),
     a: shade(attire, -1.4), A: attire, B: shade(attire, 1),
     n: shade(accent, -1.4), N: accent,
     b: shade(boots, -1.5), V: boots, W: shade(boots, 1),
