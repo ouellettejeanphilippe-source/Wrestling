@@ -202,6 +202,20 @@ export function pathTo(grid, units, unit, target) {
   return path;
 }
 
+// Chemin réellement parcouru jusqu'à une tuile, reconstruit depuis la carte
+// rendue par reachable(). La distance à vol d'oiseau ment dès qu'il y a un
+// obstacle : contourner les marches, c'est courir, et l'élan doit le compter.
+export function pathIn(best, x, y) {
+  const path = [];
+  let cur = key(x, y);
+  while (cur && best.has(cur)) {
+    const n = best.get(cur);
+    path.unshift({ x: n.x, y: n.y });
+    cur = n.from;
+  }
+  return path;
+}
+
 // Meilleure tuile atteignable en direction d'une cible (pour l'IA).
 export function stepToward(grid, units, unit, target, mov) {
   const reach = reachable(grid, units, unit, mov);

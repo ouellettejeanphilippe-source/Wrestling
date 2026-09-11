@@ -30,6 +30,23 @@ export const COMBOS = [
     when: (b, a, t, m, ctx) => ctx.fromRope && m.type !== 'taunt',
     dmg: 1.1, momentum: 8, heat: 6,
   },
+  // Les deux combos ci-dessous ne regardent pas un état de la cible mais le
+  // TRAJET du tour : c'est ce qui relie le déplacement au coup au lieu d'en
+  // faire deux phases indépendantes.
+  {
+    id: 'roperun', name: 'Course dans les cordes', icon: '💨',
+    hint: 'Traversez les cordes en chemin, puis frappez',
+    desc: 'Prendre appui dans les cordes en courant, puis revenir : le rebond du catch télévisé. Il faut PASSER par les cordes, pas s’y arrêter.',
+    when: (b, a, t, m, ctx) => ctx.crossedRope && m.type !== 'taunt',
+    dmg: 1.15, momentum: 10, heat: 8,
+  },
+  {
+    id: 'blindside', name: 'Pris à revers', icon: '🌀',
+    hint: 'Contournez : frappez hors du champ de vision',
+    desc: 'Arriver dans le dos ou sur le flanc plutôt que de face. Le chemin le plus court n’est pas toujours le meilleur.',
+    when: (b, a, t, m, ctx) => ctx.blindside && ['strike', 'grapple', 'aerial'].includes(m.type),
+    dmg: 1.2, momentum: 8, heat: 6,
+  },
   {
     id: 'ground', name: 'Au sol et martelé', icon: '🔨',
     hint: 'Frappez une cible au sol',

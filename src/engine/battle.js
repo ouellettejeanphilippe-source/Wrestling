@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, heightAt, climbOf } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, pathIn, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, heightAt, climbOf } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -26,14 +26,59 @@ const gim = (u) => GIMMICKS[u.gimmick] || {};
 const HAZARD_TILES = ['table', 'steps', 'cage', 'barricade', 'turnbuckle'];
 
 // Contexte utilisé par les combos : d'où part le coup, et la cible est-elle acculée ?
+// ÉLAN — LE DÉPLACEMENT ET LE COUP NE SONT PLUS DEUX TOURS SÉPARÉS
+//
+// Un lutteur planté sur place qui frappe son voisin de palier n'a aucun poids.
+// Ce n'est pas du catch, c'est un échange de tours. Le coup porté ce tour-ci
+// est donc multiplié par la distance réellement parcourue avant de le donner :
+// rien du tout à l'arrêt, un quart de plus après une course.
+//
+// C'est une carotte ET un bâton. Le bâton est petit (-15 %) et se contourne
+// toujours : même au corps à corps, il reste une case voisine où se replacer.
+// Ce qu'il interdit, c'est de ne jamais bouger.
+const CHARGEABLE = new Set(['strike', 'aerial', 'grapple', 'weapon']);
+export const ELAN_FULL = 4;                       // cases pour l'élan maximum
+export const ELAN_MIN = 0.85, ELAN_MAX = 1.25;
+
+export function elanMult(travel, move, unit = null) {
+  if (!move || !CHARGEABLE.has(move.type)) return 1;
+  // Étourdi, on ne court pas : la punition serait double.
+  if (unit && unit.statuses && unit.statuses.dazed) return 1;
+  const t = Math.max(0, Math.min(ELAN_FULL, travel || 0));
+  return ELAN_MIN + (ELAN_MAX - ELAN_MIN) * (t / ELAN_FULL);
+}
+// Ce que l'interface annonce avant de confirmer : un mot et un multiplicateur.
+export function elanLabel(travel, move, unit = null) {
+  const mult = elanMult(travel, move, unit);
+  if (mult === 1) return null;
+  const t = Math.max(0, travel || 0);
+  const name = t === 0 ? 'Planté' : t >= ELAN_FULL ? 'Pleine course' : t >= 2 ? 'Élan' : 'Appui';
+  return { name, travel: t, mult, good: mult > 1 };
+}
+
+export const comboContextFor = (battle, attacker, target, move, pos) =>
+  comboContext(battle, attacker, target, move, pos);
+
 function comboContext(battle, attacker, target, move, pos = null) {
   const g = battle.grid;
   const from = pos || attacker;
   const tile = tileAt(g, from.x, from.y);
+  // Le trajet de ce tour-ci fait partie du contexte au même titre que le
+  // terrain : c'est ce qui permet à un combo de récompenser la course, pas
+  // seulement la case d'arrivée.
+  const path = pos ? (pos.path || null) : attacker.movePath;
+  const travel = pos && pos.travel != null ? pos.travel : (attacker.movedTiles || 0);
   return {
     fromCorner: tile === 'turnbuckle',
     fromRope: tile === 'rope',
     targetPinnedToHazard: HAZARD_TILES.some((t) => isAdjacentToTerrain(g, target.x, target.y, t)),
+    travel,
+    // Traversé les cordes en chemin, sans forcément s'y arrêter : c'est le
+    // rebond du catch télévisé.
+    crossedRope: !!path && path.length > 1
+      && path.slice(0, -1).some((p) => tileAt(g, p.x, p.y) === 'rope'),
+    // Arrivé dans le dos ou sur le flanc de la cible : contourner paie.
+    blindside: !!target.facing && facingTo(target, from) !== target.facing,
     phase: matchPhase(battle),
   };
 }
@@ -137,12 +182,23 @@ export function getReachable(battle, unit) {
   return r;
 }
 
+export const MOVE_MOMENTUM_CAP = 5;
+
 export function moveUnit(battle, unit, x, y) {
   if (unit.acted || unit.moved || unit.down || unit.eliminated) return false;
-  const n = getReachable(battle, unit).get(key(x, y));
+  const reach = getReachable(battle, unit);
+  const n = reach.get(key(x, y));
   if (!n || n.blocked) return false;
   unit.prev = { x: unit.x, y: unit.y, facing: unit.facing };
-  unit.movedTiles = manhattan(unit, { x, y });
+  // Le chemin RÉEL, pas la distance à vol d'oiseau : contourner les marches,
+  // c'est courir, et l'élan doit le compter. Le trajet sert aussi aux combos —
+  // passer dans les cordes en chemin n'est pas la même chose que s'y arrêter.
+  unit.movePath = pathIn(reach, x, y);
+  unit.movedTiles = Math.max(0, unit.movePath.length - 1);
+  // Se replacer rapporte un peu de jauge, comme une provocation : rester
+  // immobile ne doit jamais être le choix confortable.
+  unit.moveMomentum = Math.min(MOVE_MOMENTUM_CAP, unit.movedTiles);
+  addMomentum(battle, unit, unit.moveMomentum);
   unit.facing = facingTo(unit, { x, y });          // on regarde là où on va
   unit.x = x; unit.y = y; unit.moved = true; unit.climb = 0;
   emit(battle, { type: 'move', uid: unit.uid, x, y });
@@ -154,7 +210,9 @@ export function moveUnit(battle, unit, x, y) {
 export function undoMove(battle, unit) {
   if (!unit.prev || unit.acted) return false;
   unit.x = unit.prev.x; unit.y = unit.prev.y; unit.facing = unit.prev.facing || unit.facing;
+  addMomentum(battle, unit, -(unit.moveMomentum || 0));
   unit.prev = null; unit.moved = false; unit.movedTiles = 0;
+  unit.movePath = null; unit.moveMomentum = 0;
   return true;
 }
 
@@ -391,7 +449,9 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   const drop = heightAt(battle.grid, pos.x, pos.y) - heightAt(battle.grid, target.x, target.y);
   if (move.type === 'aerial' && drop > 0) dmg *= 1 + Math.min(3, drop) * 0.22;
   else if (drop > 0) dmg *= 1 + Math.min(3, drop) * 0.07;
-  if (eff.charge && attacker.movedTiles >= 3) dmg += 8;
+  if (eff.charge && (opts.travel ?? attacker.movedTiles) >= 3) dmg += 8;
+  // L'élan : le trajet de ce tour-ci pèse sur le coup qui le termine.
+  dmg *= elanMult(opts.travel ?? attacker.movedTiles, move, attacker);
   // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
   if (gim(target).modInDamage) dmg = gim(target).modInDamage(battle, target, attacker, move, dmg);
@@ -786,7 +846,7 @@ export function startPhase(battle, team) {
   if (battle.refDistracted > 0) battle.refDistracted--;
   if (team === 'player') spawnReinforcements(battle);
   for (const u of living(battle, team)) {
-    u.acted = false; u.moved = false; u.movedTiles = 0; u.prev = null; u.onlyPin = false;
+    u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
       if (u.downTurns === 0) {
         u.downTurns = 1; u.acted = true;

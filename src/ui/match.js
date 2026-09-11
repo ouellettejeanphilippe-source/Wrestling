@@ -4,7 +4,7 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel } from '../engine/battle.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
@@ -648,6 +648,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
       afterT = Math.max(0, tgt.hp - dmg);
       mid = [['Précision', `${hit} %`], ['Dégâts', `~${dmg}`], ['Critique', `${crit} %`]];
+      // L'élan doit se voir AVANT de confirmer, sinon le joueur subit un
+      // malus qu'il ne peut pas relier à son déplacement.
+      const el = elanLabel(u.movedTiles, a.move, u);
+      if (el) mid.push([`🏃 ${el.name}`, `${el.travel} case${el.travel > 1 ? 's' : ''} · ${el.good ? '+' : ''}${Math.round((el.mult - 1) * 100)} % dégâts`]);
       const cbs = activeCombos(battle, u, tgt, a.move);
       for (const c of cbs) mid.push([`${c.icon} ${c.name}`, `+${Math.round((c.dmg - 1) * 100)} % dégâts`]);
       if (dmg >= tgt.hp && !tgt.down) mid.push(['Résultat', '💫 AU SOL']);

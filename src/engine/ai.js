@@ -1,5 +1,5 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
-import { manhattan, tileAt, isOutside, stepToward, heightAt } from './grid.js';
+import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange } from './battle.js';
 import { MOVES } from '../data/moves.js';
@@ -9,7 +9,11 @@ export function planUnit(battle, unit) {
   const tiles = unit.moved ? [reach.get(`${unit.x},${unit.y}`)] : [...reach.values()].filter((v) => !v.blocked);
   let best = null;
   for (const t of tiles) {
-    const pos = { x: t.x, y: t.y };
+    // La tuile candidate porte son trajet : sans lui, l'IA calcule les dégâts
+    // avec l'élan qu'elle a MAINTENANT, pas celui qu'elle aurait après le
+    // déplacement — et elle conclut qu'avancer ne sert à rien.
+    const path = pathIn(reach, t.x, t.y);
+    const pos = { x: t.x, y: t.y, path, travel: Math.max(0, path.length - 1) };
     const actions = listActions(battle, unit, pos);
     for (const a of actions) {
       if (!a.ok) continue;
@@ -54,7 +58,7 @@ function scoreAction(battle, unit, pos, a, tg) {
     default: {
       const m = a.move, t = tg.unit;
       const hit = hitChance(battle, unit, t, m, { pos }) / 100;
-      const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos });
+      const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos, travel: pos.travel });
       let s = hit * dmg * 2;
       if (!t.down && dmg >= t.hp) s += 90;
       if (m.tier === 'finisher') s += 30 + (t.hp <= dmg * 1.3 ? 70 : 0);
