@@ -43,8 +43,70 @@ const mix = (hex, target, amount) => {
   return `#${a.map((n, i) => Math.round(n + (b[i] - n) * amount)).map((n) => n.toString(16).padStart(2, '0')).join('')}`;
 };
 
+// ---------------------------------------------------------------------------
+// DÉGRADÉS À TEINTE TOURNANTE
+//
+// Un dégradé de sprite ne va pas du noir au blanc : il TOURNE. L'ombre glisse
+// vers le bleu-violet EN GAGNANT de la saturation, la lumière glisse vers le
+// jaune et en perd un peu. C'est la règle du pixel art depuis les années 80,
+// et c'est ce qui sépare une palette vivante d'une palette morte.
+//
+// Éclaircir et assombrir une même teinte — mix(couleur, noir) et
+// mix(couleur, blanc) — donne des ombres grises et des lumières délavées :
+// la couleur perd sa saturation aux deux bouts, exactement là où l'œil la
+// cherche. C'est la signature du pixel art amateur.
+// ---------------------------------------------------------------------------
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
+function toHsl(hex) {
+  const [r, g, b] = parse(hex).map((n) => n / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  const l = (mx + mn) / 2;
+  if (!d) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = (mx === r ? ((g - b) / d + (g < b ? 6 : 0)) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+  return [h, s, l];
+}
+function fromHsl(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const seg = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h / 60) % 6];
+  return `#${seg.map((n) => Math.round((n + m) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+// Fait glisser une teinte vers une cible, par le chemin le plus court.
+function towards(h, target, amount) {
+  const d = ((target - h + 540) % 360) - 180;
+  return h + Math.sign(d) * Math.min(Math.abs(d), amount);
+}
+// k négatif = vers l'ombre, positif = vers la lumière.
+//
+// Deux réglages comptent, et se tromper dessus casse tout :
+//   · la rotation de teinte reste PETITE (14° au maximum). À 40° l'ombre de la
+//     peau vire au rouge pur et le bleu s'écroule au noir — la couleur change
+//     d'identité au lieu de s'assombrir.
+//   · la luminosité se réduit en PROPORTION, elle ne se soustrait pas. Une
+//     soustraction fixe écrase les couleurs déjà sombres jusqu'au noir plat,
+//     et fait déborder les claires jusqu'au blanc.
+const HUE_SHADOW = 268, HUE_LIGHT = 48;
+const HUE_MAX = 14;
+function shade(hex, k) {
+  const [h, s, l] = toHsl(hex);
+  const a = Math.abs(k), dark = k < 0;
+  const target = dark ? HUE_SHADOW : HUE_LIGHT;
+  // Une couleur presque grise n'a pas de teinte à faire tourner : on lui en
+  // donne une, sinon elle s'assombrit en gris sale.
+  const flat = s < 0.08;
+  const hh = flat ? target : towards(h, target, Math.min(HUE_MAX, 6 * a));
+  // Le gain de saturation se prend sur la MARGE restante. Un gain additif
+  // pousse une couleur déjà saturée — la peau — jusqu'au néon : les ombres
+  // deviennent des coups de soleil.
+  const ss = clamp01(dark ? s + (1 - s) * 0.14 * a : s * (1 - 0.06 * a));
+  const ll = clamp01(dark ? l * (1 - 0.22 * a) : l + (1 - l) * 0.25 * a);
+  return fromHsl(hh, ss, ll);
+}
+
 // Trois tons par matière : c'est le registre des sprites 16 bits, et c'est ce
-// qui garde la silhouette lisible à la taille d'une case.
+// qui garde la silhouette lisible à la taille d'une case. Chaque ton sort de
+// shade(), donc la teinte tourne au lieu de simplement s'éclaircir.
 function palette(def) {
   const L = def.look || {};
   const skin = SKIN[L.skin] || L.skin || SKIN.light;
@@ -54,13 +116,13 @@ function palette(def) {
   const boots = mix(attire, '#000000', 0.55);
   return {
     '.': null, K: INK,
-    1: mix(skin, '#3a1c10', 0.45), 2: mix(skin, '#7a3c1c', 0.3), 3: skin,
-    4: mix(skin, '#fff2d8', 0.34), 5: mix(skin, '#ffffff', 0.6),
-    h: mix(hair, '#140d1c', 0.45), H: hair, G: mix(hair, '#ffe0a8', 0.35),
-    a: mix(attire, '#140d1c', 0.42), A: attire, B: mix(attire, '#ffffff', 0.35),
-    n: mix(accent, '#140d1c', 0.42), N: accent,
-    b: mix(boots, '#000000', 0.5), V: boots, W: mix(boots, '#ffffff', 0.3),
-    e: WHITE, E: mix(hair, '#0b1b3a', 0.55), m: mix(skin, '#8c2f28', 0.55),
+    1: shade(skin, -1.3), 2: shade(skin, -0.6), 3: skin,
+    4: shade(skin, 0.6), 5: shade(skin, 1.2),
+    h: shade(hair, -1.5), H: hair, G: shade(hair, 1.1),
+    a: shade(attire, -1.4), A: attire, B: shade(attire, 1),
+    n: shade(accent, -1.4), N: accent,
+    b: shade(boots, -1.5), V: boots, W: shade(boots, 1),
+    e: WHITE, E: shade(hair, -2.4), m: shade(mix(skin, '#8c2f28', 0.55), -0.4),
     w: WHITE, o: '#191423',
   };
 }
