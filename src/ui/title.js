@@ -1,6 +1,7 @@
 // Écran titre : nouvelle saison (nom, mode, lutteurs de départ), continuer, exhibition.
 import { h, clear, toast } from './dom.js';
 import { wrestlerCard } from './cards.js';
+import { avatar } from './avatar.js';
 import { WRESTLERS, WRESTLERS_BY_ID, STARTER_CHOICES } from '../data/wrestlers.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
@@ -20,6 +21,7 @@ export function showTitle(root, app) {
     h('h1', {}, 'Parodie Pro Wrestling', h('span', {}, 'Tactics')),
     h('p', { class: 'tagline' }, 'Un jeu tactique sur grille à la Fire Emblem × Chroma Squad, avec des parodies de lutteurs, des gimmicks passifs et des tas de façons de gagner (ou de perdre avec panache).'),
     menu,
+    parade(),
     h('div', { class: 'title-help' },
       h('h3', {}, 'Comment ça marche'),
       h('ul', {},
@@ -30,6 +32,16 @@ export function showTitle(root, app) {
       ),
     ),
   ));
+}
+
+// Défilé d'entrée : une poignée de sprites alignés sur la rampe, comme au générique.
+function parade() {
+  const cast = WRESTLERS.filter((w) => !w.npc).sort(() => Math.random() - 0.5).slice(0, 10);
+  return h('div', { class: 'parade' }, cast.map((d, i) => {
+    const a = avatar(d, 56, { view: 'full', bg: 'none', class: 'parade-unit', facing: i % 2 ? -1 : 1 });
+    a.style.setProperty('--delay', `${(i % 5) * 0.12}s`);
+    return a;
+  }));
 }
 
 function showSetup(root, app) {

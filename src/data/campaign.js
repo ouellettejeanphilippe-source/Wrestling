@@ -69,7 +69,7 @@ export const SEASON = {
       intro: 'Une faction en noir et blanc envahit votre show. Ils sont nombreux, ils arrivent par vagues, et le Network adore ça.',
       matches: [
         { id: 'ep7a', script: { summary: 'Vous tenez le ring jusqu’au bout sans perdre personne.', finish: { winner: 'player', method: 'any' }, beats: ['no_loss', 'heat'] }, title: 'Tenir le ring', type: 'survival', teamSize: 3, turns: 8, enemies: ['invader', 'invader'], directives: ['no_loss', 'heat'], reward: { money: 1000, fans: 420 },
-          reinforcements: [{ turn: 3, enemies: ['invader'], spawns: [[0, 4]] }, { turn: 5, enemies: ['gunter'], spawns: [[0, 5]] }, { turn: 7, enemies: ['invader'], spawns: [[0, 3]] }],
+          reinforcements: [{ turn: 3, enemies: ['invader'], spawns: [[0, 7]] }, { turn: 5, enemies: ['gunter'], spawns: [[0, 7]] }, { turn: 7, enemies: ['invader'], spawns: [[0, 6]] }],
           desc: 'Survivez 8 tours. Des renforts arrivent par la rampe aux tours 3, 5 et 7.' },
         { id: 'ep7b', script: { summary: 'Cliffhanger : l’invasion prend le contrôle. Votre équipe perd après avoir encaissé un finisher et beaucoup vendu.', finish: { winner: 'enemy', method: 'any' }, beats: ['sells', 'took_finisher', 'heat'] }, title: 'Contre-attaque', type: 'showdown', teamSize: 3, enemies: ['invader', 'invader', 'randy_python'], directives: ['no_loss', 'finisher_finish'], reward: { money: 1100, fans: 450 },
           desc: 'Éliminez tous les envahisseurs et leur nouveau leader. Pas de compte, pas de DQ.' },
@@ -88,4 +88,4 @@ export const SEASON = {
   ],
 };
 
-export const EXHIBITION_TYPES = ['singles', 'tag', 'hardcore', 'battle_royal', 'ladder', 'cage', 'showdown'];
+export const EXHIBITION_TYPES = ['singles', 'tag', 'hardcore', 'street_fight', 'last_man_standing', 'submission_only', 'battle_royal', 'ladder', 'tlc', 'cage', 'hell_in_cell', 'showdown'];

@@ -56,6 +56,17 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 *Meilleure machine à matchs* (combo), *La Liste*, *Très gentil très méchant* (malédiction), *Laisse-moi entrer*
 (transformation), *Inamovible*, *Le Boss Final*… (30 lutteurs + jobbers, voir `src/data/wrestlers.js`).
 
+## Le plateau et les gabarits
+
+L'aréna fait **20×14 cases**, le ring 10×6 (cordes comprises). Chaque lutteur occupe un **rectangle** de cases,
+ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 3, h: 2 }`. Par défaut, un colosse
+(`weight: 'super'`, comme Andrei le Géant) tient sur 2×2 et tout le monde sur une case.
+
+- Le gabarit complet doit tenir pour se déplacer : terrain praticable, pas d'adversaire, et le coût payé est celui
+  de la case la plus chère (un colosse à cheval sur les cordes paie le prix des cordes).
+- Les distances sont calculées entre gabarits : « à portée 1 » veut dire que les deux rectangles se touchent.
+- Un colosse ne rentre pas partout : points d'apparition et projections vérifient qu'il tient.
+
 ## Règles de match
 
 - **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les cordes et les coins coûtent
@@ -77,6 +88,20 @@ Quelques gimmicks : *Reconnaissez-moi* (aura d'équipe), *N'abandonne jamais* (r
 
 - **Étourdissement** : un coup qui étourdit dure jusqu'à votre tour suivant, ce qui permet des enchaînements
   (doigt dans l'œil puis Elbow Drop, coup de pied retourné puis finisher, étourdir puis jeter par-dessus la corde).
+
+## Stipulations
+
+Les règles transversales d'un type de match : `dq` (disqualification), `countOut` (compte à l'extérieur),
+`tables` (la table des commentateurs peut être brisée), `weapons` (armes déjà au sol), `underRing` (armes
+disponibles **sous le ring**), `tenCount` (compte de dix sur un lutteur au sol).
+
+- **La table des commentateurs ne se brise que si la stipulation l'autorise** (TLC, hardcore, street fight, Hell in
+  a Cell). Ailleurs on s'écrase dessus — ça fait mal et ça fait du bruit — mais elle tient.
+- **Les armes se cherchent sous le ring** : sortir, se placer contre le tablier, et fouiller. C'est légal ; s'en
+  servir devant l'arbitre ne l'est pas (risque de DQ dans les matchs avec règles).
+- Stipulations disponibles : match simple, par équipes, hardcore, **street fight (sans DQ)**, **Last Man Standing**
+  (compte de dix), **soumission uniquement**, bataille royale, échelle, **TLC**, cage, **Hell in a Cell**,
+  confrontation, survie.
 
 ## Les trois actes d'un match
 
@@ -146,8 +171,26 @@ jouer.
 - Après le déplacement, un **menu contextuel** apparaît près du lutteur : Attaquer, Tombé, Provoquer, Spécial, Attendre.
 - Avant de confirmer une cible, une **prévision de combat** montre précision, dégâts estimés, critique, PV après le
   coup, risques (contre, DQ) — cliquer la cible confirme, Échap annule.
-- Barre d'équipe avec **portraits** (SVG générés, un « bonhomme » par lutteur), PV et momentum ; bannière de tour ;
-  journal de commentaires.
+- Barre d'équipe avec **vignettes** (bustes pixel générés, un sprite par lutteur), PV et momentum ; bannière de tour
+  façon transition sentai ; journal de commentaires.
+
+## Direction artistique
+
+Le jeu se présente comme une **émission de catch du samedi soir filmée en pixel** : gros contours d'encre, ombres
+portées dures (jamais de flou), aplats saturés, lignes de balayage et vignettage de vieille télé. C'est un clin d'œil
+assumé aux jeux tactiques tokusatsu — sans copier leur palette : ici c'est violet de coulisses, or de ceinture, rouge
+de tapis.
+
+- **Sprites** (`src/ui/sprite.js`) : chaque lutteur est dessiné pixel par pixel sur une grille 32×40, en SVG à arêtes
+  franches (`shape-rendering="crispEdges"`), à partir de sa description `look` (peau, cheveux, tenue, accent,
+  `features`). Deux cadrages sur le même dessin : `full` (corps entier, pions du plateau, défilé de l'écran titre) et
+  `bust` (portrait, cartes et listes). Les silhouettes sont détourées d'un pixel d'encre, les pions respirent
+  (animation d'attente) et regardent l'adversaire (`facing`).
+- **Aucune image externe** : tout est généré à la volée, donc ajouter un lutteur ne demande aucun fichier d'art.
+- **Habillage** : voyant « ON AIR » sur le bandeau de régie, guirlande de loges sur l'écran titre, menu contextuel
+  coiffé d'un clap de cinéma (qui sert de poignée à la feuille d'actions sur mobile), onomatopées à contour épais pour
+  les dégâts, bannière de tour en balayage diagonal.
+- `prefers-reduced-motion` coupe les animations d'ambiance.
 
 ## Hub de promotion (entre les shows)
 
@@ -178,7 +221,9 @@ src/data/    wrestlers.js     roster parodique
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              script.js        évaluation des directives et des scripts (étoiles)
-src/ui/      title.js hub.js match.js cards.js avatar.js tutorial.js dom.js
+src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
+             sprite.js        sprites pixel 32×40 générés en SVG (corps entier / buste)
+             avatar.js        enrobage DOM des sprites (vignettes, pions)
 tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne
 ```
 
@@ -196,4 +241,4 @@ pour l'équilibrage.
 - Rivalités et storylines persistantes (heat entre lutteurs, promos entre les shows).
 - Blessures, moral, contrats en mode Scénarios ; gestion des heels/faces (turns).
 - Managers et interférences (ref bump), matchs à stipulations (No Holds Barred, Last Man Standing).
-- Sprites/animations, sons ; éditeur de lutteurs.
+- Sons et musiques ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.

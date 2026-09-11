@@ -5,7 +5,7 @@ import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
-import { TERRAIN, tileAt, key, manhattan } from '../engine/grid.js';
+import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
@@ -41,8 +41,30 @@ const CATS = [
 
 const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse), (max-width: 800px)').matches;
 
+// Vue du plateau : 'iso' = caméra isométrique (losanges, lutteurs debout sur le
+// tapis), 'top' = vue de dessus classique. Le choix est mémorisé.
+const VIEW_KEY = 'ppw.boardView';
+const ROT_KEY = 'ppw.boardRot';
+// Rotation de caméra : quatre quarts de tour, comme dans un tactical faux-3D.
+// Tourner permet de voir derrière une plateforme et de reprendre un angle de tir.
+function boardRot() {
+  try { return (Number(localStorage.getItem(ROT_KEY)) || 0) % 4; } catch { return 0; }
+}
+function setBoardRot(r) { try { localStorage.setItem(ROT_KEY, String(r)); } catch { /* mode privé */ } }
+// Les quatre directions du regard, dans l'ordre des quarts de tour (+x, +y, -x, -y).
+const FACE_ORDER = ['se', 'sw', 'nw', 'ne'];
+// Direction telle qu'elle apparaît À L'ÉCRAN une fois la caméra tournée.
+function screenFacing(facing, rot) {
+  const i = FACE_ORDER.indexOf(facing || 'se');
+  return FACE_ORDER[(i + (i < 0 ? 0 : rot)) % 4] || 'se';
+}
+function boardView() {
+  try { return localStorage.getItem(VIEW_KEY) === 'top' ? 'top' : 'iso'; } catch { return 'iso'; }
+}
+function setBoardView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch { /* mode privé : tant pis */ } }
+
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
-  const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, inspect: null, busy: false, resultShown: false, acting: null };
+  const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, hoverXY: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
   clear(root);
   const el = {
@@ -52,19 +74,57 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     tileInfo: h('div', { class: 'tile-info' }),
     right: h('aside', { class: 'm-right' }),
     party: h('div', { class: 'partybar' }),
-    log: h('details', { class: 'm-log', open: true }),
+    log: h('details', { class: 'm-log', open: !TOUCH }),
     banner: h('div', { class: 'turn-banner', hidden: true }),
   };
-  const boardWrap = h('div', { class: 'board-wrap' }, el.board, el.popover, el.tileInfo);
-  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, el.top, h('div', { class: 'm-stage' }, h('div', { class: 'm-center' }, boardWrap, el.party, el.log), el.right), el.banner));
+  // La scène porte l'encombrement réel du losange isométrique : c'est elle qui
+  // définit la zone de défilement, le plateau étant transformé (donc hors flux).
+  const stage = h('div', { class: 'board-stage' }, el.board);
+  const boardWrap = h('div', { class: `board-wrap view-${boardView()}`, style: { '--rows': g.h, '--cols': g.w, '--rot': boardRot() } }, stage);
+  boardWrap.dataset.rot = boardRot();
+  function rotateBoard(step) {
+    const next = (boardRot() + step + 4) % 4;
+    setBoardRot(next);
+    boardWrap.style.setProperty('--rot', next);
+    boardWrap.dataset.rot = next;
+    render();
+    fitBoard();
+  }
+  function toggleView() {
+    const next = boardWrap.classList.contains('view-iso') ? 'top' : 'iso';
+    boardWrap.classList.toggle('view-iso', next === 'iso');
+    boardWrap.classList.toggle('view-top', next === 'top');
+    setBoardView(next);
+    render();
+    fitBoard();
+  }
+  // Mise en scène façon tactical console : le plateau occupe tout l'écran et le
+  // HUD flotte par-dessus (coins), pour laisser un maximum de place aux sprites.
+  el.endTurn = h('div', { class: 'hud-endturn' });
+  const scene = h('div', { class: 'm-scene' },
+    boardWrap,
+    h('div', { class: 'hud hud-tl' }, el.top),
+    h('div', { class: 'hud hud-bl' }, el.right, el.tileInfo),
+    h('div', { class: 'hud hud-br' }, el.endTurn, el.party, el.log),
+    el.popover,
+  );
+  // Le jeu est pensé pour le paysage sur téléphone : en portrait, l'écran ne
+  // laisse pas assez de largeur au losange. On le dit, sans bloquer.
+  const rotate = h('div', { class: 'rotate-hint' },
+    h('span', {}, '📱↻ Tournez votre appareil : le plateau a besoin de largeur.'),
+    h('button', { class: 'btn small', onclick: () => rotate.remove() }, 'OK'));
+  root.append(h('div', { class: `match ${TOUCH ? 'touch' : ''}` }, scene, el.banner, rotate));
   document.addEventListener('keydown', onKey);
+  document.body.classList.add('in-match');
+  window.addEventListener('resize', fitBoard);
+  requestAnimationFrame(fitBoard);
   showBanner('🔔 DING DING DING !', 'start');
   render();
   if (!tutorialSeen()) showTutorial(root, {});
 
   // ------------------------------------------------------------ rendu global
   function render() {
-    renderTop(); renderBoard(); renderPopover(); renderRight(); renderParty(); renderLog(); flushEvents();
+    renderTop(); renderBoard(); renderPopover(); renderRight(); renderEndTurn(); renderParty(); renderLog(); flushEvents(); fitBoard();
     if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
   }
 
@@ -80,9 +140,19 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
+      h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
+
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
+    // Le bouton de rotation n'a de sens qu'en vue isométrique. On l'ajoute à
+    // part : append() écrirait « null » si on lui passait une branche vide.
+    if (boardWrap.classList.contains('view-iso')) {
+      el.top.insertBefore(
+        h('button', { class: 'btn small ghost', title: 'Tourner la caméra d’un quart de tour (touche R, Maj+R dans l’autre sens)', onclick: () => rotateBoard(1) }, '↻ Tourner'),
+        el.top.lastChild.previousSibling,
+      );
+    }
   }
 
   function renderObjectives() {
@@ -106,16 +176,35 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function renderBoard() {
     clear(el.board);
     const reach = ui.mode === 'move' ? ui.reach : null;
+    // Chemin prévu jusqu'à la case survolée : on remonte les liens du Dijkstra.
+    const path = new Set();
+    if (reach && ui.hoverXY) {
+      let k = key(ui.hoverXY.x, ui.hoverXY.y);
+      let guard = 0;
+      while (k && reach.has(k) && guard++ < 200) { path.add(k); k = reach.get(k).from; }
+    }
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
-    for (let y = 0; y < g.h; y++) {
-      for (let x = 0; x < g.w; x++) {
+    // Ordre du peintre : on dessine du fond vers l'avant, sinon une case
+    // surélevée recouvre les lutteurs qui se tiennent derrière elle. La
+    // profondeur écran dépend de l'angle de caméra ; la position dans la
+    // grille, elle, est posée explicitement (sinon l'ordre casserait la mise
+    // en page).
+    const rot = boardRot();
+    const depth = (x, y) => (rot === 0 ? x + y : rot === 1 ? x - y : rot === 2 ? -(x + y) : y - x);
+    const order = [];
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) order.push([x, y]);
+    order.sort((a, b) => depth(a[0], a[1]) - depth(b[0], b[1]));
+    {
+      for (const [x, y] of order) {
         const tile = tileAt(g, x, y);
         const k = key(x, y);
-        const cell = h('div', { class: `cell t-${tile}`, 'data-x': x, 'data-y': y, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
+        const lvl = heightAt(g, x, y);
+        const cell = h('div', { class: `cell t-${tile}${lvl ? ' raised' : ''}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, style: lvl ? { '--lvl': lvl } : {}, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
+        if (path.has(k)) cell.classList.add('path');
         else if (atk && atk.has(k)) cell.classList.add('atk');
         if (threat && threat.has(k)) cell.classList.add('threat');
         if (targets && targets.has(k)) {
@@ -127,9 +216,44 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const item = battle.items.find((i) => i.x === x && i.y === y);
         if (item) cell.append(h('span', { class: 'item', title: item.weapon.name }, item.weapon.icon));
         const u = unitAt(battle, x, y);
-        if (u) { const tok = unitToken(u); if (ui.sel === u) tok.classList.add('selected'); if (ui.acting === u) tok.classList.add('acting'); cell.append(tok); }
+        if (u) {
+          // marquage au sol aux couleurs de l'équipe : posé sur la case, donc
+          // parfaitement aligné sur le losange (c'est le repère le plus lisible)
+          const mark = h('span', { class: `tile-mark team-${u.team}${ui.sel === u ? ' sel' : ''}${u.acted && u.team === 'player' ? ' acted' : ''}` });
+          cell.append(mark);
+        }
+        if (u && (u.x !== x || u.y !== y)) cell.classList.add('unit-body');   // reste du gabarit
+        if (u && u.x === x && u.y === y) {
+          const tok = unitToken(u);
+          if (ui.sel === u) tok.classList.add('selected');
+          if (ui.acting === u) tok.classList.add('acting');
+          // en isométrie, un lutteur plus « en avant » (x + y grand) passe devant
+          tok.style.zIndex = 10 + x + y + heightAt(g, x, y);
+          tok.style.setProperty('--lvl', heightAt(g, x, y));
+          cell.append(tok);
+        }
+        cell.style.gridColumn = String(x + 1);
+        cell.style.gridRow = String(y + 1);
         el.board.append(cell);
       }
+    }
+    // Décor du ring, hors du flux de la grille (sinon il décalerait les cases) et
+    // peint après elles, mais sous les lutteurs :
+    //   · le tablier, qui donne au ring son épaisseur de plateforme surélevée
+    //   · le marquage central, repère fixe pour se situer
+    const ring = g.ring;
+    if (ring) {
+      const box = (x0, y0, w, hh, cls, kid) => h('div', {
+        class: cls,
+        style: {
+          left: `calc(${x0} * (var(--cell) + 2px))`,
+          top: `calc(${y0} * (var(--cell) + 2px))`,
+          width: `calc(${w} * (var(--cell) + 2px))`,
+          height: `calc(${hh} * (var(--cell) + 2px))`,
+        },
+      }, kid || null);
+      const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
+      el.board.append(box(cx - 2, cy - 1, 4, 2, 'ring-logo', h('span', {}, 'PPW')));
     }
   }
 
@@ -167,6 +291,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return set;
   }
 
+  // Nom court pour la plaque au-dessus du sprite (« Stone Cold Steve Boston » est
+  // illisible à cette taille).
+  function shortName(name) {
+    const parts = name.replace(/\(.*\)/, '').trim().split(/\s+/);
+    return parts.length > 2 ? `${parts[0]} ${parts[parts.length - 1]}` : name;
+  }
+
   function unitToken(u) {
     const def = WRESTLERS_BY_ID[u.id];
     const icons = [];
@@ -175,14 +306,27 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.statuses.finished) icons.push('☠️');
     if (u.weapon) icons.push(u.weapon.icon);
     if (battle.rules.tag && u.legal) icons.push('⭐');
+    if (u.acted && u.team === 'player' && battle.phase === 'player') icons.push('✔');
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
-    const cls = `unit team-${u.team}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
-    return h('div', { class: cls, title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}` },
-      avatar(def, 0, { fill: true, bg: u.team === 'player' ? '#1e3a5f' : '#5a1e1e', stroke: 'transparent' }),
+    const { w: uw, h: uh } = sizeOf(u);
+    const big = uw > 1 || uh > 1;
+    const hurt = u.hp / u.maxHp <= 0.4;
+    const cls = `unit team-${u.team}${big ? ' big' : ''}${hurt ? ' hurt' : ''}${u.down ? ' down' : ''}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}`;
+    return h('div', {
+      class: cls,
+      // le gabarit pilote la taille et le recentrage du sprite (voir styles.css)
+      style: big ? { '--uw': uw, '--uh': uh } : {},
+      title: `${u.name} — ${u.hp}/${u.maxHp} PV, momentum ${u.momentum}${big ? ` · gabarit ${uw}×${uh} cases` : ''}`,
+    },
+      h('span', { class: 'unit-shadow' }),
+      avatar(def, 0, { fill: true, view: 'full', bg: 'none', dir: screenFacing(u.facing, boardRot()), pose: u.down ? 'down' : null }),
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
+      // Plaque de nom : visible pour le lutteur sélectionné, celui qu'on survole,
+      // et ceux qui sont en danger — pas pour tout le monde tout le temps.
+      h('span', { class: 'uname' }, h('b', {}, shortName(u.name)), h('i', {}, `${u.hp}`)),
     );
   }
 
@@ -232,12 +376,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function placePopover(u) {
     const cell = el.board.querySelector(`.cell[data-x="${u.x}"][data-y="${u.y}"]`);
     if (!cell) return;
-    const b = el.board.getBoundingClientRect(), c = cell.getBoundingClientRect();
+    const b = boardWrap.getBoundingClientRect(), c = cell.getBoundingClientRect();
     const left = c.right - b.left + 8, top = c.top - b.top - 8;
     const flip = u.x >= g.w - 4;
     el.popover.style.left = flip ? `${c.left - b.left - 8}px` : `${left}px`;
     el.popover.style.transform = flip ? 'translateX(-100%)' : '';
-    el.popover.style.top = `${Math.max(0, Math.min(top, b.height - 260))}px`;
+    el.popover.style.top = `${Math.max(0, Math.min(top, b.height - el.popover.offsetHeight - 8))}px`;
   }
 
   function openCategory(c, list) {
@@ -276,15 +420,21 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       return;
     }
     if (u) {
-      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Déplacement · 🟥 portée d’attaque. Cliquez une case bleue, ou le lutteur lui-même pour agir sur place.' : 'Choisissez une action dans le menu près du lutteur.'));
+      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Se déplacer · 🟥 portée d’attaque · cliquez le lutteur pour agir sur place' : 'Choisissez une action dans le menu.'));
       el.right.append(unitCard(battle, u, { class: 'selected' }));
     }
     const insp = ui.hover && ui.hover !== u ? ui.hover : ui.inspect && ui.inspect !== u ? ui.inspect : null;
     if (insp) el.right.append(h('div', { class: 'inspect-label' }, insp.team === 'enemy' ? '🔍 Adversaire (zone de menace en rouge)' : '🔍 Inspection'), unitCard(battle, insp));
-    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? 'Cliquez un de vos lutteurs (plateau ou barre du bas). Survolez un adversaire pour voir sa zone de menace.' : 'Tour adverse…'));
+    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? '👉 Choisissez un lutteur (survolez un adversaire pour voir sa zone de menace)' : 'Tour adverse…'));
     el.right.append(renderObjectives());
     el.right.append(renderRoutes());
-    if (!battle.result) el.right.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${living(battle, 'player').filter((x) => !x.acted && !x.down).length} à jouer)`));
+  }
+
+  function renderEndTurn() {
+    clear(el.endTurn);
+    if (battle.result) return;
+    const left = living(battle, 'player').filter((x) => !x.acted && !x.down).length;
+    el.endTurn.append(h('button', { class: 'btn primary wide', disabled: ui.busy || battle.phase !== 'player', onclick: endTurn }, `⏭ Fin du tour (${left})`));
   }
 
   function renderRoutes() {
@@ -329,12 +479,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const a = ui.action;
     const tgt = t.unit;
     const box = h('div', { class: 'forecast' });
-    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56), h('b', {}, unit.name),
+    const side = (unit, after, extra) => h('div', { class: `fc-side team-${unit.team}` }, avatar(WRESTLERS_BY_ID[unit.id], 56, { view: 'full', dir: screenFacing(unit.facing, boardRot()) }), h('b', {}, unit.name),
       h('div', { class: 'fc-hp' }, `PV ${unit.hp}`, after != null ? h('span', { class: after < unit.hp ? 'dn' : 'up' }, ` → ${after}`) : null),
       bar(after != null ? Math.max(0, after) : unit.hp, unit.maxHp, 'hpbar'), extra || null);
     let mid = [], afterT = null, afterU = null;
     if (a.move && ATTACK_TYPES.has(a.type)) {
-      const hit = hitChance(battle, u, tgt, a.move);
+      const hit = hitChance(battle, u, tgt, a.move, { pos: u });
       const { dmg } = computeDamage(battle, u, tgt, a.move, { noRng: true });
       const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
       afterT = Math.max(0, tgt.hp - dmg);
@@ -442,11 +592,14 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = x == null ? null : unitAt(battle, x, y);
     const tile = x == null ? null : tileAt(g, x, y);
     if (tile !== ui.hoverTile) { ui.hoverTile = tile; el.tileInfo.textContent = tile && TILE_HELP[tile] ? `${TERRAIN[tile].name} — ${TILE_HELP[tile]}` : ''; }
+    // La case survolée sert à dessiner le chemin prévu pendant un déplacement.
+    const moved = !ui.hoverXY || x !== ui.hoverXY.x || y !== ui.hoverXY.y;
+    ui.hoverXY = x == null ? null : { x, y };
     if (u !== ui.hover) {
       ui.hover = u;
       renderRight();
       if (ui.mode === 'idle') renderBoard();
-    }
+    } else if (moved && ui.mode === 'move') renderBoard();
   }
   function onCell(x, y) {
     if (ui.busy || battle.result || battle.phase !== 'player') return;
@@ -491,12 +644,40 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     deselect();
   }
   function onKey(e) {
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && boardWrap.classList.contains('view-iso')) { rotateBoard(e.shiftKey ? -1 : 1); return; }
     if (e.key !== 'Escape' || ui.busy) return;
     if (ui.mode === 'target') { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
     else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
     else if (ui.sel) deselect();
   }
-  function cleanup() { document.removeEventListener('keydown', onKey); document.body.classList.remove('sheet-open'); }
+  function cleanup() {
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('resize', fitBoard);
+    document.body.classList.remove('sheet-open', 'in-match');
+  }
+
+  // Le plateau doit tenir dans la place qui lui reste : on calcule la taille de
+  // case à partir de la boîte disponible, dans les deux dimensions. En iso, le
+  // losange fait (colonnes + rangées) de diagonale, et les lutteurs dépassent
+  // du tapis vers le haut (d'où la marge de 1,5 case).
+  function fitBoard() {
+    // Le plateau se range sous le bandeau du haut et au-dessus des boîtes du bas,
+    // sinon le HUD intercepte les clics des rangées qu'il recouvre.
+    const scene = boardWrap.parentElement;
+    const topH = el.top.offsetHeight || 0;
+    const botH = Math.min(110, Math.round((scene.clientHeight || 0) * 0.14));
+    boardWrap.style.top = `${topH + 6}px`;
+    boardWrap.style.bottom = `${botH}px`;
+    const availW = boardWrap.clientWidth, availH = boardWrap.clientHeight;
+    if (!availW || !availH) return;
+    const iso = boardWrap.classList.contains('view-iso');
+    const h = Math.max(80, availH - 4);
+    const span = g.w + g.h;
+    const cell = iso
+      ? Math.min(availW / (span * 0.7072), h / (span * 0.3536 + 1.5))
+      : Math.min(availW / g.w, h / g.h) - 2;
+    boardWrap.style.setProperty('--cell', `${Math.max(14, Math.min(112, Math.floor(cell)))}px`);
+  }
 
   async function endTurn() {
     if (ui.busy || battle.result || battle.phase !== 'player') return;

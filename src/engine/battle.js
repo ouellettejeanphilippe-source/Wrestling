@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, heightAt, climbOf } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -13,12 +13,12 @@ import { planUnit } from './ai.js';
 import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
-  standard: { player: [[5, 4], [5, 5], [4, 4], [4, 5], [6, 3], [6, 6]], enemy: [[8, 4], [8, 5], [9, 4], [9, 5], [7, 6], [7, 3]] },
-  ladder: { player: [[4, 4], [4, 5], [5, 3], [5, 6]], enemy: [[9, 4], [9, 5], [8, 3], [8, 6]] },
-  tag: { player: [[5, 4], [3, 5], [3, 4]], enemy: [[8, 5], [10, 4], [10, 5]] },
-  invasion: { enemy: [[1, 4], [1, 5], [1, 3], [1, 6], [0, 4]] },
+  standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
+  ladder: { player: [[7, 6], [7, 9], [6, 7], [6, 8]], enemy: [[12, 6], [12, 9], [13, 7], [13, 8]] },
+  tag: { player: [[7, 7], [5, 10], [5, 9]], enemy: [[12, 7], [14, 8], [14, 7]] },
+  invasion: { enemy: [[1, 7], [1, 8], [1, 6], [1, 9], [0, 7]] },
 };
-const WEAPON_SPOTS = [[2, 4], [11, 5], [2, 5], [11, 4], [1, 2], [12, 7], [1, 7], [12, 2]];
+const WEAPON_SPOTS = [[4, 7], [15, 8], [4, 8], [15, 7], [2, 4], [16, 12], [2, 12], [16, 4]];
 const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
 
@@ -70,6 +70,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   playerTeam.forEach((def, i) => {
     const [x, y] = pSpawns[i] || pSpawns[pSpawns.length - 1];
     const u = createUnit(def, 'player', x, y, { bonus: playerBonuses[def.id] || {}, uid: `p${i}-${def.id}` });
+    placeUnit(battle, u, x, y);
     battle.units.push(u);
   });
   (match.enemies || []).forEach((e, i) => {
@@ -77,10 +78,14 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     const def = WRESTLERS_BY_ID[spec.id];
     if (!def) throw new Error(`Lutteur inconnu : ${spec.id}`);
     const [x, y] = eSpawns[i] || eSpawns[eSpawns.length - 1];
-    battle.units.push(createUnit(def, 'enemy', x, y, { boost: spec.boost || match.boost || {}, uid: `e${i}-${def.id}` }));
+    const u = createUnit(def, 'enemy', x, y, { boost: spec.boost || match.boost || {}, uid: `e${i}-${def.id}` });
+    placeUnit(battle, u, x, y);
+    battle.units.push(u);
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
 
+  // Armes cachées sous le ring : il faudra aller les chercher au bord du tablier.
+  battle.underRing = rules.underRing ?? 0;
   const nWeapons = rules.weapons || 0;
   WEAPON_SPOTS.filter(([x, y]) => tileAt(grid, x, y) === 'floor').slice(0, nWeapons).forEach(([x, y], i) => {
     battle.items.push({ x, y, weapon: { ...WEAPONS[WEAPON_ORDER[i % WEAPON_ORDER.length]] } });
@@ -90,6 +95,22 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   for (const u of battle.units) if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
   startPhase(battle, 'player');
   return battle;
+}
+
+// Un gabarit 2×2 ne tient pas forcément sur le point d'apparition prévu : on
+// cherche la case libre la plus proche où il rentre.
+function placeUnit(battle, unit, x, y) {
+  unit.x = x; unit.y = y;
+  if (fits(battle.grid, battle.units, unit, x, y, { anyUnitBlocks: true })) return true;
+  for (let r = 1; r <= 6; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+      if (fits(battle.grid, battle.units, unit, x + dx, y + dy, { anyUnitBlocks: true })) {
+        unit.x = x + dx; unit.y = y + dy; return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- stats & portées
@@ -120,8 +141,9 @@ export function moveUnit(battle, unit, x, y) {
   if (unit.acted || unit.moved || unit.down || unit.eliminated) return false;
   const n = getReachable(battle, unit).get(key(x, y));
   if (!n || n.blocked) return false;
-  unit.prev = { x: unit.x, y: unit.y };
+  unit.prev = { x: unit.x, y: unit.y, facing: unit.facing };
   unit.movedTiles = manhattan(unit, { x, y });
+  unit.facing = facingTo(unit, { x, y });          // on regarde là où on va
   unit.x = x; unit.y = y; unit.moved = true; unit.climb = 0;
   emit(battle, { type: 'move', uid: unit.uid, x, y });
   if (battle.rules.tag && !unit.legal && !isOutside(battle.grid, x, y) && !isOnRope(battle.grid, x, y) && !isOnTurnbuckle(battle.grid, x, y)) {
@@ -131,7 +153,8 @@ export function moveUnit(battle, unit, x, y) {
 }
 export function undoMove(battle, unit) {
   if (!unit.prev || unit.acted) return false;
-  unit.x = unit.prev.x; unit.y = unit.prev.y; unit.prev = null; unit.moved = false; unit.movedTiles = 0;
+  unit.x = unit.prev.x; unit.y = unit.prev.y; unit.facing = unit.prev.facing || unit.facing;
+  unit.prev = null; unit.moved = false; unit.movedTiles = 0;
   return true;
 }
 
@@ -177,12 +200,12 @@ export function listActions(battle, unit, pos = null) {
     else if (req.attackerOnRope && !onRope) { a.ok = false; a.reason = 'Doit être sur les cordes'; }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
-      a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m) }));
+      a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
       if (a.ok && !a.targets.length) { a.ok = false; a.reason = 'Aucune cible debout adjacente'; }
     } else if (m.type === 'special') {
       a.targets = enemies.filter((e) => inRange(e, m.range)).map((e) => ({ unit: e }));
     } else {
-      a.targets = enemies.filter((e) => inRange(e, m.range) && targetOk(battle, m, e, p)).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m) }));
+      a.targets = enemies.filter((e) => inRange(e, m.range) && targetOk(battle, m, e, p)).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
     }
     if (a.ok && !a.targets.length) {
       a.ok = false;
@@ -192,7 +215,7 @@ export function listActions(battle, unit, pos = null) {
   }
 
   if (unit.weapon) {
-    const targets = enemies.filter((e) => manhattan(p, e) === 1).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, weaponMove(battle, unit)) }));
+    const targets = enemies.filter((e) => manhattan(p, e) === 1).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, weaponMove(battle, unit), { pos: p }) }));
     actions.push({ id: 'weapon', name: `${unit.weapon.icon} Frapper : ${unit.weapon.name} (${unit.weapon.uses})`, tier: 'base', type: 'weapon', move: weaponMove(battle, unit), desc: rules.dq ? 'Gros dégâts. Illégal : risque de DQ si l’arbitre regarde.' : 'Gros dégâts. Légal ici.', targets, ok: targets.length > 0, reason: 'Aucune cible adjacente' });
   }
   if (!rules.noPin) {
@@ -208,6 +231,17 @@ export function listActions(battle, unit, pos = null) {
   }
   const item = battle.items.find((i) => i.x === p.x && i.y === p.y);
   if (item && !unit.weapon) actions.push({ id: 'pickup', name: `${item.weapon.icon} Ramasser : ${item.weapon.name}`, tier: 'base', type: 'pickup', desc: `+${item.weapon.power} dégâts, ${item.weapon.uses} utilisations.`, targets: [{ self: true }], ok: true });
+  // Sous le ring : accessible depuis l'extérieur, au bord du tablier.
+  if (battle.underRing > 0 && !unit.weapon) {
+    const apron = isOutside(g, p.x, p.y) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => ['rope', 'turnbuckle'].includes(tileAt(g, p.x + dx, p.y + dy)));
+    actions.push({
+      id: 'scavenge', name: '🔦 Chercher sous le ring', tier: 'base', type: 'scavenge',
+      desc: battle.rules.dq
+        ? 'Sortez une arme de sous le tablier. La chercher est légal ; s’en servir devant l’arbitre, non.'
+        : 'Sortez une arme de sous le tablier. Tout est légal ici.',
+      targets: [{ self: true }], ok: apron, reason: apron ? null : 'Il faut être à l’extérieur, contre le tablier du ring',
+    });
+  }
   if (rules.tag && unit.legal) {
     const partners = allies.filter((a) => !a.legal && !a.down && manhattan(p, a) === 1).map((u) => ({ unit: u }));
     actions.push({ id: 'tag', name: '🤝 Tag !', tier: 'base', type: 'tag', desc: 'Passe le relais à un partenaire adjacent : il devient légal, soigne 15 % et gagne 30 momentum.', targets: partners, ok: partners.length > 0, reason: 'Partenaire non adjacent' });
@@ -249,6 +283,8 @@ export function executeAction(battle, unit, actionId, target = null) {
   } else if (a.targets.length && a.targets[0].unit) {
     return { ok: false, reason: 'Cible requise' };
   }
+  // On se tourne vers sa cible avant d'agir : le sprite suit le regard.
+  if (tgt) unit.facing = facingTo(unit, tgt);
   let result = {};
   switch (a.type) {
     case 'taunt': result = doTaunt(battle, unit, a.move); break;
@@ -258,6 +294,17 @@ export function executeAction(battle, unit, actionId, target = null) {
     case 'weapon': {
       result = resolveAttack(battle, unit, tgt, a.move);
       if (unit.weapon) { unit.weapon.uses -= 1; if (unit.weapon.uses <= 0) { log(battle, `${unit.weapon.name} de ${unit.name} se brise.`); unit.weapon = null; } }
+      break;
+    }
+    case 'scavenge': {
+      if (battle.underRing > 0) {
+        battle.underRing--;
+        const pool = WEAPON_ORDER.filter((w) => WEAPONS[w]);
+        const pick = pool[Math.floor(battle.rng.next() * pool.length)] || 'chair';
+        unit.weapon = { ...WEAPONS[pick] };
+        addHeat(battle, 8);
+        log(battle, `🔦 ${unit.name} plonge sous le ring et en ressort ${unit.weapon.name} ! (${battle.underRing} objet(s) restant(s))`, 'big');
+      }
       break;
     }
     case 'pickup': {
@@ -312,14 +359,20 @@ function doSpecial(battle, unit, target, move) {
   return {};
 }
 
-export function hitChance(battle, attacker, target, move) {
+export function hitChance(battle, attacker, target, move, opts = {}) {
   if (target.down) return 100;
+  // `pos` : la case d'où le coup partira (l'IA et la prévision évaluent des
+  // déplacements pas encore joués ; sans ça, l'avantage de hauteur serait
+  // calculé depuis la position actuelle).
+  const from = opts.pos || attacker;
   const A = getStats(battle, attacker), D = getStats(battle, target);
   // L'écart d'agilité est plafonné : un colosse touche encore un voltigeur.
   // Une prise s'esquive moins bien qu'une frappe : quand on est attrapé, on est attrapé.
   const grabby = move.type === 'grapple' || move.type === 'submission';
   let c = (move.acc ?? 90) + clamp(A.agi - D.agi, -12, 12) * (grabby ? 1.2 : 2.2);
   if (target.statuses.dazed) c += 25;
+  // Le relief compte : frapper d'en haut est plus facile, d'en bas plus dur.
+  c += clamp(heightAt(battle.grid, from.x, from.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
   if (gim(attacker).modHitChance) c = gim(attacker).modHitChance(battle, attacker, attacker, target, move, c, 'attacker');
@@ -333,7 +386,11 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   const pos = opts.pos || attacker;
   const atk = A[move.stat || 'str'];
   let dmg = (move.power || 0) + atk * 1.3 - D.def * 0.9 * (eff.ignoreDef ? 1 - eff.ignoreDef : 1);
-  if (move.type === 'aerial' && isOnTurnbuckle(battle.grid, pos.x, pos.y)) dmg *= 1.35;
+  // Un mouvement aérien tire sa force du dénivelé : depuis un coin (3) sur une
+  // cible au tapis (2), c'est +1 ; depuis le tablier vers le plancher, c'est +2.
+  const drop = heightAt(battle.grid, pos.x, pos.y) - heightAt(battle.grid, target.x, target.y);
+  if (move.type === 'aerial' && drop > 0) dmg *= 1 + Math.min(3, drop) * 0.22;
+  else if (drop > 0) dmg *= 1 + Math.min(3, drop) * 0.07;
   if (eff.charge && attacker.movedTiles >= 3) dmg += 8;
   // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
@@ -592,6 +649,13 @@ function irishWhip(battle, unit, target, move) {
   return { hit: true };
 }
 
+const footprintAt = (unit, x, y) => {
+  const { w, h } = sizeOf(unit), out = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push({ x: x + dx, y: y + dy });
+  return out;
+};
+const isBig = (unit) => { const { w, h } = sizeOf(unit); return w > 1 || h > 1; };
+
 export function pushUnit(battle, target, dx, dy, dist, source) {
   const g = battle.grid;
   let x = target.x, y = target.y, moved = 0;
@@ -601,7 +665,13 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
     if (!inBounds(g, nx, ny)) break;
     const t = terrainAt(g, nx, ny);
     const tileName = tileAt(g, nx, ny);
-    const occ = unitAt(battle, nx, ny);
+    // pour un colosse, c'est tout le gabarit qui doit tenir sur la case d'arrivée
+    let occ = null;
+    for (const cell of footprintAt(target, nx, ny)) { occ = unitAt(battle, cell.x, cell.y); if (occ && occ !== target) break; occ = null; }
+    if (!occ && isBig(target) && !fits(g, battle.units, target, nx, ny)) {
+      log(battle, `${target.name} est trop massif pour passer par là.`);
+      break;
+    }
     if (occ) {
       log(battle, `${target.name} percute ${occ.name} !`);
       applyDamage(battle, occ, 6, source, { move: { type: 'collision' } });
@@ -610,6 +680,15 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
     }
     if (!t.passable) {
       if (t.hazard) {
+        if (t.breakable && !battle.rules.tables) {
+          // La table des commentateurs n'est pas au menu ce soir : on s'écrase
+          // dessus (ça fait mal, ça fait du bruit) mais elle tient.
+          log(battle, `${target.name} s’écrase sur la table des commentateurs — elle tient bon ! (pas de tables dans ce match)`);
+          addHeat(battle, 6);
+          credit();
+          applyDamage(battle, target, 10, source, { move: { type: 'hazard' } });
+          break;
+        }
         if (t.breakable) {
           setTile(g, nx, ny, 'debris'); battle.stats.tables++; addHeat(battle, 25);
           log(battle, `💥 ${target.name} PASSE À TRAVERS LA TABLE !!!`, 'big');
@@ -635,7 +714,18 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
       log(battle, `${target.name} s’accroche aux cordes de justesse ! (${Math.round(c * 100)} %)`);
       break;
     }
+    // chute : quitter le tablier pour le plancher, ça se paie
+    const fall = heightAt(g, x, y) - heightAt(g, nx, ny);
     x = nx; y = ny; moved++;
+    if (fall >= 2) {
+      target.x = x; target.y = y;
+      const dmg = 6 + fall * 4;
+      setStatus(battle, target, 'dazed', 1);
+      credit(); addHeat(battle, 10);
+      log(battle, `🪂 ${target.name} bascule de ${fall} niveaux et s’écrase au sol ! (-${dmg}, étourdi)`, 'big');
+      applyDamage(battle, target, dmg, source, { move: { type: 'hazard' } });
+      break;
+    }
     if (tileName === 'rope') { setStatus(battle, target, 'dazed', 1); log(battle, `${target.name} est projeté dans les cordes ! (étourdi)`); break; }
     if (tileName === 'turnbuckle') { setStatus(battle, target, 'dazed', 1); credit(); target.x = x; target.y = y; applyDamage(battle, target, 10, source, { move: { type: 'hazard' } }); log(battle, `${target.name} s’écrase dans le coin ! (-10, étourdi)`); break; }
     if (tileName === 'steps') { credit(); target.x = x; target.y = y; applyDamage(battle, target, t.hazard, source, { move: { type: 'hazard' } }); log(battle, `${target.name} percute les marches d’acier ! (-${t.hazard})`); break; }
@@ -698,8 +788,15 @@ export function startPhase(battle, team) {
   for (const u of living(battle, team)) {
     u.acted = false; u.moved = false; u.movedTiles = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
-      if (u.downTurns === 0) { u.downTurns = 1; u.acted = true; log(battle, `${u.name} est toujours au sol…`); }
-      else standUp(battle, u);
+      if (u.downTurns === 0) {
+        u.downTurns = 1; u.acted = true;
+        log(battle, battle.rules.tenCount ? `🔟 L’arbitre compte sur ${u.name}… un, deux, trois…` : `${u.name} est toujours au sol…`);
+      } else if (battle.rules.tenCount) {
+        // Last Man Standing : deux tours au sol = le compte de dix va au bout.
+        log(battle, `🔟 …HUIT ! NEUF ! DIX ! ${u.name} n’a pas répondu au compte.`, 'big');
+        eliminate(battle, u, 'stoppage');
+        continue;
+      } else standUp(battle, u);
     }
     if (battle.rules.countOut > 0) {
       if (isOutside(battle.grid, u.x, u.y)) {

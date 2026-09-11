@@ -1,5 +1,5 @@
 // Petites fonctions partagées par le moteur, l'IA et les gimmicks (aucune dépendance sur battle.js).
-import { manhattan } from './grid.js';
+import { manhattan, occupies } from './grid.js';
 
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -14,7 +14,7 @@ export const alliesOf = (battle, unit) => living(battle, unit.team).filter((u) =
 export const enemiesOf = (battle, unit) => living(battle, unit.team === 'player' ? 'enemy' : 'player');
 export const unitsWithin = (battle, unit, range, team = null) =>
   living(battle, team).filter((u) => u !== unit && manhattan(u, unit) <= range);
-export const unitAt = (battle, x, y) => battle.units.find((u) => !u.eliminated && u.x === x && u.y === y) || null;
+export const unitAt = (battle, x, y) => battle.units.find((u) => !u.eliminated && occupies(u, x, y)) || null;
 
 export function addMomentum(battle, unit, n) {
   unit.momentum = clamp(Math.round(unit.momentum + n), 0, 100);
