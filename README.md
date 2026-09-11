@@ -1,5 +1,7 @@
 # Parodie Pro Wrestling Tactics
 
+### ▶️ [Jouer maintenant](https://ouellettejeanphilippe-source.github.io/Wrestling/)
+
 Un jeu tactique sur grille à la **Fire Emblem × Chroma Squad**, avec des parodies de lutteurs WWE/AEW.
 Chaque lutteur a un **gimmick** (passif unique, comme dans League of Legends), une **classe**, une **spécialité**,
 un **signature** et un **finisher**. Les matchs se gagnent (ou se perdent avec panache) de plein de façons :
@@ -16,9 +18,8 @@ npm test           # tests du moteur (node:test)
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
 
-**En ligne (GitHub Pages)** : chaque push sur `main` déploie le jeu via `.github/workflows/pages.yml`.
-Première fois seulement : dans *Settings → Pages*, mettre *Source* sur **GitHub Actions**. Le jeu est ensuite servi à
-`https://<utilisateur>.github.io/<dépôt>/`.
+**En ligne** : <https://ouellettejeanphilippe-source.github.io/Wrestling/> — chaque push sur `main` redéploie le jeu
+via `.github/workflows/pages.yml` (rien à installer, ça tourne dans le navigateur, mobile compris).
 
 ## Les deux modes de campagne
 
