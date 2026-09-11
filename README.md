@@ -97,6 +97,38 @@ ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 
 
 - **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les cordes et les coins coûtent
   2 de mouvement ; les ennemis bloquent le passage.
+- **L'élan : le déplacement et le coup ne sont pas deux phases séparées.** Le coup porté vaut ce que vaut la course
+  qui le précède. Un lutteur planté qui frappe son voisin n'a aucun poids.
+
+  | Distance parcourue avant de frapper | Dégâts |
+  | --- | --- |
+  | aucune | −15 % |
+  | 1 case | −5 % |
+  | 2 cases | +5 % |
+  | 3 cases | +15 % |
+  | 4 cases ou plus | +25 % |
+
+  Ça vaut pour les frappes, les aériens, les prises et les armes — pas pour les soumissions ni les provocations, et
+  pas pour un lutteur étourdi, qui serait puni deux fois. Se replacer rapporte aussi jusqu'à 5 de momentum, et
+  **le chemin compte autant que la destination** : c'est le trajet réel qui est mesuré, contournement compris.
+  Sur des matchs simulés, la part des tours comportant un déplacement passe de **17 % à 63 %**.
+
+- **Le statisme s'aggrave.** Un tour sur place est un choix tactique ; trois d'affilée, c'est un match qui s'enlise.
+  Chaque tour passé immobile creuse le plancher des dégâts (−7 % de plus, jusqu'à trois tours) **et refroidit la
+  salle** — dans le catch, le prix d'un match statique, c'est le public. Une seule case parcourue remet le compteur
+  à zéro : l'ankylose ne se traîne pas, elle se secoue.
+
+- **Ce que le coup fait à la grille**, pas seulement aux points de vie. Trois effets rendent le placement *défensif*
+  autant qu'offensif :
+
+  | effet | ce qu'il fait | exemples |
+  | --- | --- | --- |
+  | ➡️ **Ligne** | le coup continue tout droit derrière la cible | Clothesline, Spear, Buckshot Lariat |
+  | 💥 **Zone** | les voisins de la cible prennent une fraction des dégâts | Running Senton, Frog Splash, Suicide Dive |
+  | ↗️ **Recul** | la cible est projetée — vers les cordes, un coin, une table | Chokeslam, Poing K.-O., Big Boot |
+
+  La zone ne fait pas le tri : **un partenaire collé à la cible déguste aussi**. La prévision de combat le dit avant
+  que vous confirmiez.
 - **Momentum** (0–100) : gagné en frappant, en encaissant, en provoquant (+5 par tour). Il **débloque les paliers de
   mouvements** et se dépense à l'usage :
 
@@ -156,6 +188,8 @@ Ils se déclenchent tout seuls quand les conditions sont réunies, s'annoncent d
 | 📣 La foule est debout | Attaquer avec 80+ de chaleur |
 | 🪑 Décor complice | Frapper une cible acculée à un obstacle |
 | 🔗 Enchaînement | Alterner les familles de coups sur la même cible |
+| 💨 Course dans les cordes | **Traverser** les cordes en chemin (pas s'y arrêter) avant de frapper |
+| 🌀 Pris à revers | Arriver dans le dos ou sur le flanc plutôt que de face |
 | 💪 Différence de force | Prise sur un adversaire nettement moins fort |
 
 ## Plusieurs façons de gagner

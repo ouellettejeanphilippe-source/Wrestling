@@ -32,6 +32,37 @@ const PAGES = [
     ],
   },
   {
+    title: 'Ne restez pas planté',
+    icon: '🏃',
+    body: () => [
+      h('p', {}, 'Le déplacement et l’attaque ne sont pas deux choses séparées : ', h('b', {}, 'le coup que vous portez vaut ce que vaut la course qui le précède'), '. Un lutteur immobile qui frappe son voisin n’a aucun poids.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Distance parcourue avant de frapper', 'Dégâts'].map((x) => h('th', {}, x))),
+        [['Aucune — vous n’avez pas bougé', '−15 %'], ['1 case', '−5 %'], ['2 cases', '+5 %'],
+         ['3 cases', '+15 %'], ['4 cases ou plus', '+25 %']]
+          .map(([d, v]) => h('tr', {}, h('td', {}, d), h('td', {}, v)))),
+      h('p', {}, 'Ça vaut pour les frappes, les aériens, les prises et les armes — pas pour les soumissions, qui s’appliquent au sol, ni pour les provocations.'),
+      h('p', {}, 'Se replacer rapporte aussi un peu de momentum, et ', h('b', {}, 'le chemin compte autant que la destination'), ' : passer dans les cordes en courant, ou arriver dans le dos plutôt que de face, déclenche ses propres combos.'),
+      h('p', { class: 'muted' }, 'Même au corps à corps il reste presque toujours une case voisine où se replacer : le malus se contourne, mais il interdit de ne jamais bouger.'),
+      h('p', {}, h('b', {}, 'Et ça s’aggrave.'), ' Un tour sur place est un choix. Trois d’affilée, c’est un match qui s’enlise : le plancher des dégâts s’enfonce encore, ', h('b', {}, 'et la foule décroche'), ' — dans le catch, le prix d’un match statique, c’est le public. Une seule case remet le compteur à zéro.'),
+    ],
+  },
+  {
+    title: 'Ce que le coup fait à la grille',
+    icon: '💥',
+    body: () => [
+      h('p', {}, 'Tous les mouvements ne touchent pas qu’une personne. Trois effets font du placement une question ', h('b', {}, 'défensive'), ' autant qu’offensive : rester aligné ou agglutiné coûte cher.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Effet', 'Ce qu’il fait', 'Exemples'].map((x) => h('th', {}, x))),
+        [['➡️ Ligne', 'Le coup continue tout droit derrière la cible', 'Clothesline, Spear, Buckshot Lariat'],
+         ['💥 Zone', 'Les voisins de la cible prennent une part des dégâts', 'Running Senton, Frog Splash, Suicide Dive'],
+         ['↗️ Recul', 'La cible est projetée — cordes, coin, table', 'Chokeslam, Poing K.-O., Big Boot']]
+          .map(([a, b2, c]) => h('tr', {}, h('td', {}, a), h('td', {}, b2), h('td', {}, c)))),
+      h('p', {}, 'La zone ne fait pas le tri : ', h('b', {}, 'un partenaire collé à la cible déguste aussi'), '. La prévision de combat vous le dit avant que vous confirmiez.'),
+      h('p', { class: 'muted' }, 'Le recul se combine avec le décor : projeter vers un coin, des marches ou une table fait bien plus mal que les dégâts affichés.'),
+    ],
+  },
+  {
     title: 'Les combos récompensent la mise en place',
     icon: '🔗',
     body: () => [

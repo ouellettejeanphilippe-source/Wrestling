@@ -4,7 +4,7 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange } from '../engine/battle.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel } from '../engine/battle.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
@@ -634,6 +634,37 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return box;
   }
 
+  // Qui d'autre est pris dans le mouvement, et de quel côté il est.
+  function spreadPreview(battle, u, tgt, move, dmg) {
+    const eff = (move && move.effects) || {};
+    const out = [];
+    if (eff.push) out.push(['↗️ Recul', `${eff.push} case${eff.push > 1 ? 's' : ''} — décor complice ?`]);
+    if (!eff.line && !eff.splash) return out;
+    const pris = new Set();
+    if (eff.line) {
+      const dx = Math.sign(tgt.x - u.x), dy = Math.sign(tgt.y - u.y);
+      // unitAt tient compte du gabarit : chercher la case exacte raterait un
+      // colosse, qui en occupe quatre. Une prévision qui ment sur ce point est
+      // pire que pas de prévision.
+      if (dx || dy) for (let i = 1; i <= eff.line; i++) {
+        const v = unitAt(battle, tgt.x + dx * i, tgt.y + dy * i);
+        if (v && v !== u && v !== tgt) pris.add(v);
+      }
+    }
+    if (eff.splash) {
+      for (const v of battle.units) {
+        if (v === u || v === tgt || v.eliminated) continue;
+        if (manhattan(v, tgt) === 1) pris.add(v);          // distance entre gabarits
+      }
+    }
+    const part = Math.round(dmg * (eff.line ? 0.7 : eff.splash === true ? 0.5 : eff.splash));
+    if (!pris.size) out.push([eff.line ? '➡️ Traverse' : '💥 Zone', 'personne d’autre dans la zone']);
+    for (const v of pris) {
+      out.push([v.team === u.team ? `⚠️ ${v.name} (allié)` : `↳ ${v.name}`, `~${part} dégâts`]);
+    }
+    return out;
+  }
+
   function renderForecast(u, t, compact = false) {
     const a = ui.action;
     const tgt = t.unit;
@@ -648,6 +679,15 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const crit = Math.round((0.05 + getStats(battle, u).tec * 0.01) * 100);
       afterT = Math.max(0, tgt.hp - dmg);
       mid = [['Précision', `${hit} %`], ['Dégâts', `~${dmg}`], ['Critique', `${crit} %`]];
+      // L'élan doit se voir AVANT de confirmer, sinon le joueur subit un
+      // malus qu'il ne peut pas relier à son déplacement.
+      const el = elanLabel(u.movedTiles, a.move, u);
+      if (el) mid.push([`🏃 ${el.name}`, `${el.travel} case${el.travel > 1 ? 's' : ''} · ${el.good ? '+' : ''}${Math.round((el.mult - 1) * 100)} % dégâts`]);
+      if (el && el.static >= 2) mid.push(['😴 Immobile depuis', `${el.static} tour${el.static > 1 ? 's' : ''} — la foule décroche`]);
+      // Ligne, zone, recul : ce que le coup fait à la GRILLE. Ça doit se voir
+      // avant de confirmer, surtout quand un partenaire est dans la ligne.
+      const spread = spreadPreview(battle, u, tgt, a.move, dmg);
+      for (const row of spread) mid.push(row);
       const cbs = activeCombos(battle, u, tgt, a.move);
       for (const c of cbs) mid.push([`${c.icon} ${c.name}`, `+${Math.round((c.dmg - 1) * 100)} % dégâts`]);
       if (dmg >= tgt.hp && !tgt.down) mid.push(['Résultat', '💫 AU SOL']);
