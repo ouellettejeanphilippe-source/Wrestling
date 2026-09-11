@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS, TORSO } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_GIANT_BACK, BASE_FEM, OVERLAYS, TORSO } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -20,10 +20,11 @@ const POSE = {
   se: { art: 'front', mirror: false }, sw: { art: 'front', mirror: true },
   ne: { art: 'back', mirror: false }, nw: { art: 'back', mirror: true },
 };
-// Le dessin occupe les lignes 2 à 38 : on recadre dessus, sinon le sprite
-// flotte au milieu d'une boîte à moitié vide.
-const ART_TOP = 2, ART_USED = 37;
-const VIEWBOX = { full: `0 ${ART_TOP} ${ART_W} ${ART_USED}`, bust: '9 1 15 15' };
+// Le dessin occupe les lignes 1 à 30 : on recadre dessus, sinon le sprite
+// flotte au milieu d'une boîte à moitié vide. Le buste se cadre sur la boîte
+// crânienne (colonnes 8 à 15, lignes 1 à 8), élargie d'un peu d'air.
+const ART_TOP = 1, ART_USED = 30;
+const VIEWBOX = { full: `0 ${ART_TOP} ${ART_W} ${ART_USED}`, bust: '7 0 10 10' };
 // Le lutteur au sol s'étale : son cadrage prend toute la largeur, plus bas.
 const VIEWBOX_DOWN = `0 ${ART_TOP} ${ART_W} ${ART_USED}`;
 
@@ -84,12 +85,12 @@ const MATERIAL = {
 // manche sur les bras (null = sans manches). open : le vêtement s'ouvre sur
 // la poitrine et laisse voir la peau. straps : deux bretelles sur les épaules.
 const GARMENTS = {
-  shirt: { keys: ['shirt'], rows: [13, 24], sleeves: [14, 18], mat: 'accent' },
-  jacket: { keys: ['jacket'], rows: [13, 24], sleeves: [14, 24], mat: 'attire', open: true },
-  coat: { keys: ['coat'], rows: [13, 31], sleeves: [14, 24], mat: 'attire', open: true },
-  vest: { keys: ['vest', 'suit'], rows: [13, 24], sleeves: null, mat: 'attire', open: true },
-  singlet: { keys: ['singlet'], rows: [19, 27], sleeves: null, mat: 'attire', straps: [14, 18] },
-  sleeve: { keys: ['tattoo_arms'], rows: null, sleeves: [15, 23], mat: 'tattoo', speckle: true },
+  shirt: { keys: ['shirt'], rows: [10, 17], sleeves: [11, 13], mat: 'accent' },
+  jacket: { keys: ['jacket'], rows: [10, 17], sleeves: [11, 17], mat: 'attire', open: true },
+  coat: { keys: ['coat'], rows: [10, 25], sleeves: [11, 17], mat: 'attire', open: true },
+  vest: { keys: ['vest', 'suit'], rows: [10, 17], sleeves: null, mat: 'attire', open: true },
+  singlet: { keys: ['singlet'], rows: [13, 17], sleeves: null, mat: 'attire', straps: [11, 12] },
+  sleeve: { keys: ['tattoo_arms'], rows: null, sleeves: [11, 17], mat: 'tattoo', speckle: true },
 };
 // L'ordre compte : l'encre du tatouage passe sous le tissu, le manteau
 // par-dessus la veste.
@@ -131,48 +132,53 @@ function layersFor(def, back) {
 // Choix de l'archétype de corps.
 const isGiant = (def) => def.weight === 'super' || (def.size && def.size !== 1);
 const archetypeOf = (def) => (isGiant(def) ? 'giant' : def.body === 'fem' ? 'fem' : 'normal');
-// Colonnes du torse à une ligne donnée : la dernière tranche qui commence
-// avant elle.
+// Colonnes du torse à une ligne donnée. La table vient du dessin lui-même :
+// au-dessus des épaules et sous les hanches il n'y a pas de torse, donc pas
+// de vêtement à y peindre.
 function torsoAt(kind, y) {
   const t = TORSO[kind] || TORSO.normal;
-  let hit = t[0];
-  for (const s of t) if (y >= s[0]) hit = s;
-  return [hit[1], hit[2]];
+  return t[y] || null;
 }
 
 // Repeint la peau d'une tranche de lignes aux couleurs d'un tissu, en gardant
 // l'ombrage du corps : c'est lui qui fait les plis.
 function wear(grid, kind, spec) {
   const mat = MATERIAL[spec.mat];
-  const paint = (y, x) => { grid[y][x] = mat[TONE[grid[y][x]]]; };
+  const paint = (y, x, edge) => { grid[y][x] = edge ? mat[0] : mat[1]; };
   const bounds = (y) => torsoAt(kind, y);
   if (spec.rows) {
     for (let y = spec.rows[0]; y <= spec.rows[1] && y < ART_H; y++) {
-      const [l, r] = bounds(y);
+      const span = bounds(y);
+      if (!span) continue;
+      const [l, r] = span;
       const mid = (l + r) / 2;
       for (let x = l; x <= r; x++) {
         if (!SKIN_CHARS.has(grid[y][x])) continue;
         // Un vêtement ouvert laisse une bande de peau au milieu de la poitrine.
-        if (spec.open && Math.abs(x - mid) < 1.5 && y <= spec.rows[0] + 8) continue;
-        paint(y, x);
+        if (spec.open && Math.abs(x - mid) < 1 && y <= spec.rows[0] + 5) continue;
+        paint(y, x, x === l || x === r);
       }
     }
   }
   if (spec.straps) {
     for (let y = spec.straps[0]; y <= spec.straps[1]; y++) {
-      const [l, r] = bounds(y);
-      for (const x of [l + 1, l + 2, r - 2, r - 1]) if (SKIN_CHARS.has(grid[y][x])) paint(y, x);
+      const span = bounds(y);
+      if (!span) continue;
+      const [l, r] = span;
+      for (const x of [l, l + 1, r - 1, r]) if (SKIN_CHARS.has(grid[y][x])) paint(y, x, false);
     }
   }
   if (spec.sleeves) {
     for (let y = spec.sleeves[0]; y <= spec.sleeves[1] && y < ART_H; y++) {
-      const [l, r] = bounds(y);
+      const span = bounds(y);
+      if (!span) continue;
+      const [l, r] = span;
       for (let x = 0; x < ART_W; x++) {
         if (x >= l && x <= r) continue;                       // le torse, pas le bras
         if (!SKIN_CHARS.has(grid[y][x])) continue;
         // Le tatouage est ajouré, sinon le bras devient un bloc noir.
         if (spec.speckle && (x * 3 + y * 5) % 4 === 0) continue;
-        paint(y, x);
+        paint(y, x, x < l - 2 || x > r + 2);
       }
     }
   }
@@ -181,7 +187,7 @@ function wear(grid, kind, spec) {
 function compose(def, back, down) {
   const kind = archetypeOf(def);
   const base = down ? BASE_DOWN
-    : kind === 'giant' ? BASE_GIANT
+    : kind === 'giant' ? (back ? BASE_GIANT_BACK : BASE_GIANT)
       : kind === 'fem' && !back ? BASE_FEM
         : back ? BASE_BACK : BASE_FRONT;
   const grid = base.map((r) => [...r]);
