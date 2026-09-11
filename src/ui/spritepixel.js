@@ -347,6 +347,25 @@ function compose(def, back, down, frame) {
   return grid;
 }
 
+// LE CONTOUR S'OUVRE DANS LES CHEVEUX
+//
+// Chez Crono, le contour disparaît entre les mèches : c'est ce qui rend une
+// chevelure vivante au lieu d'en faire un casque. Partout ailleurs il reste
+// plein et de la même encre — c'est lui qui porte la silhouette.
+//
+// J'avais d'abord ÉCLAIRCI le contour du côté éclairé, en extrapolant. C'était
+// faux : la référence colore son encre (prune, jamais noir) et l'ouvre dans
+// les cheveux, elle ne l'éclaircit pas. L'éclaircir gonflait les jambes d'une
+// colonne grise et les transformait en bouillie.
+const HAIR_TINT = 0.82;
+const HAIR_CHARS = new Set(['h', 'H', 'G']);
+function litInk(grid, P, y, x) {
+  const ch = grid[y][x + 1];
+  if (!ch || !HAIR_CHARS.has(ch)) return null;
+  const c = P[ch];
+  return c ? mix(INK, c, HAIR_TINT) : null;
+}
+
 export function spriteSvg(def, opts = {}) {
   const view = opts.view === 'bust' ? 'bust' : 'full';
   const dir = POSE[opts.dir] ? opts.dir : 'se';
@@ -358,10 +377,16 @@ export function spriteSvg(def, opts = {}) {
   for (let y = 0; y < ART_H; y++) {
     let x = 0;
     while (x < ART_W) {
-      const color = P[grid[y][x]];
+      const ch = grid[y][x];
+      const color = ch === 'K' ? (litInk(grid, P, y, x) || INK) : P[ch];
       if (!color) { x++; continue; }
       let end = x;
-      while (end + 1 < ART_W && P[grid[y][end + 1]] === color) end++;
+      while (end + 1 < ART_W) {
+        const n = grid[y][end + 1];
+        const nc = n === 'K' ? (litInk(grid, P, y, end + 1) || INK) : P[n];
+        if (nc !== color) break;
+        end++;
+      }
       body += `<rect x="${x}" y="${y}" width="${end - x + 1}" height="1" fill="${color}"/>`;
       x = end + 1;
     }
