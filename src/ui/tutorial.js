@@ -44,6 +44,7 @@ const PAGES = [
       h('p', {}, 'Ça vaut pour les frappes, les aériens, les prises et les armes — pas pour les soumissions, qui s’appliquent au sol, ni pour les provocations.'),
       h('p', {}, 'Se replacer rapporte aussi un peu de momentum, et ', h('b', {}, 'le chemin compte autant que la destination'), ' : passer dans les cordes en courant, ou arriver dans le dos plutôt que de face, déclenche ses propres combos.'),
       h('p', { class: 'muted' }, 'Même au corps à corps il reste presque toujours une case voisine où se replacer : le malus se contourne, mais il interdit de ne jamais bouger.'),
+      h('p', {}, h('b', {}, 'Les cordes sont un tremplin, pas un mur.'), ' On ne les escalade pas, on rebondit dessus : y entrer coûte 1, en repartir est gratuit. Passer par les cordes fait aller ', h('b', {}, 'plus loin'), ' qu’aller tout droit — donc plus d’élan, et le combo 💨 Course dans les cordes en prime. Le coin, lui, coûte 2 : on y ', h('b', {}, 'monte'), ', et la hauteur fait mal en plongeon.'),
       h('p', {}, h('b', {}, 'Et ça s’aggrave.'), ' Un tour sur place est un choix. Trois d’affilée, c’est un match qui s’enlise : le plancher des dégâts s’enfonce encore, ', h('b', {}, 'et la foule décroche'), ' — dans le catch, le prix d’un match statique, c’est le public. Une seule case remet le compteur à zéro.'),
     ],
   },

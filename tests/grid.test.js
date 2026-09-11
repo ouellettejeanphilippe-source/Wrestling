@@ -34,8 +34,28 @@ test('les cordes coûtent plus cher et les ennemis bloquent le passage', () => {
   assert.ok(!r.has('8,7'), 'la case de l’ennemi est inaccessible');
   assert.ok(r.has('7,6'));
   const r2 = reachable(g, [me], { x: 6, y: 7, team: 'player', flags: {} }, 2);
-  assert.equal(r2.get('5,7').cost, 2, 'entrer dans les cordes coûte 2');
-  assert.ok(!r2.has('4,7'), 'sortir du ring en un tour de 2 MOV est impossible');
+  assert.equal(r2.get('5,7').cost, 1, 'entrer dans les cordes coûte 1 : on rebondit dessus, on ne les escalade pas');
+  // Basculer dehors est facile (2), y rentrer coûte plus cher (3 : les cordes
+  // plus le dénivelé). C'est l'asymétrie du compte à l'extérieur — on s'échappe
+  // d'un pas, on revient en peinant.
+  assert.equal(r2.get('4,7').cost, 2, 'sortir du ring : cordes + plancher, la descente est gratuite');
+});
+
+test('les cordes sont un tremplin : en repartir est gratuit', () => {
+  const g = buildArena('standard');
+  const u = { x: 6, y: 7, team: 'player', flags: {} };        // sur le tapis, à côté des cordes
+  const r = reachable(g, [], u, 2);
+  assert.equal(r.get('5,7').cost, 1, 'entrer dans les cordes : 1');
+  assert.equal(r.get('6,7') ? 0 : null, 0);
+  // 5,7 = corde ; 6,7 = tapis. Repartir de la corde vers le tapis ne coûte rien,
+  // donc une case atteinte VIA les cordes ne coûte pas plus cher que sans.
+  const parLesCordes = reachable(g, [], { x: 6, y: 6, team: 'player', flags: {} }, 3);
+  assert.equal(parLesCordes.get('5,7').cost, 2, 'tapis → tapis → corde');
+  assert.ok(parLesCordes.get('6,8') && parLesCordes.get('6,8').cost <= 2);
+
+  // Le rebond ne vaut pas de corde à corde, sinon on fait le tour du ring pour rien.
+  const long = reachable(g, [], { x: 5, y: 5, team: 'player', flags: {} }, 3);
+  assert.equal(long.get('5,8').cost, 3, 'longer les cordes coûte plein tarif');
 });
 
 // --------------------------------------------------------------- gabarits 2×2
@@ -93,10 +113,14 @@ test('le plateau a du relief : le ring est une plateforme qu’il faut escalader
 
   // depuis le plancher, entrer dans le ring coûte le terrain PLUS le dénivelé
   const u = { x: 4, y: 8, team: 'player', flags: {} };
-  const petit = reachable(g, [], u, 3);
-  assert.ok(!petit.has(key(5, 8)), '3 MOV ne suffisent pas à grimper sur le tablier');
-  const grand = reachable(g, [], u, 4);
-  assert.ok(grand.has(key(5, 8)), '4 MOV suffisent : 2 de cordes + 2 de dénivelé');
+  const petit = reachable(g, [], u, 2);
+  assert.ok(!petit.has(key(5, 8)), '2 MOV ne suffisent pas à grimper sur le tablier');
+  const grand = reachable(g, [], u, 3);
+  assert.ok(grand.has(key(5, 8)), '3 MOV suffisent : 1 de cordes + 2 de dénivelé');
+  assert.equal(grand.get(key(5, 8)).cost, 3, 'le dénivelé se paie même sur les cordes');
+  // Le rebond ne dispense pas de monter : on entre dans le ring pour 3, on en
+  // ressort pour 2, et on ne saute pas au coin depuis le plancher.
+  assert.equal(reachable(g, [], { x: 6, y: 7, team: 'player', flags: {} }, 4).get(key(4, 7)).cost, 2);
   // le coin culmine trop haut pour qu'on y saute depuis le plancher : il faut
   // passer par le tapis, donc en faire le tour — beaucoup plus loin.
   const coin = reachable(g, [], { x: 4, y: 12, team: 'player', flags: {} }, 5);

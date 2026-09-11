@@ -73,16 +73,19 @@ test('annuler un déplacement rend la jauge et efface le trajet', () => {
   assert.equal(u.movePath, null);
 });
 
-test('« Pris à revers » se déclenche quand on contourne, pas de face', () => {
+test('« Pris à revers » demande le dos ET le déplacement', () => {
   const b = mk(['jean_sina'], ['gunter']);
   const [u, e] = b.units;
-  e.x = u.x + 1; e.y = u.y;
-  e.facing = 'nw';                                   // l'ennemi regarde vers le joueur
-  const face = activeCombos(b, u, e, strike).some((c) => c.id === 'blindside');
-  e.facing = 'se';                                   // il regarde ailleurs
-  const dos = activeCombos(b, u, e, strike).some((c) => c.id === 'blindside');
-  assert.equal(face, false, 'de face, pas de bonus');
-  assert.equal(dos, true, 'dans le dos, bonus');
+  e.x = u.x + 1; e.y = u.y;                       // le joueur est à l'ouest de l'ennemi
+  const combo = (facing, travel) => {
+    e.facing = facing;
+    const ctx = comboContextFor(b, u, e, strike, { x: u.x, y: u.y, path: null, travel });
+    return activeCombos(b, u, e, strike, ctx).some((c) => c.id === 'blindside');
+  };
+  assert.equal(combo('nw', 1), false, 'l’ennemi regarde vers nous : pas de bonus');
+  assert.equal(combo('sw', 1), false, 'de flanc non plus — il faut le dos, pas « tout sauf de face »');
+  assert.equal(combo('se', 1), true, 'il regarde à l’opposé : contourné');
+  assert.equal(combo('se', 0), false, 'être déjà derrière ne compte pas : il faut y arriver');
 });
 
 test('« Course dans les cordes » demande de TRAVERSER, pas de s’y arrêter', () => {

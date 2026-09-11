@@ -42,10 +42,14 @@ export const COMBOS = [
   },
   {
     id: 'blindside', name: 'Pris à revers', icon: '🌀',
-    hint: 'Contournez : frappez hors du champ de vision',
-    desc: 'Arriver dans le dos ou sur le flanc plutôt que de face. Le chemin le plus court n’est pas toujours le meilleur.',
-    when: (b, a, t, m, ctx) => ctx.blindside && ['strike', 'grapple', 'aerial'].includes(m.type),
-    dmg: 1.2, momentum: 8, heat: 6,
+    hint: 'Contournez : bougez, puis frappez dans le dos',
+    desc: 'Arriver exactement derrière la cible, et y ARRIVER — être déjà là ne compte pas. C’est le contournement qu’on récompense, pas la position.',
+    when: (b, a, t, m, ctx) => ctx.blindside && ctx.travel >= 1
+      && ['strike', 'grapple', 'aerial'].includes(m.type),
+    // Un combo qui se gagne souvent doit se payer peu : sur des matchs
+    // simulés il se déclenche sur la moitié des coups d'une IA qui cherche
+    // l'angle. Récompense réelle, pas prime déguisée.
+    dmg: 1.12, momentum: 8, heat: 6,
   },
   {
     id: 'ground', name: 'Au sol et martelé', icon: '🔨',

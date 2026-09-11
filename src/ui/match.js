@@ -20,8 +20,8 @@ const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weap
 const TILE_HELP = {
   floor: 'Plancher : hors du ring. Compte de l’arbitre dans les matchs avec règles.',
   ring: 'Tapis du ring.',
-  rope: 'Cordes : coût 2 pour y entrer. Y être projeté étourdit. Rope break possible pour les soumissions. Bataille royale : on peut y être jeté par-dessus.',
-  turnbuckle: 'Coin : coût 2. Plongeons aériens +25 % depuis ici. Y être projeté = 10 dégâts + étourdi. Cage : point d’escalade.',
+  rope: 'Cordes : TREMPLIN. Y entrer coûte 1, en repartir est GRATUIT — passer par les cordes fait aller plus loin qu’aller tout droit, et déclenche 💨 Course dans les cordes. Y être projeté étourdit. Rope break pour les soumissions. Bataille royale : on peut y être jeté par-dessus.',
+  turnbuckle: 'Coin : coût 2, on y MONTE. Plongeons aériens +25 % depuis ici (et le dénivelé ajoute encore). Y être projeté = 10 dégâts + étourdi. Cage : point d’escalade.',
   ramp: 'Rampe d’entrée : hors du ring. Les renforts arrivent par ici.',
   table: 'Table des commentateurs : projetez-y quelqu’un pour 25 dégâts et un moment mémorable.',
   debris: 'Table brisée. Rien à voir ici, circulez.',
