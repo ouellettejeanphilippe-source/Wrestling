@@ -871,3 +871,42 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   .picker { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
   .picker-detail { position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow-y: auto; }
 }
+
+/* ------------------------------------------------- cordes du ring (faux 3D)
+   Rubans posés le long des arêtes du ring et remontés sur l'axe « haut de
+   l'écran ». Ce qui les rend crédibles, c'est l'ordre : le fond passe sous les
+   lutteurs, le devant par-dessus. Les poteaux portent leur colonne en ombre. */
+.ring-rope, .ring-post { position: absolute; pointer-events: none; }
+.ring-rope {
+  --thick: calc(var(--cell) * 0.17);
+  background: linear-gradient(#f0e3c2, var(--rope, #c8323f) 38%, #6d151d);
+  border-radius: calc(var(--thick));
+  box-shadow: 0 0 0 1px #00000055;
+}
+.ring-rope.h { height: var(--thick); margin-top: calc(var(--thick) / -2); }
+.ring-rope.v { width: var(--thick); margin-left: calc(var(--thick) / -2); }
+.ring-rope.rope-1 { --rope: #d8d2c4; }
+.ring-rope.rope-2 { --rope: #c8323f; }
+/* le fond passe derrière les lutteurs, le devant par-dessus : c'est cette
+   occultation qui donne le volume, pas le dégradé */
+/* Pas de z-index : les cordes sont insérées dans l'ordre du peintre, entre les
+   cases, exactement comme le relief. Une case surélevée est transformée, donc
+   elle forme son propre contexte d'empilement — un z-index ne pourrait pas
+   glisser une corde entre une case et le lutteur qui s'y tient. */
+.ring-post {
+  --w: calc(var(--cell) * 0.42);
+  width: var(--w); height: var(--w);
+  margin: calc(var(--w) / -2) 0 0 calc(var(--w) / -2);
+  border-radius: 3px;
+  background: linear-gradient(#f6c445, #b3232f 45%, #6d151d);
+  /* la colonne du poteau : une ombre portée dans le sens inverse de la montée */
+  box-shadow:
+    calc(var(--lx, -1) * var(--post) * -0.5) calc(var(--ly, -1) * var(--post) * -0.5) 0 #8d1f28,
+    calc(var(--lx, -1) * var(--post) * -1) calc(var(--ly, -1) * var(--post) * -1) 0 #5b1119,
+    0 0 0 1px var(--ink);
+}
+/* En iso, les câbles sont de vrais objets : la case ne les peint plus, elle
+   ne garde que le rebord du tablier. */
+.view-iso .t-rope {
+  background: linear-gradient(180deg, #cbbb99 0 22%, var(--canvas) 22% 100%);
+}

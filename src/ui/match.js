@@ -61,6 +61,9 @@ function boardZoom() {
   try { return clampZoom(Number(localStorage.getItem(ZOOM_KEY)) || 1); } catch { return 1; }
 }
 function setBoardZoom(z) { try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* mode privé */ } }
+// Hauteur des trois câbles et des poteaux, en cases (voir ringRopes).
+const ROPE_LEVELS = [0.42, 0.74, 1.06];
+const POST_H = 1.28;
 // Les quatre directions du regard, dans l'ordre des quarts de tour (+x, +y, -x, -y).
 const FACE_ORDER = ['se', 'sw', 'nw', 'ne'];
 // Direction telle qu'elle apparaît À L'ÉCRAN une fois la caméra tournée.
@@ -342,7 +345,75 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       }, kid || null);
       const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
       el.board.append(box(cx - 2, cy - 1, 4, 2, 'ring-logo', h('span', {}, 'PPW')));
+      if (boardWrap.classList.contains('view-iso')) {
+        // Les cordes s'insèrent dans l'ordre du peintre, comme les cases : un
+        // z-index ne suffirait pas, puisque chaque case surélevée est
+        // transformée, donc forme son propre contexte d'empilement.
+        for (const { el: rope, depth: d } of ringRopes(ring, depth)) {
+          const after = [...el.board.children].find((c) => c.dataset.x !== undefined
+            && depth(Number(c.dataset.x), Number(c.dataset.y)) > d);
+          el.board.insertBefore(rope, after || null);
+        }
+      }
     }
+  }
+
+
+  // CORDES EN FAUX 3D
+  //
+  // Une corde est un ruban posé le long d'une arête du ring, puis décalé à
+  // parts égales sur les deux axes de la grille : après la projection
+  // isométrique, ce décalage tombe pile vers le haut de l'écran, donc le ruban
+  // « monte » au-dessus du tapis sans quitter la 2D. Trois hauteurs, quatre
+  // côtés, quatre poteaux.
+  //
+  // Ce qui fait la lecture, c'est l'occultation : les deux côtés du fond
+  // passent derrière les lutteurs, les deux côtés de devant passent par-dessus.
+  // Sans ça, les cordes ne sont qu'un décor peint.
+  function ringRopes(ring, depth) {
+    const rot = boardRot();
+    // « vers le haut de l'écran », exprimé dans le repère de la grille
+    const LX = [-1, -1, 1, 1][rot], LY = [-1, 1, 1, -1][rot];
+    const px = (n) => `calc(${n} * (var(--cell) + 2px))`;
+    const up = (n) => `translate(${px(LX * n)}, ${px(LY * n)})`;
+    const x0 = ring.rx0, y0 = ring.ry0, x1 = ring.rx1 + 1, y1 = ring.ry1 + 1;
+    const out = [];
+    const sides = [
+      { left: x0, top: y0, w: x1 - x0, horiz: true },
+      { left: x0, top: y1, w: x1 - x0, horiz: true },
+      { left: x0, top: y0, w: y1 - y0, horiz: false },
+      { left: x1, top: y0, w: y1 - y0, horiz: false },
+    ];
+    // Profondeur d'un côté : celle de son milieu, comme pour une case. Le côté
+    // du fond se glisse ainsi juste après le tablier qu'il longe et juste avant
+    // les lutteurs du tapis ; celui de devant passe après tout le monde.
+    for (const s of sides) {
+      const mx = s.horiz ? (s.left + s.w / 2) : s.left;
+      const my = s.horiz ? s.top : (s.top + s.w / 2);
+      for (let i = 0; i < ROPE_LEVELS.length; i++) {
+        out.push({
+          depth: depth(mx, my),
+          el: h('div', {
+            class: `ring-rope ${s.horiz ? 'h' : 'v'} rope-${i}`,
+            style: {
+              left: px(s.left), top: px(s.top),
+              [s.horiz ? 'width' : 'height']: px(s.w),
+              transform: up(ROPE_LEVELS[i]),
+            },
+          }),
+        });
+      }
+    }
+    for (const [cx2, cy2] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      out.push({
+        depth: depth(cx2, cy2),
+        el: h('div', {
+          class: 'ring-post',
+          style: { left: px(cx2), top: px(cy2), '--post': px(POST_H), transform: up(POST_H) },
+        }),
+      });
+    }
+    return out;
   }
 
   function threatRange(enemy) {
