@@ -1,0 +1,20 @@
+{
+  "name": "Parodie Pro Wrestling Tactics",
+  "short_name": "PPW Tactics",
+  "description": "Jeu tactique sur grille avec des parodies de lutteurs : gimmicks passifs, trois actes, et des tas de façons de gagner.",
+  "lang": "fr",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1526",
+  "theme_color": "#241a33",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

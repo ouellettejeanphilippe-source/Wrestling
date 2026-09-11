@@ -81,6 +81,13 @@ button { font: inherit; cursor: pointer; }
 .btn.small { padding: 4px 9px; font-size: 0.78rem; border-width: 2px; box-shadow: var(--pop-sm); }
 .btn.big { font-family: var(--display); font-size: 0.8rem; padding: 14px 22px; }
 .btn.wide { width: 100%; font-size: 1rem; padding: 11px; }
+/* Installation : vert, parce que ce n'est pas une action de jeu. Le bouton
+   n'apparaît que si le navigateur a vraiment de quoi installer, d'où le
+   [hidden] — que .btn ne doit surtout pas écraser. */
+.btn.install { background: var(--green); color: var(--ink); }
+.btn.install:hover:not(:disabled) { background: #7ade85; }
+.btn[hidden] { display: none !important; }
+.install-hint { color: var(--muted); font-size: 0.85rem; text-align: center; margin: 2px 0 0; }
 
 input[type=text], select {
   font: inherit; background: var(--ink); color: var(--text);
