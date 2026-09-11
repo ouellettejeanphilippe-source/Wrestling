@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS, GIANT_OVERLAYS } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -67,9 +67,11 @@ function palette(def) {
 // et enfin ce que le lutteur tient. Chaque couche a la même règle : le '.'
 // laisse voir le dessous, tout le reste écrase.
 const LAYER_ORDER = [
-  'shirt', 'singlet', 'vest', 'jacket',              // torse
-  'bald', 'long_hair',                                // crâne
-  'beard', 'goatee', 'mustache',                      // pilosité
+  'sleeve',                                           // peau (tatouages)
+  'shirt', 'singlet', 'vest', 'jacket', 'coat',       // torse
+  'scarf',                                            // cou
+  'bald', 'long_hair', 'streak',                      // crâne
+  'beard', 'goatee', 'mustache', 'horseshoe_stache',  // pilosité
   'paint_full', 'paint_half', 'mask',                 // visage
   'cap', 'bandana', 'cowboy_hat', 'hood',             // couvre-chef
   'sunglasses',                                       // yeux
@@ -77,12 +79,19 @@ const LAYER_ORDER = [
 ];
 // Certaines caractéristiques du roster partagent un même dessin.
 const ALIASES = {
+  long_hair: ['long_hair', 'curly_hair', 'messy_hair'],
+  sleeve: ['tattoo_arms'],
+  scarf: ['scarf'],
   beard: ['beard', 'beard_big', 'stubble'],
+  mustache: ['mustache'],
   cap: ['cap', 'headband'],
   mask: ['mask', 'fiend_mask'],
   paint_full: ['paint_full', 'paint_evil'],
   vest: ['vest', 'suit'],
   bat: ['bat', 'skateboard'],
+  coat: ['coat'],
+  horseshoe_stache: ['horseshoe'],
+  streak: ['streak'],
   beer: ['beer', 'bottle', 'teeth_jar'],
 };
 function layersFor(def) {
@@ -98,7 +107,7 @@ function layersFor(def) {
   return out;
 }
 // De dos, seul ce qui se voit par derrière subsiste.
-const BACK_LAYERS = new Set(['shirt', 'singlet', 'vest', 'jacket', 'mask', 'cap', 'bandana', 'cowboy_hat', 'hood', 'long_hair', 'bat']);
+const BACK_LAYERS = new Set(['bald', 'shirt', 'singlet', 'vest', 'jacket', 'coat', 'sleeve', 'mask', 'cap', 'bandana', 'cowboy_hat', 'hood', 'long_hair', 'streak', 'bat']);
 function layersForBack(def) {
   const f = new Set((def.look || {}).features || []);
   return LAYER_ORDER.filter((n) => BACK_LAYERS.has(n) && OVERLAYS[n]
@@ -116,15 +125,24 @@ function compose(def, back, down) {
       : def.body === 'fem' && !back ? BASE_FEM
         : back ? BASE_BACK : BASE_FRONT;
   const grid = base.map((r) => [...r]);
-  if (isGiant(def) && !down) return grid;   // le colosse a son propre dessin, sans couches
+  const apply = (layers) => {
+    for (const layer of layers) {
+      layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
+    }
+    return grid;
+  };
+  // Le colosse est dessiné dans son propre cadre : ses couches lui sont propres.
+  if (isGiant(def) && !down) {
+    const f = new Set((def.look || {}).features || []);
+    return apply(Object.entries(GIANT_OVERLAYS)
+      .filter(([n]) => (ALIASES[n] || [n]).some((k) => f.has(k)))
+      .map(([, art]) => art));
+  }
   // Au sol, la tête n'est plus au même endroit : les couches de tête ne
   // s'appliquent pas, seule la palette distingue les lutteurs.
   if (down) return grid;
   // De dos, on ne voit ni visage ni barbe : seules les couches de tête comptent.
-  for (const layer of (back ? layersForBack(def) : layersFor(def))) {
-    layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
-  }
-  return grid;
+  return apply(back ? layersForBack(def) : layersFor(def));
 }
 
 export function spriteSvg(def, opts = {}) {
