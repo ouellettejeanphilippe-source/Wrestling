@@ -261,6 +261,15 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
    (comme une console tactique) — les zones vides du HUD laissent passer les clics. */
 .m-scene { position: relative; flex: 1; min-height: 0; }
 .board-wrap { position: absolute; inset: 0; overflow: visible; display: flex; flex-direction: column; justify-content: center; }
+/* Zoomé, le plateau dépasse de sa boîte : elle devient défilable, et « safe
+   center » garde le haut atteignable — un centrage flex ordinaire le rognerait. */
+.board-wrap.zoomed { overflow: auto; justify-content: safe center; overscroll-behavior: contain; cursor: grab; scrollbar-width: thin; }
+.board-wrap.zoomed.panning { cursor: grabbing; }
+.board-wrap.zoomed::-webkit-scrollbar { width: 8px; height: 8px; }
+.board-wrap.zoomed::-webkit-scrollbar-thumb { background: #ffffff24; border-radius: 4px; }
+.zoom-ctl { display: inline-flex; align-items: center; gap: 2px; }
+.zoom-ctl .btn { min-width: 26px; padding-inline: 6px; }
+.zoom-ctl .zoom-val { min-width: 52px; font-variant-numeric: tabular-nums; }
 .hud { position: absolute; z-index: 12; display: flex; flex-direction: column; gap: 7px; pointer-events: none; max-width: min(400px, 42%); }
 .hud > * { pointer-events: auto; }
 .hud-tl { top: 0; left: 0; right: 0; max-width: none; }
@@ -698,6 +707,7 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
    s'affiche droit, face caméra. Les surbrillances, elles, restent sur le tapis.
    =========================================================================== */
 .board-stage { width: max-content; max-width: 100%; align-self: center; }
+.zoomed .board-stage { max-width: none; }
 .board-wrap.view-iso {
   --iso-span: calc((var(--cols, 14) + var(--rows, 10)) * (var(--cell) + 2px));
   --iso-w: calc(var(--iso-span) * 0.7071);
@@ -814,4 +824,89 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
     box-shadow: var(--pop); padding: 8px 10px; font-weight: 700; font-size: 0.82rem;
   }
   .rotate-hint .btn { background: var(--ink); color: var(--gold); }
+}
+
+/* ---------------------------------------------------------------- sélection
+   Grille de portraits + fiche en dessous : la fiche complète reste lisible,
+   mais elle ne se répète plus trente fois dans la page. */
+.picker { display: grid; gap: 10px; }
+.picker-grid {
+  display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+}
+.picker-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 2px 4px; border: 2px solid #ffffff1f; border-radius: 8px;
+  background: linear-gradient(#ffffff0a, #0000001a); color: inherit;
+  font: inherit; cursor: pointer; overflow: hidden;
+}
+.picker-tile:hover { border-color: #ffffff40; }
+.picker-tile.focus { border-color: var(--gold, #f6c445); box-shadow: 0 0 0 2px #f6c44540; }
+.picker-tile.picked { background: linear-gradient(#f6c4451f, #0000002a); border-color: var(--gold, #f6c445); }
+.picker-art { width: 100%; height: 58px; display: block; flex: 0 0 auto; }
+.picker-art svg { width: 100%; height: 100%; }
+.picker-name {
+  font-size: 10px; line-height: 1.15; text-align: center; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+.picker-mark {
+  position: absolute; top: 2px; right: 3px; font-size: 11px; color: #101; opacity: 0;
+  background: var(--gold, #f6c445); border-radius: 50%; width: 15px; height: 15px;
+  display: grid; place-items: center;
+}
+.picker-tile.picked .picker-mark { opacity: 1; }
+.picker-detail .wcard { margin: 0; }
+.pick-btn { width: 100%; margin-top: 8px; }
+.hint { margin: 2px 0 6px; font-size: 12px; }
+.muted.ok { color: var(--gold, #f6c445); font-weight: 700; }
+/* Téléphone à la verticale : la grille défile dans sa propre boîte pour que la
+   fiche reste à portée, sans avoir à passer trente portraits avant de la voir. */
+@media (max-width: 699px) {
+  .picker-grid { max-height: 42vh; overflow-y: auto; padding-right: 2px; }
+}
+/* Dès qu'il y a de la largeur (téléphone en paysage compris) : grille à gauche,
+   fiche à droite qui suit le défilement. */
+@media (min-width: 700px) {
+  .picker { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
+  .picker-detail { position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow-y: auto; }
+}
+
+/* ------------------------------------------------- cordes du ring (faux 3D)
+   Rubans posés le long des arêtes du ring et remontés sur l'axe « haut de
+   l'écran ». Ce qui les rend crédibles, c'est l'ordre : le fond passe sous les
+   lutteurs, le devant par-dessus. Les poteaux portent leur colonne en ombre. */
+.ring-rope, .ring-post { position: absolute; pointer-events: none; }
+.ring-rope {
+  --thick: calc(var(--cell) * 0.17);
+  background: linear-gradient(#f0e3c2, var(--rope, #c8323f) 38%, #6d151d);
+  border-radius: calc(var(--thick));
+  box-shadow: 0 0 0 1px #00000055;
+}
+.ring-rope.h { height: var(--thick); margin-top: calc(var(--thick) / -2); }
+.ring-rope.v { width: var(--thick); margin-left: calc(var(--thick) / -2); }
+.ring-rope.rope-1 { --rope: #d8d2c4; }
+.ring-rope.rope-2 { --rope: #c8323f; }
+/* le fond passe derrière les lutteurs, le devant par-dessus : c'est cette
+   occultation qui donne le volume, pas le dégradé */
+/* Pas de z-index : les cordes sont insérées dans l'ordre du peintre, entre les
+   cases, exactement comme le relief. Une case surélevée est transformée, donc
+   elle forme son propre contexte d'empilement — un z-index ne pourrait pas
+   glisser une corde entre une case et le lutteur qui s'y tient. */
+.ring-post {
+  --w: calc(var(--cell) * 0.42);
+  width: var(--w); height: var(--w);
+  margin: calc(var(--w) / -2) 0 0 calc(var(--w) / -2);
+  border-radius: 3px;
+  background: linear-gradient(#f6c445, #b3232f 45%, #6d151d);
+  /* la colonne du poteau : une ombre portée dans le sens inverse de la montée */
+  box-shadow:
+    calc(var(--lx, -1) * var(--post) * -0.5) calc(var(--ly, -1) * var(--post) * -0.5) 0 #8d1f28,
+    calc(var(--lx, -1) * var(--post) * -1) calc(var(--ly, -1) * var(--post) * -1) 0 #5b1119,
+    0 0 0 1px var(--ink);
+}
+/* En iso, les câbles sont de vrais objets : la case ne les peint plus, elle
+   ne garde que le rebord du tablier. */
+.view-iso .t-rope {
+  background: linear-gradient(180deg, #cbbb99 0 22%, var(--canvas) 22% 100%);
 }

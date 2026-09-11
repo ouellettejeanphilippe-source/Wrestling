@@ -74,3 +74,65 @@ export function unitCard(battle, u, opts = {}) {
     h('div', { class: 'gimmick small' }, h('b', {}, g ? g.name : u.gimmick), h('div', {}, g ? g.desc : '')),
   );
 }
+
+// Sélection de lutteurs façon borne d'arcade : une grille de portraits, et la
+// fiche complète qui se remplit en dessous quand on en pointe un. Empiler
+// trente fiches entières demandait un défilement interminable sur téléphone,
+// alors que la grille tient en un écran et garde les choix visibles.
+//
+// Un premier appui pointe (la fiche se remplit), un second choisit. Le bouton
+// de la fiche fait la même chose pour qui préfère viser une cible large.
+export function rosterPicker(defs, opts = {}) {
+  const max = opts.max || Infinity;
+  const picked = new Set(opts.picked || []);
+  const onChange = opts.onChange || (() => {});
+  let focus = defs[0];
+
+  const detail = h('div', { class: 'picker-detail' });
+  const grid = h('div', { class: 'picker-grid' });
+  const tiles = new Map();
+
+  function toggle(def) {
+    if (picked.has(def.id)) picked.delete(def.id);
+    else if (picked.size >= max) return { ok: false, reason: `Maximum ${max} lutteur(s)` };
+    else picked.add(def.id);
+    paint();
+    onChange([...picked]);
+    return { ok: true };
+  }
+  function paint() {
+    for (const [id, t] of tiles) {
+      t.classList.toggle('picked', picked.has(id));
+      t.classList.toggle('focus', focus && id === focus.id);
+      t.setAttribute('aria-pressed', picked.has(id) ? 'true' : 'false');
+    }
+    detail.replaceChildren(wrestlerCard(focus, {
+      extra: h('button', {
+        class: `btn ${picked.has(focus.id) ? 'ghost' : 'primary'} pick-btn`,
+        onclick: () => { const r = toggle(focus); if (!r.ok && opts.onFull) opts.onFull(r.reason); },
+      }, picked.has(focus.id) ? '✗ Retirer de l’équipe' : '✓ Ajouter à l’équipe'),
+    }));
+  }
+
+  for (const def of defs) {
+    const tile = h('button', {
+      class: 'picker-tile', type: 'button', title: `${def.name} — « ${def.nick} »`,
+      onclick: () => {
+        // Pointer d'abord, choisir ensuite : on peut lire la fiche avant de
+        // s'engager, et un second appui au même endroit valide.
+        if (focus && focus.id === def.id) { const r = toggle(def); if (!r.ok && opts.onFull) opts.onFull(r.reason); return; }
+        focus = def;
+        paint();
+      },
+    }, avatar(def, 0, { view: 'full', bg: 'none', fill: true, class: 'picker-art' }),
+      h('span', { class: 'picker-name' }, def.name),
+      h('span', { class: 'picker-mark' }, '✓'));
+    tiles.set(def.id, tile);
+    grid.append(tile);
+  }
+  paint();
+
+  const box = h('div', { class: 'picker' }, grid, detail);
+  box.picked = picked;
+  return box;
+}

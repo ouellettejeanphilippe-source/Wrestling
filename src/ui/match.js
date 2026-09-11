@@ -51,6 +51,19 @@ function boardRot() {
   try { return (Number(localStorage.getItem(ROT_KEY)) || 0) % 4; } catch { return 0; }
 }
 function setBoardRot(r) { try { localStorage.setItem(ROT_KEY, String(r)); } catch { /* mode privé */ } }
+// Zoom de caméra : multiplicateur appliqué à la taille de case calculée par
+// fitBoard. 1 = « tout le plateau tient à l'écran », au-delà on s'approche des
+// sprites et le plateau devient défilable.
+const ZOOM_KEY = 'ppw.boardZoom';
+const ZOOM_MIN = 0.6, ZOOM_MAX = 3;
+const clampZoom = (z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+function boardZoom() {
+  try { return clampZoom(Number(localStorage.getItem(ZOOM_KEY)) || 1); } catch { return 1; }
+}
+function setBoardZoom(z) { try { localStorage.setItem(ZOOM_KEY, String(z)); } catch { /* mode privé */ } }
+// Hauteur des trois câbles et des poteaux, en cases (voir ringRopes).
+const ROPE_LEVELS = [0.42, 0.74, 1.06];
+const POST_H = 1.28;
 // Les quatre directions du regard, dans l'ordre des quarts de tour (+x, +y, -x, -y).
 const FACE_ORDER = ['se', 'sw', 'nw', 'ne'];
 // Direction telle qu'elle apparaît À L'ÉCRAN une fois la caméra tournée.
@@ -90,6 +103,26 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     render();
     fitBoard();
   }
+  // Zoomer garde le centre de la vue en place : sans ça, s'approcher déporte le
+  // plateau et on perd de vue le lutteur qu'on regardait.
+  let zoom = boardZoom();
+  function zoomBoard(mult, anchor) {
+    const next = clampZoom(zoom * mult);
+    if (next === zoom) return;
+    const before = { w: boardWrap.scrollWidth, h: boardWrap.scrollHeight };
+    const ax = anchor ? anchor.x : boardWrap.clientWidth / 2;
+    const ay = anchor ? anchor.y : boardWrap.clientHeight / 2;
+    const px = (boardWrap.scrollLeft + ax) / (before.w || 1);
+    const py = (boardWrap.scrollTop + ay) / (before.h || 1);
+    zoom = next;
+    setBoardZoom(next);
+    fitBoard();
+    boardWrap.scrollLeft = px * boardWrap.scrollWidth - ax;
+    boardWrap.scrollTop = py * boardWrap.scrollHeight - ay;
+    renderTop();
+  }
+  function resetZoom() { zoom = 1; setBoardZoom(1); fitBoard(); renderTop(); }
+
   function toggleView() {
     const next = boardWrap.classList.contains('view-iso') ? 'top' : 'iso';
     boardWrap.classList.toggle('view-iso', next === 'iso');
@@ -117,6 +150,58 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   document.addEventListener('keydown', onKey);
   document.body.classList.add('in-match');
   window.addEventListener('resize', fitBoard);
+  // Molette = zoom (la page ne défile pas, la molette n'a pas d'autre usage ici).
+  // L'ancre est le curseur : on zoome là où on regarde.
+  const onWheel = (e) => {
+    e.preventDefault();
+    const box = boardWrap.getBoundingClientRect();
+    zoomBoard(e.deltaY < 0 ? 1.12 : 1 / 1.12, { x: e.clientX - box.left, y: e.clientY - box.top });
+  };
+  boardWrap.addEventListener('wheel', onWheel, { passive: false });
+  // Pincer à deux doigts : même geste que dans une carte.
+  let pinch = 0;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const onTouchStart = (e) => { if (e.touches.length === 2) pinch = dist(e.touches); };
+  const onTouchMove = (e) => {
+    if (e.touches.length !== 2 || !pinch) return;
+    e.preventDefault();
+    const d = dist(e.touches);
+    if (Math.abs(d - pinch) < 12) return;
+    const box = boardWrap.getBoundingClientRect();
+    zoomBoard(d > pinch ? 1.12 : 1 / 1.12, {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - box.left,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - box.top,
+    });
+    pinch = d;
+  };
+  const onTouchEnd = () => { pinch = 0; };
+  boardWrap.addEventListener('touchstart', onTouchStart, { passive: true });
+  boardWrap.addEventListener('touchmove', onTouchMove, { passive: false });
+  boardWrap.addEventListener('touchend', onTouchEnd, { passive: true });
+  // Glisser pour déplacer la vue quand le plateau dépasse. Sous le seuil de
+  // 6 px, c'est un clic sur une case : on ne lui vole pas son geste.
+  let drag = null;
+  const onDown = (e) => {
+    if (e.button !== 0 || !boardWrap.classList.contains('zoomed')) return;
+    drag = { x: e.clientX, y: e.clientY, sl: boardWrap.scrollLeft, st: boardWrap.scrollTop, moved: false };
+  };
+  const onMove = (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true;
+    boardWrap.classList.add('panning');
+    boardWrap.scrollLeft = drag.sl - dx;
+    boardWrap.scrollTop = drag.st - dy;
+  };
+  const onUp = (e) => {
+    if (drag && drag.moved) { e.preventDefault(); e.stopPropagation(); }
+    drag = null;
+    boardWrap.classList.remove('panning');
+  };
+  boardWrap.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp, true);
   requestAnimationFrame(fitBoard);
   showBanner('🔔 DING DING DING !', 'start');
   render();
@@ -147,12 +232,18 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     );
     // Le bouton de rotation n'a de sens qu'en vue isométrique. On l'ajoute à
     // part : append() écrirait « null » si on lui passait une branche vide.
+    const before = el.top.lastChild.previousSibling;
     if (boardWrap.classList.contains('view-iso')) {
       el.top.insertBefore(
         h('button', { class: 'btn small ghost', title: 'Tourner la caméra d’un quart de tour (touche R, Maj+R dans l’autre sens)', onclick: () => rotateBoard(1) }, '↻ Tourner'),
-        el.top.lastChild.previousSibling,
+        before,
       );
     }
+    el.top.insertBefore(h('span', { class: 'zoom-ctl' },
+      h('button', { class: 'btn small ghost', title: 'Dézoomer (touche −)', disabled: zoom <= ZOOM_MIN + 1e-6, onclick: () => zoomBoard(1 / 1.25) }, '−'),
+      h('button', { class: 'btn small ghost zoom-val', title: 'Revenir au plateau entier (touche 0)', onclick: resetZoom }, `${Math.round(zoom * 100)} %`),
+      h('button', { class: 'btn small ghost', title: 'Zoomer (touche +)', disabled: zoom >= ZOOM_MAX - 1e-6, onclick: () => zoomBoard(1.25) }, '+'),
+    ), before);
   }
 
   function renderObjectives() {
@@ -254,7 +345,75 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       }, kid || null);
       const cx = (ring.x0 + ring.x1 + 1) / 2, cy = (ring.y0 + ring.y1 + 1) / 2;
       el.board.append(box(cx - 2, cy - 1, 4, 2, 'ring-logo', h('span', {}, 'PPW')));
+      if (boardWrap.classList.contains('view-iso')) {
+        // Les cordes s'insèrent dans l'ordre du peintre, comme les cases : un
+        // z-index ne suffirait pas, puisque chaque case surélevée est
+        // transformée, donc forme son propre contexte d'empilement.
+        for (const { el: rope, depth: d } of ringRopes(ring, depth)) {
+          const after = [...el.board.children].find((c) => c.dataset.x !== undefined
+            && depth(Number(c.dataset.x), Number(c.dataset.y)) > d);
+          el.board.insertBefore(rope, after || null);
+        }
+      }
     }
+  }
+
+
+  // CORDES EN FAUX 3D
+  //
+  // Une corde est un ruban posé le long d'une arête du ring, puis décalé à
+  // parts égales sur les deux axes de la grille : après la projection
+  // isométrique, ce décalage tombe pile vers le haut de l'écran, donc le ruban
+  // « monte » au-dessus du tapis sans quitter la 2D. Trois hauteurs, quatre
+  // côtés, quatre poteaux.
+  //
+  // Ce qui fait la lecture, c'est l'occultation : les deux côtés du fond
+  // passent derrière les lutteurs, les deux côtés de devant passent par-dessus.
+  // Sans ça, les cordes ne sont qu'un décor peint.
+  function ringRopes(ring, depth) {
+    const rot = boardRot();
+    // « vers le haut de l'écran », exprimé dans le repère de la grille
+    const LX = [-1, -1, 1, 1][rot], LY = [-1, 1, 1, -1][rot];
+    const px = (n) => `calc(${n} * (var(--cell) + 2px))`;
+    const up = (n) => `translate(${px(LX * n)}, ${px(LY * n)})`;
+    const x0 = ring.rx0, y0 = ring.ry0, x1 = ring.rx1 + 1, y1 = ring.ry1 + 1;
+    const out = [];
+    const sides = [
+      { left: x0, top: y0, w: x1 - x0, horiz: true },
+      { left: x0, top: y1, w: x1 - x0, horiz: true },
+      { left: x0, top: y0, w: y1 - y0, horiz: false },
+      { left: x1, top: y0, w: y1 - y0, horiz: false },
+    ];
+    // Profondeur d'un côté : celle de son milieu, comme pour une case. Le côté
+    // du fond se glisse ainsi juste après le tablier qu'il longe et juste avant
+    // les lutteurs du tapis ; celui de devant passe après tout le monde.
+    for (const s of sides) {
+      const mx = s.horiz ? (s.left + s.w / 2) : s.left;
+      const my = s.horiz ? s.top : (s.top + s.w / 2);
+      for (let i = 0; i < ROPE_LEVELS.length; i++) {
+        out.push({
+          depth: depth(mx, my),
+          el: h('div', {
+            class: `ring-rope ${s.horiz ? 'h' : 'v'} rope-${i}`,
+            style: {
+              left: px(s.left), top: px(s.top),
+              [s.horiz ? 'width' : 'height']: px(s.w),
+              transform: up(ROPE_LEVELS[i]),
+            },
+          }),
+        });
+      }
+    }
+    for (const [cx2, cy2] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      out.push({
+        depth: depth(cx2, cy2),
+        el: h('div', {
+          class: 'ring-post',
+          style: { left: px(cx2), top: px(cy2), '--post': px(POST_H), transform: up(POST_H) },
+        }),
+      });
+    }
+    return out;
   }
 
   function threatRange(enemy) {
@@ -645,6 +804,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   }
   function onKey(e) {
     if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && boardWrap.classList.contains('view-iso')) { rotateBoard(e.shiftKey ? -1 : 1); return; }
+    if (e.key === '+' || e.key === '=') { zoomBoard(1.25); return; }
+    if (e.key === '-' || e.key === '_') { zoomBoard(1 / 1.25); return; }
+    if (e.key === '0') { resetZoom(); return; }
     if (e.key !== 'Escape' || ui.busy) return;
     if (ui.mode === 'target') { ui.mode = ui.cat ? 'list' : 'menu'; ui.action = null; render(); }
     else if (ui.mode === 'list') { ui.mode = 'menu'; ui.cat = null; render(); }
@@ -653,6 +815,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function cleanup() {
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('resize', fitBoard);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp, true);
     document.body.classList.remove('sheet-open', 'in-match');
   }
 
@@ -676,7 +840,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const cell = iso
       ? Math.min(availW / (span * 0.7072), h / (span * 0.3536 + 1.5))
       : Math.min(availW / g.w, h / g.h) - 2;
-    boardWrap.style.setProperty('--cell', `${Math.max(14, Math.min(112, Math.floor(cell)))}px`);
+    const fit = Math.max(14, Math.min(112, Math.floor(cell)));
+    boardWrap.style.setProperty('--cell', `${Math.max(10, Math.round(fit * zoom))}px`);
+    boardWrap.classList.toggle('zoomed', zoom > 1);
   }
 
   async function endTurn() {

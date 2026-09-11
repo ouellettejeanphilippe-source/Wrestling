@@ -11,7 +11,7 @@
 // pour garder un SVG léger même avec une planche complète.
 // ---------------------------------------------------------------------------
 export { facingTo } from '../engine/grid.js';
-import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS, GIANT_OVERLAYS } from './spriteart.js';
+import { ART_W, ART_H, BASE_FRONT, BASE_BACK, BASE_DOWN, BASE_GIANT, BASE_FEM, OVERLAYS, TORSO } from './spriteart.js';
 
 export const SPRITE_W = ART_W;
 export const SPRITE_H = ART_H;
@@ -63,86 +63,152 @@ function palette(def) {
   };
 }
 
-// Ordre des couches : le corps d'abord, puis la tête, puis ce qui la couvre,
-// et enfin ce que le lutteur tient. Chaque couche a la même règle : le '.'
-// laisse voir le dessous, tout le reste écrase.
+// VÊTEMENTS : PEINTS SUR LE CORPS, PAS DESSINÉS À CÔTÉ
+//
+// Un habit n'est pas une planche de plus : c'est une tranche de lignes dans
+// laquelle on repeint la peau aux couleurs du tissu. Le vêtement épouse donc
+// la silhouette réelle — y compris celle du colosse et celle du corps
+// féminin, qui ont chacun leur cadre — et il hérite gratuitement de l'ombrage
+// du corps : le creux sous les pectoraux devient un pli du t-shirt.
+//
+// Un rectangle fixe, lui, flottait à côté du torse dès qu'on changeait de
+// carrure.
+const SKIN_CHARS = new Set(['1', '2', '3', '4', '5']);
+const TONE = { 1: 0, 2: 0, 3: 1, 4: 1, 5: 2 };     // ombre, base, éclat
+const MATERIAL = {
+  attire: ['a', 'A', 'B'],
+  accent: ['n', 'N', 'N'],
+  tattoo: ['1', '1', '2'],
+};
+// rows : la tranche couverte sur le torse. sleeves : jusqu'où descend la
+// manche sur les bras (null = sans manches). open : le vêtement s'ouvre sur
+// la poitrine et laisse voir la peau. straps : deux bretelles sur les épaules.
+const GARMENTS = {
+  shirt: { keys: ['shirt'], rows: [13, 24], sleeves: [14, 18], mat: 'accent' },
+  jacket: { keys: ['jacket'], rows: [13, 24], sleeves: [14, 24], mat: 'attire', open: true },
+  coat: { keys: ['coat'], rows: [13, 31], sleeves: [14, 24], mat: 'attire', open: true },
+  vest: { keys: ['vest', 'suit'], rows: [13, 24], sleeves: null, mat: 'attire', open: true },
+  singlet: { keys: ['singlet'], rows: [19, 27], sleeves: null, mat: 'attire', straps: [14, 18] },
+  sleeve: { keys: ['tattoo_arms'], rows: null, sleeves: [15, 23], mat: 'tattoo', speckle: true },
+};
+// L'ordre compte : l'encre du tatouage passe sous le tissu, le manteau
+// par-dessus la veste.
+const GARMENT_ORDER = ['sleeve', 'shirt', 'singlet', 'vest', 'jacket', 'coat'];
+
+// Couches dessinées, dans l'ordre de l'habillage : le crâne, puis la
+// pilosité, puis le visage, puis ce qui le couvre, puis ce qu'on tient.
 const LAYER_ORDER = [
-  'sleeve',                                           // peau (tatouages)
-  'shirt', 'singlet', 'vest', 'jacket', 'coat',       // torse
-  'scarf',                                            // cou
-  'bald', 'long_hair', 'streak',                      // crâne
-  'beard', 'goatee', 'mustache', 'horseshoe_stache',  // pilosité
-  'paint_full', 'paint_half', 'mask',                 // visage
-  'cap', 'bandana', 'cowboy_hat', 'hood',             // couvre-chef
-  'sunglasses',                                       // yeux
-  'bat', 'beer',                                      // objets tenus
+  'long_hair', 'streak',
+  'beard', 'goatee', 'mustache', 'horseshoe_stache',
+  'paint_full', 'paint_half', 'mask',
+  'cap', 'bandana', 'cowboy_hat', 'hood',
+  'sunglasses',
+  'bat', 'beer',
 ];
 // Certaines caractéristiques du roster partagent un même dessin.
 const ALIASES = {
   long_hair: ['long_hair', 'curly_hair', 'messy_hair'],
-  sleeve: ['tattoo_arms'],
-  scarf: ['scarf'],
   beard: ['beard', 'beard_big', 'stubble'],
-  mustache: ['mustache'],
-  cap: ['cap', 'headband'],
   mask: ['mask', 'fiend_mask'],
   paint_full: ['paint_full', 'paint_evil'],
-  vest: ['vest', 'suit'],
   bat: ['bat', 'skateboard'],
-  coat: ['coat'],
   horseshoe_stache: ['horseshoe'],
-  streak: ['streak'],
+  cap: ['cap', 'headband'],
   beer: ['beer', 'bottle', 'teeth_jar'],
 };
-function layersFor(def) {
-  const f = new Set((def.look || {}).features || []);
-  const out = [];
-  for (const name of LAYER_ORDER) {
-    const art = OVERLAYS[name];
-    if (!art) continue;
-    const keys = ALIASES[name] || [name];
-    if (!keys.some((k) => f.has(k))) continue;
-    out.push(art);
-  }
-  return out;
-}
-// De dos, seul ce qui se voit par derrière subsiste.
-const BACK_LAYERS = new Set(['bald', 'shirt', 'singlet', 'vest', 'jacket', 'coat', 'sleeve', 'mask', 'cap', 'bandana', 'cowboy_hat', 'hood', 'long_hair', 'streak', 'bat']);
-function layersForBack(def) {
-  const f = new Set((def.look || {}).features || []);
-  return LAYER_ORDER.filter((n) => BACK_LAYERS.has(n) && OVERLAYS[n]
-    && (ALIASES[n] || [n]).some((k) => f.has(k))).map((n) => OVERLAYS[n]);
+// De dos, on ne voit ni visage ni barbe.
+const BACK_LAYERS = new Set(['long_hair', 'streak', 'mask', 'cap', 'bandana', 'cowboy_hat', 'hood', 'bat']);
+
+const featuresOf = (def) => new Set((def.look || {}).features || []);
+const has = (f, name) => (ALIASES[name] || [name]).some((k) => f.has(k));
+
+function layersFor(def, back) {
+  const f = featuresOf(def);
+  return LAYER_ORDER.filter((n) => OVERLAYS[n] && has(f, n) && (!back || BACK_LAYERS.has(n)))
+    .map((n) => OVERLAYS[n]);
 }
 
-// Choix de l'archétype de corps. Le colosse est dessiné plus grand dans le même
-// cadre : sa taille vient du dessin, pas d'un agrandissement — les pixels
-// gardent donc exactement la même taille que ceux des autres lutteurs.
+// Choix de l'archétype de corps.
 const isGiant = (def) => def.weight === 'super' || (def.size && def.size !== 1);
+const archetypeOf = (def) => (isGiant(def) ? 'giant' : def.body === 'fem' ? 'fem' : 'normal');
+// Colonnes du torse à une ligne donnée : la dernière tranche qui commence
+// avant elle.
+function torsoAt(kind, y) {
+  const t = TORSO[kind] || TORSO.normal;
+  let hit = t[0];
+  for (const s of t) if (y >= s[0]) hit = s;
+  return [hit[1], hit[2]];
+}
+
+// Repeint la peau d'une tranche de lignes aux couleurs d'un tissu, en gardant
+// l'ombrage du corps : c'est lui qui fait les plis.
+function wear(grid, kind, spec) {
+  const mat = MATERIAL[spec.mat];
+  const paint = (y, x) => { grid[y][x] = mat[TONE[grid[y][x]]]; };
+  const bounds = (y) => torsoAt(kind, y);
+  if (spec.rows) {
+    for (let y = spec.rows[0]; y <= spec.rows[1] && y < ART_H; y++) {
+      const [l, r] = bounds(y);
+      const mid = (l + r) / 2;
+      for (let x = l; x <= r; x++) {
+        if (!SKIN_CHARS.has(grid[y][x])) continue;
+        // Un vêtement ouvert laisse une bande de peau au milieu de la poitrine.
+        if (spec.open && Math.abs(x - mid) < 1.5 && y <= spec.rows[0] + 8) continue;
+        paint(y, x);
+      }
+    }
+  }
+  if (spec.straps) {
+    for (let y = spec.straps[0]; y <= spec.straps[1]; y++) {
+      const [l, r] = bounds(y);
+      for (const x of [l + 1, l + 2, r - 2, r - 1]) if (SKIN_CHARS.has(grid[y][x])) paint(y, x);
+    }
+  }
+  if (spec.sleeves) {
+    for (let y = spec.sleeves[0]; y <= spec.sleeves[1] && y < ART_H; y++) {
+      const [l, r] = bounds(y);
+      for (let x = 0; x < ART_W; x++) {
+        if (x >= l && x <= r) continue;                       // le torse, pas le bras
+        if (!SKIN_CHARS.has(grid[y][x])) continue;
+        // Le tatouage est ajouré, sinon le bras devient un bloc noir.
+        if (spec.speckle && (x * 3 + y * 5) % 4 === 0) continue;
+        paint(y, x);
+      }
+    }
+  }
+}
 
 function compose(def, back, down) {
+  const kind = archetypeOf(def);
   const base = down ? BASE_DOWN
-    : isGiant(def) ? BASE_GIANT
-      : def.body === 'fem' && !back ? BASE_FEM
+    : kind === 'giant' ? BASE_GIANT
+      : kind === 'fem' && !back ? BASE_FEM
         : back ? BASE_BACK : BASE_FRONT;
   const grid = base.map((r) => [...r]);
-  const apply = (layers) => {
-    for (const layer of layers) {
-      layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
-    }
-    return grid;
-  };
-  // Le colosse est dessiné dans son propre cadre : ses couches lui sont propres.
-  if (isGiant(def) && !down) {
-    const f = new Set((def.look || {}).features || []);
-    return apply(Object.entries(GIANT_OVERLAYS)
-      .filter(([n]) => (ALIASES[n] || [n]).some((k) => f.has(k)))
-      .map(([, art]) => art));
-  }
-  // Au sol, la tête n'est plus au même endroit : les couches de tête ne
-  // s'appliquent pas, seule la palette distingue les lutteurs.
+  // Au sol, la tête n'est plus au même endroit : seule la palette distingue
+  // les lutteurs.
   if (down) return grid;
-  // De dos, on ne voit ni visage ni barbe : seules les couches de tête comptent.
-  return apply(back ? layersForBack(def) : layersFor(def));
+  const f = featuresOf(def);
+  // Le crâne dégarni n'est pas un dessin : on rend simplement les cheveux à
+  // la peau, donc la silhouette du crâne reste exactement la même.
+  if (f.has('bald')) {
+    for (let y = 0; y < ART_H; y++) {
+      for (let x = 0; x < ART_W; x++) {
+        const c = grid[y][x];
+        if (c === 'h') grid[y][x] = '2';
+        else if (c === 'H') grid[y][x] = '3';
+        else if (c === 'G') grid[y][x] = '4';
+      }
+    }
+  }
+  for (const name of GARMENT_ORDER) {
+    const spec = GARMENTS[name];
+    if (spec.keys.some((k) => f.has(k))) wear(grid, kind, spec);
+  }
+  for (const layer of layersFor(def, back)) {
+    layer.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') grid[y][x] = ch; }));
+  }
+  return grid;
 }
 
 export function spriteSvg(def, opts = {}) {
