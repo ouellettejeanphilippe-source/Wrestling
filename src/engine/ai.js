@@ -64,11 +64,29 @@ function scoreAction(battle, unit, pos, a, tg) {
       if (!t.down && dmg >= t.hp) s += 90;
       if (m.tier === 'finisher') s += 30 + (t.hp <= dmg * 1.3 ? 70 : 0);
       if (m.type === 'submission') s += hit * Math.max(0, (1 - hpRatio(t)) * 0.6 - t.grit * 0.06) * 250;
-      if (m.effects && m.effects.illegal && rules.dq && battle.refDistracted <= 0) s -= 45;
-      if (m.type === 'weapon' && rules.dq && battle.refDistracted <= 0) s -= 30;
+      // La prudence se mesure à ce qu'il reste de patience à l'arbitre. Tant
+      // qu'il y a de la marge, tricher est un calcul ; au dernier
+      // avertissement, c'est jeter le match.
+      if (rules.dq && battle.refDistracted <= 0) {
+        const marge = risqueArbitre(battle, unit);
+        if (m.effects && m.effects.illegal) s -= 45 * marge;
+        if (m.type === 'weapon') s -= 30 * marge;
+      }
       if (t.down && !(m.requires && m.requires.targetDown)) s *= 0.6;
       if (t.climb > 0) s += 200;
-      if (rules.tag && !unit.legal) s -= 60;
+      // Attaquer sans être légal, c'est 25 % de DQ par coup. Un malus fixe ne
+      // pesait rien face au score d'un gros mouvement : le partenaire illégal
+      // entrait dans le ring à chaque tour et perdait le match. Avec des
+      // matchs deux fois plus longs, ça passait de 38 % à 68 % des fins.
+      // C'est désormais un quasi-veto : on n'y va que si rien d'autre ne vaut
+      // le coup, ou si l'arbitre regarde ailleurs.
+      // Entrer sans être légal : même logique. Un arbitre complaisant qui a
+      // encore trois avertissements en réserve, ça se tente — c'est du catch.
+      // Au dernier, c'est perdre le match sur un coup de sang.
+      if (rules.tag && !unit.legal && battle.refDistracted <= 0) {
+        const marge = risqueArbitre(battle, unit);
+        s = marge >= 0.9 ? Math.min(s * 0.15, 12) : s * (1 - 0.55 * marge);
+      }
       s -= (a.cost || 0) * 0.35;
       return s;
     }
@@ -100,6 +118,22 @@ function spreadValue(battle, unit, pos, target, move, dmg) {
   let s = 0;
   for (const u of pris) s += u.team === unit.team ? -dmg * 0.9 : dmg * 0.7;
   return s;
+}
+
+// 0 = l'arbitre a toute sa patience, 1 = il est au bout. Sert de coefficient
+// de prudence à tout ce qui est illégal.
+//
+// Le tempérament entre dedans : un heel pousse sa chance là où un face se
+// range. Sans ça, tout le monde reculait au premier avertissement et la
+// disqualification disparaissait du jeu — ce n'est pas moins faux qu'une DQ
+// à tous les coups.
+function risqueArbitre(battle, unit) {
+  const r = battle.ref;
+  if (!r || !r.maxPatience) return 1;
+  const marge = 1 - (r.patience - 1) / r.maxPatience;
+  const temperament = unit && unit.alignment === 'heel' ? 0.55
+    : unit && unit.alignment === 'face' ? 1.15 : 1;
+  return Math.max(0, Math.min(1, marge * temperament));
 }
 
 function scoreWhip(battle, unit, pos, target) {

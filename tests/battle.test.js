@@ -23,8 +23,14 @@ test('les données sont cohérentes : classes, spécialités, gimmicks et mouvem
     assert.ok(MOVES[w.finisher] && MOVES[w.finisher].tier === 'finisher', `${w.id}: finisher ${w.finisher}`);
     const moves = movesFor(w);
     assert.ok(moves.includes('punch') && moves.includes('taunt'), 'mouvements de base');
-    assert.equal(moves.filter((m) => MOVES[m].tier === 'class').length, 3, `${w.id}: 3 mouvements de classe`);
-    assert.equal(moves.filter((m) => MOVES[m].tier === 'specialty').length, 2, `${w.id}: 2 mouvements de spécialité`);
+    // On vérifie l'INVARIANT, pas une taille figée : chaque lutteur reçoit
+    // l'intégralité du vivier de sa classe et de sa spécialité. Les viviers
+    // grossissent — un long match épuise un kit de trois coups — et le test ne
+    // doit pas casser à chaque ajout.
+    for (const m of CLASSES[w.cls].moves) assert.ok(moves.includes(m), `${w.id}: ${m} manquant (classe)`);
+    for (const m of SPECIALTIES[w.spec].moves) assert.ok(moves.includes(m), `${w.id}: ${m} manquant (spécialité)`);
+    assert.equal(moves.length, new Set(moves).size, `${w.id}: un mouvement en double`);
+    assert.ok(moves.some((m) => (MOVES[m].requires || {}).ran), `${w.id}: doit avoir au moins un mouvement de course`);
   }
   for (const show of SEASON.shows) for (const m of show.matches) {
     for (const e of m.enemies) assert.ok(W[typeof e === 'string' ? e : e.id], `${m.id}: ennemi inconnu`);
@@ -106,7 +112,11 @@ test('un lutteur à 0 PV est au sol, peut être couvert, puis se relève', () =>
   const r = executeAction(b, s, 'punch', { unit: j });
   assert.ok(r.ok && r.hit);
   assert.ok(j.down, 'au sol');
-  assert.ok(pinChance(b, s, j) > 0.4, 'gros pourcentage de tombé sur une cible au sol');
+  // Le cœur est le plafond du tombé : tant qu'il en reste, la couverture est
+  // un faux départ. C'est « il s'est dégagé du finisher ! ».
+  assert.ok(pinChance(b, s, j) <= 0.15, 'une couverture à cœur plein reste un near-fall');
+  const aSec = { ...j, grit: 0 };
+  assert.ok(pinChance(b, s, aSec) > pinChance(b, s, j), 'sans cœur, le tombé passe');
   // le jobber reste au sol un tour puis se relève
   endPlayerPhase(b);
   assert.ok(j.down && j.acted, 'toujours au sol pendant son tour');

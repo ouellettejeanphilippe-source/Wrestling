@@ -121,6 +121,9 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   const battle = {
     rng: createRng(seed), seed, grid, rules, match, mode: match.mode || 'kayfabe', script: match.script || null, units: [], items: [], turn: 1, phase: 'player', log: [], events: [],
     heat: 10, refDistracted: 0, result: null, lastElimination: null, reinforcementsDone: [],
+    // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
+    // fait partie de ce qu'on lit avant de décider de tricher.
+    ref: makeReferee(createRng(seed ^ 0x9e37)),
     stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0 },
   };
   battle.api = {
@@ -236,6 +239,15 @@ export function undoMove(battle, unit) {
   return true;
 }
 
+// Distance parcourue ce tour, au vrai sens : celle de la tuile candidate
+// quand l'IA simule un déplacement, celle déjà faite sinon.
+const travelOf = (unit, pos) => (pos && pos.travel != null ? pos.travel : (unit.movedTiles || 0));
+const crossedRopeIn = (battle, unit, pos) => {
+  const path = (pos && pos.path) || unit.movePath;
+  return !!path && path.length > 1
+    && path.slice(0, -1).some((p) => tileAt(battle.grid, p.x, p.y) === 'rope');
+};
+
 // ---------------------------------------------------------------- liste des actions
 function targetOk(battle, move, e, pos) {
   const req = move.requires || {};
@@ -276,6 +288,13 @@ export function listActions(battle, unit, pos = null) {
     if (unit.momentum < Math.max(unlock, cost)) { a.ok = false; a.reason = `🔒 Momentum ${Math.max(unlock, cost)} requis (vous : ${unit.momentum})`; }
     else if (req.turnbuckle && !onTb && !unit.flags.ignoreTurnbuckle) { a.ok = false; a.reason = 'Doit être sur un coin'; }
     else if (req.attackerOnRope && !onRope) { a.ok = false; a.reason = 'Doit être sur les cordes'; }
+    // `ran` : ce mouvement N'EXISTE PAS sans course. Là où l'élan est un
+    // dégradé, c'est un interrupteur — la moitié du catalogue de la vitesse
+    // et des cordes ne s'ouvre qu'en mouvement.
+    else if (req.ran && travelOf(unit, pos) < req.ran) {
+      a.ok = false; a.reason = `Doit avoir couru ${req.ran} cases ce tour (vous : ${travelOf(unit, pos)})`;
+    }
+    else if (req.crossedRope && !crossedRopeIn(battle, unit, pos)) { a.ok = false; a.reason = 'Doit avoir traversé les cordes en chemin'; }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
       a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
@@ -535,6 +554,10 @@ export function resolveAttack(battle, attacker, target, move) {
     if (eff.daze) setStatus(battle, target, 'dazed', eff.daze + 1);
     if (eff.welt) addStatus(battle, target, 'welt', eff.welt, 4);
     if (eff.push) pushUnit(battle, target, Math.sign(target.x - attacker.x), Math.sign(target.y - attacker.y), eff.push, attacker);
+    // Attirer : le recul à l'envers. Arrache l'adversaire des cordes, le sort
+    // d'un coin, le ramène au centre — la position se dispute dans les deux
+    // sens, pas seulement en se repoussant.
+    if (eff.pull) pushUnit(battle, target, Math.sign(attacker.x - target.x), Math.sign(attacker.y - target.y), eff.pull, attacker);
     if (eff.breakTable) {
       const n = battle.grid;
       for (const [nx, ny] of [[target.x + 1, target.y], [target.x - 1, target.y], [target.x, target.y + 1], [target.x, target.y - 1]]) {
@@ -644,7 +667,10 @@ function downUnit(battle, unit) {
 
 function standUp(battle, u) {
   u.down = false; u.downTurns = 0;
-  u.hp = Math.max(1, Math.round(u.maxHp * 0.3) + u.grit * 3);
+  // Le second souffle. À 30 % on repartait avec une vie et demie de coup : le
+  // lutteur se relevait pour se faire remettre au sol aussitôt. À 55 % il a de
+  // quoi raconter une reprise — et il lui reste un cœur de moins pour le faire.
+  u.hp = Math.max(1, Math.round(u.maxHp * 0.55) + u.grit * 3);
   u.grit = Math.max(0, u.grit - 1);
   addMomentum(battle, u, 25);
   if (u.team === 'player') battle.stats.playerStandUps++;
@@ -685,16 +711,51 @@ export function scriptAllowsElimination(battle, target, method) {
 }
 const SCRIPT_PENALTY = 0.3;
 
+// LE TOMBÉ EST UNE HISTOIRE, PAS UN JET DE DÉ
+//
+// Un tombé à froid ne marche jamais : c'est le principe même du catch. Ce qui
+// décide, c'est le CŒUR — combien de fois l'adversaire s'est déjà relevé. La
+// première couverture doit se solder par un kick-out à un, la dernière par un
+// silence dans la salle.
+//
+// Avant, une cible au sol partait à 55 % : le premier knockdown finissait le
+// match. Sur 60 matchs simulés, il y avait exactement UNE chute par match et
+// tout se terminait au premier tombé — un match de catch qui dure six tours.
 export function pinChance(battle, pinner, target) {
-  let c = target.down ? 0.55 : 0.05 + (1 - hpRatio(target)) * 0.3;
-  if (target.statuses.finished) c += 0.3;
-  c += (pinner.momentum / 100) * 0.1;
-  c -= target.grit * 0.07;
+  const gritLeft = target.maxGrit ? target.grit / target.maxGrit : 0;
+  // Couvrir quelqu'un DEBOUT n'est pas un tombé, c'est un roll-up désespéré :
+  // ça reste marginal quoi qu'il arrive. Tous les bonus — momentum, phase,
+  // finisher — ne s'appliquent qu'à une cible au sol. Sans cette séparation,
+  // un bonus de phase de +0,12 posé sur une base de 0,12 la doublait, et les
+  // matchs se terminaient sur une couverture à 34 % d'un adversaire debout
+  // qui n'était jamais tombé.
+  if (!target.down) {
+    let r = 0.02 + (1 - hpRatio(target)) * 0.08;
+    if (gim(pinner).modPinChance) r = gim(pinner).modPinChance(battle, pinner, pinner, target, r, 'pinner');
+    if (gim(target).modPinChance) r = gim(target).modPinChance(battle, target, pinner, target, r, 'target');
+    if (!scriptAllowsElimination(battle, target, 'pin')) r *= SCRIPT_PENALTY;
+    return clamp(r, 0.02, 0.15);
+  }
+  // La courbe du cœur n'est pas droite : elle s'ouvre à la fin. Linéaire, le
+  // deuxième knockdown suffisait déjà à conclure. Au carré, les deux premières
+  // couvertures sont des faux départs et la salle n'y croit qu'au bout.
+  const used = 1 - gritLeft;
+  let c = 0.10 + used * used * 0.60;
+  if (target.statuses.finished) c += 0.25;
+  c += (pinner.momentum / 100) * 0.08;
   const saves = alliesOf(battle, target).filter((a) => !a.down && manhattan(a, target) === 1).length;
   c -= saves * 0.2;
   if (gim(pinner).modPinChance) c = gim(pinner).modPinChance(battle, pinner, pinner, target, c, 'pinner');
   if (gim(target).modPinChance) c = gim(target).modPinChance(battle, target, pinner, target, c, 'target');
   c += matchPhase(battle).pin;
+  // LE CŒUR EST UN PLAFOND, PAS UN TERME
+  //
+  // C'est la règle du catch : « il s'est dégagé du finisher ! ». Tant qu'il
+  // reste du cœur, aucun bonus — momentum, main event, finisher — ne fait
+  // passer un tombé. Sans ce plafond, un +0,12 de phase posé sur une base de
+  // 0,14 la doublait, et le match se terminait au premier knockdown pendant
+  // que la courbe du cœur ne servait à rien.
+  c = Math.min(c, 0.15 + used * 0.80);
   if (!scriptAllowsElimination(battle, target, 'pin')) c *= SCRIPT_PENALTY;
   return clamp(c, 0.03, 0.95);
 }
@@ -900,18 +961,70 @@ function doClimb(battle, unit) {
   return {};
 }
 
+// L'ARBITRE A UNE TOLÉRANCE
+//
+// Un arbitre de catch ne disqualifie presque jamais au premier coup. Il voit,
+// il avertit, il compte jusqu'à cinq — et il finit par en avoir assez. C'est
+// ce qui rend la triche jouable : on tire sur la corde jusqu'à ce qu'elle
+// casse, et on sait combien il en reste.
+//
+// Avant, chaque acte illégal était un lancer de dé indépendant : 25 % de
+// perdre le match sur-le-champ, sans avertissement, sans mémoire. Un lutteur
+// sournois n'avait aucune marge et l'IA n'avait aucun moyen de doser.
+//
+// `oeil` multiplie la flagrance de l'acte : ce que l'arbitre REMARQUE.
+// `patience` est le nombre d'actes remarqués qu'il laisse passer avant de
+// siffler la fin.
+export const REFEREES = [
+  { id: 'strict', name: 'pointilleux', oeil: 1.5, patience: 2,
+    trait: 'Il voit tout et n’a pas d’humour.' },
+  { id: 'normal', name: 'à l’ancienne', oeil: 1.0, patience: 3,
+    trait: 'Il laisse lutter, mais il compte.' },
+  { id: 'lax', name: 'complaisant', oeil: 0.6, patience: 5,
+    trait: 'Il regarde souvent ailleurs. Profitez-en.' },
+];
+
+export function makeReferee(rng) {
+  const r = REFEREES[Math.min(REFEREES.length - 1, Math.floor(rng.next() * REFEREES.length))];
+  return { ...r, patience: r.patience, maxPatience: r.patience, vus: 0 };
+}
+// Ce que l'interface doit annoncer avant qu'on triche.
+export function refState(battle) {
+  const r = battle.ref;
+  if (!battle.rules.dq) return { free: true, label: 'Aucune règle ici' };
+  if (battle.refDistracted > 0) return { blind: true, label: 'Arbitre distrait — il ne verra rien' };
+  const reste = r.patience;
+  return {
+    label: reste <= 1 ? 'Dernier avertissement !' : `${reste} avertissement${reste > 1 ? 's' : ''} avant DQ`,
+    reste, danger: reste <= 1, name: r.name, trait: r.trait,
+  };
+}
+
 function checkDq(battle, unit, base, what) {
+  // Le libellé sert à écrire la phrase de l'arbitre. Le mettre en majuscule
+  // faisait planter le moteur quand il manquait, là où l'ancien code se
+  // contentait d'un texte bizarre : un journal moche ne doit pas arrêter un
+  // match.
+  what = what || 'ce qu’il vient de faire';
   if (!battle.rules.dq) return false;
-  if (battle.refDistracted > 0) { log(battle, `L’arbitre ne voit pas ${what}.`); return false; }
-  let c = base;
+  if (battle.refDistracted > 0) { log(battle, `👀 L’arbitre ne voit pas ${what}.`); return false; }
+  const ref = battle.ref;
+  let c = base * ref.oeil;
   if (gim(unit).modDqChance) c = gim(unit).modDqChance(battle, unit, c);
-  if (battle.rng.chance(c)) {
-    log(battle, `🚨 DISQUALIFICATION ! L’arbitre a vu ${what} de ${unit.name} !`, 'big');
-    eliminate(battle, unit, 'dq');
-    return true;
+  if (!battle.rng.chance(clamp(c, 0.02, 0.95))) {
+    log(battle, `L’arbitre n’a rien vu : ${what}.`);
+    return false;
   }
-  log(battle, `L’arbitre a raté ${what}… (${Math.round(c * 100)} % de risque)`);
-  return false;
+  ref.vus++;
+  ref.patience--;
+  if (ref.patience > 0) {
+    log(battle, `⚠️ AVERTISSEMENT ! L’arbitre a vu ${what} de ${unit.name}. Encore ${ref.patience} et c’est fini.`, 'big');
+    addHeat(battle, 6);
+    return false;
+  }
+  log(battle, `🚨 DISQUALIFICATION ! ${what.charAt(0).toUpperCase()}${what.slice(1)} de trop : l’arbitre siffle la fin.`, 'big');
+  eliminate(battle, unit, 'dq');
+  return true;
 }
 
 // ---------------------------------------------------------------- phases
