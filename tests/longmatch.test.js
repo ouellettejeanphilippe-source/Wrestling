@@ -70,6 +70,7 @@ test('les mouvements de course n’existent pas à l’arrêt', () => {
   g.x = s.x + 1; g.y = s.y;
   const coureurs = movesFor(W.jean_sina).filter((m) => (MOVES[m].requires || {}).ran);
   assert.ok(coureurs.length, 'le kit de base doit contenir des mouvements de course');
+  s.hand = [coureurs[0]];                 // on le pose en main : c'est une carte
   const immobile = listActions(b, s).find((a) => a.id === coureurs[0]);
   assert.equal(immobile.ok, false, 'planté : indisponible');
   assert.match(immobile.reason, /couru/);

@@ -6,7 +6,8 @@ import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, tapChance, novelty, moveUses, STAMINA_LOW } from '../engine/battle.js';
 import { movePart, wearFrom, wearOf, wearLevel, wornParts, PARTS, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from '../engine/wear.js';
-import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
+import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt, pathIn } from '../engine/grid.js';
+import { deckState, isCard } from '../engine/hand.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
@@ -33,12 +34,22 @@ const TILE_HELP = {
   cage: 'Mur de la cage : infranchissable. Y être projeté = 15 dégâts.',
   void: '',
 };
+// LE MENU S'OUVRE SUR LA MAIN
+//
+// Classé par famille de coup, il décrivait un catalogue — « Attaquer », et
+// dedans les dix-huit mouvements du lutteur. Il décrit maintenant une
+// SITUATION : ce que j'ai pioché ce tour-ci, ce que je peux toujours faire, ce
+// que la jauge a ouvert, et le ring. C'est dans cet ordre qu'on décide.
+const enMain = (a, u) => !!(a.move && a.move.id && (u.hand || []).includes(a.move.id));
+const estMerite = (a) => !!(a.move && ['signature', 'finisher'].includes(a.move.tier));
 const CATS = [
-  { id: 'attack', icon: '⚔️', name: 'Attaquer', match: (a) => ATTACK_TYPES.has(a.type) },
+  { id: 'main', icon: '🃏', name: 'Votre main', match: (a, u) => enMain(a, u) },
+  { id: 'base', icon: '👊', name: 'Fondamentaux', match: (a, u) => !!a.move && !enMain(a, u) && !estMerite(a) && a.type !== 'taunt' },
+  { id: 'merite', icon: '⚡', name: 'Mérité', match: (a) => estMerite(a) },
   { id: 'pin', icon: '🤝', name: 'Tombé', match: (a) => a.type === 'pin' },
   { id: 'taunt', icon: '📣', name: 'Provoquer', match: (a) => a.type === 'taunt' },
-  { id: 'special', icon: '🎯', name: 'Spécial', match: (a) => ['special', 'toss', 'climb', 'tag', 'pickup', 'sell', 'job'].includes(a.type) },
-  { id: 'wait', icon: '⏳', name: 'Attendre', match: (a) => a.type === 'wait' },
+  { id: 'ring', icon: '🔔', name: 'Le ring', match: (a) => ['toss', 'climb', 'tag', 'pickup', 'scavenge', 'rollin', 'manager', 'sell', 'job'].includes(a.type) },
+  { id: 'wait', icon: '⏳', name: 'Souffler', match: (a) => ['wait', 'redraw'].includes(a.type) },
 ];
 
 const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse), (max-width: 800px)').matches;
@@ -281,6 +292,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
+    // Les cases qui débloqueraient la carte survolée.
+    const setup = ui.setupFor && ui.sel ? setupTiles(ui.sel, ui.setupFor) : null;
     // Ordre du peintre : on dessine du fond vers l'avant, sinon une case
     // surélevée recouvre les lutteurs qui se tiennent derrière elle. La
     // profondeur écran dépend de l'angle de caméra ; la position dans la
@@ -302,6 +315,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         if (path.has(k)) cell.classList.add('path');
         else if (atk && atk.has(k)) cell.classList.add('atk');
         if (threat && threat.has(k)) cell.classList.add('threat');
+        if (setup && setup.has(k)) cell.classList.add('setup');
         if (targets && targets.has(k)) {
           cell.classList.add('target');
           const t = targets.get(k);
@@ -502,7 +516,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = ui.sel;
     if (TOUCH && ui.mode === 'list') {
       pop.append(h('div', { class: 'pop-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
-      pop.append(renderActionList(u, listActions(battle, u).filter(ui.cat.match)));
+      pop.append(renderActionList(u, listActions(battle, u).filter((a) => ui.cat.match(a, u))));
       pop.hidden = false; document.body.classList.add('sheet-open'); return;
     }
     if (TOUCH && ui.mode === 'target') {
@@ -522,7 +536,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       pop.append(h('button', { class: 'pop-btn', onclick: () => doAction('wait', null) }, '⏳ Ne pas couvrir'));
     } else {
       for (const c of CATS) {
-        const list = actions.filter(c.match);
+        const list = actions.filter((a) => c.match(a, u));
         if (!list.length) continue;
         const okList = list.filter((a) => a.ok);
         const btn = h('button', { class: `pop-btn ${okList.length ? '' : 'off'}`, disabled: !okList.length, onclick: () => openCategory(c, list) },
@@ -566,7 +580,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       return;
     }
     if (ui.mode === 'list' && u) {
-      const actions = listActions(battle, u).filter(ui.cat.match);
+      const actions = listActions(battle, u).filter((a) => ui.cat.match(a, u));
       el.right.append(h('div', { class: 'panel-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
       el.right.append(renderActionList(u, actions));
       el.right.append(unitCard(battle, u, { class: 'selected compact' }));
@@ -609,31 +623,87 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${r.icon} ${r.name}`), h('span', { class: 'route-how' }, r.how), r.state ? h('span', { class: 'route-state' }, r.state) : null)));
   }
 
+  // CE QUE LA CARTE RÉCLAME
+  //
+  // Les cartes, l'histoire et le déplacement sont la même affaire : une carte
+  // qui exige quatre cases de course EST la raison de traverser le ring, et le
+  // coup qui en sort EST le moment du match qu'on racontera. Encore faut-il
+  // que le joueur voie la préparation, sinon il tient une carte morte au lieu
+  // d'avoir un plan pour les deux prochains tours.
+  const SETUPS = [
+    ['ran', (n) => ['🏃', `${n} case${n > 1 ? 's' : ''} de course avant de frapper`]],
+    ['crossedRope', () => ['🪢', 'traverser les cordes en chemin']],
+    ['turnbuckle', () => ['🪜', 'être monté dans un coin']],
+    ['attackerOnRope', () => ['🪢', 'être sur les cordes ou dans un coin']],
+    ['targetOnRope', () => ['🎯', 'la cible doit être sur les cordes']],
+    ['targetDown', () => ['💫', 'la cible doit être au sol']],
+    ['targetDownOrDazed', () => ['💫', 'la cible doit être au sol ou étourdie']],
+    ['targetDazedOrCorner', () => ['💫', 'la cible doit être étourdie ou dans un coin']],
+    ['targetNearTable', () => ['🪑', 'la cible doit être contre une table']],
+  ];
+  function setupOf(move) {
+    const req = (move && move.requires) || {};
+    for (const [k, f] of SETUPS) if (req[k]) return f(req[k]);
+    return null;
+  }
+
+  // Les cases depuis lesquelles la carte deviendrait jouable. C'est le lien
+  // direct entre la main et le plateau : on montre où aller, pas seulement ce
+  // qui manque.
+  function setupTiles(u, move) {
+    const req = (move && move.requires) || {};
+    const out = new Set();
+    if (!req.ran && !req.crossedRope && !req.turnbuckle && !req.attackerOnRope) return out;
+    const reach = getReachable(battle, u);
+    for (const v of reach.values()) {
+      if (v.blocked) continue;
+      const chemin = pathIn(reach, v.x, v.y);
+      const parcouru = Math.max(0, chemin.length - 1);
+      const tuile = tileAt(g, v.x, v.y);
+      if (req.ran && parcouru < req.ran) continue;
+      if (req.crossedRope && !(chemin.length > 1 && chemin.slice(0, -1).some((c) => tileAt(g, c.x, c.y) === 'rope'))) continue;
+      if (req.turnbuckle && tuile !== 'turnbuckle') continue;
+      if (req.attackerOnRope && tuile !== 'rope' && tuile !== 'turnbuckle') continue;
+      out.add(key(v.x, v.y));
+    }
+    return out;
+  }
+
+  // La liste d'une catégorie est déjà homogène (le menu s'ouvre sur la main),
+  // donc plus de sous-groupes : une ligne d'état du talon, puis les options.
   function renderActionList(u, actions) {
     const box = h('div', { class: 'actions' });
-    for (const tier of TIER_ORDER) {
-      const list = actions.filter((a) => (a.tier || 'base') === tier);
-      if (!list.length) continue;
-      const locked = list.every((a) => !a.ok && a.reason && a.reason.startsWith('🔒'));
-      const group = h('div', { class: `agroup tier-${tier} ${locked ? 'locked' : ''}` }, h('div', { class: 'tier-label' }, TIER_LABELS[tier], locked ? ' 🔒' : ''));
-      for (const a of list) {
-        const m = a.move;
-        const meta = [];
-        if (m && m.power != null) meta.push(`💥 ${m.power}`);
-        if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
-        if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
-        if (a.cost) meta.push(`⚡ -${a.cost}`);
-        if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
-        const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
-        const combos = m && best && best.unit ? activeCombos(battle, u, best.unit, m) : [];
-        const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'}`, disabled: !a.ok || ui.busy, onclick: () => chooseAction(a) },
-          h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
-          meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
-          combos.length ? h('span', { class: 'act-combo' }, combos.map((c) => `${c.icon} ${c.name}`).join(' + ')) : null,
-          h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
-        group.append(btn);
-      }
-      box.append(group);
+    const d = deckState(u);
+    box.append(h('div', { class: 'deck-state', title: 'Cartes en main · talon · défausse' },
+      `🃏 ${d.main} en main · 🂠 ${d.talon} au talon · 🗑 ${d.defausse} défaussées`));
+    for (const a of actions) {
+      const m = a.move;
+      const carte = !!(m && m.id && (u.hand || []).includes(m.id));
+      const meta = [];
+      if (m && m.power != null) meta.push(`💥 ${m.power}`);
+      if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
+      if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
+      if (a.cost) meta.push(`⚡ -${a.cost}`);
+      if (m && m.part && PARTS[m.part]) meta.push(`${PARTS[m.part].icon} vise ${PARTS[m.part].short}`);
+      if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
+      const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
+      const combos = m && best && best.unit ? activeCombos(battle, u, best.unit, m) : [];
+      const prep = setupOf(m);
+      const btn = h('button', {
+        class: `act ${a.ok ? '' : 'disabled'}${carte ? ' card' : ''}`,
+        disabled: !a.ok || ui.busy,
+        onclick: () => chooseAction(a),
+        // Survoler une carte allume sur le plateau les cases qui la
+        // débloqueraient : la carte devient un itinéraire.
+        onpointerenter: () => { if (!prep) return; ui.setupFor = m; renderBoard(); },
+        onpointerleave: () => { if (ui.setupFor !== m) return; ui.setupFor = null; renderBoard(); },
+      },
+        h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
+        meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
+        prep ? h('span', { class: `act-setup ${a.ok ? 'done' : ''}` }, `${prep[0]} ${prep[1]}`) : null,
+        combos.length ? h('span', { class: 'act-combo' }, combos.map((c) => `${c.icon} ${c.name}`).join(' + ')) : null,
+        h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
+      box.append(btn);
     }
     return box;
   }

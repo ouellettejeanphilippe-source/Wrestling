@@ -22,7 +22,7 @@ export const WEAR_BROKEN = 85;
 // qui l'atteint au passage. Sans cet écart, l'offensive ordinaire suffisait à
 // mettre un membre hors service dans 90 % des matchs : « hors service »
 // devenait la normale, donc ne racontait plus rien.
-export const WEAR_RATE = 0.70;                    // le coup vise le membre
+export const WEAR_RATE = 0.85;                    // le coup vise le membre
 export const WEAR_DRIFT = 0.22;                   // il l'atteint sans le viser
 
 export const PARTS = {

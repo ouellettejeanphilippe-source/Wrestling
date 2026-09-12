@@ -11,6 +11,7 @@ import { matchPhase, isFlashy } from './phases.js';
 import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
+import { initHand, refill, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE } from './hand.js';
 import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
 import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
@@ -170,6 +171,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     battle.units.push(u);
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
+  for (const u of battle.units) initHand(battle, u);
 
   // Armes cachées sous le ring : il faudra aller les chercher au bord du tablier.
   battle.underRing = rules.underRing ?? 0;
@@ -377,7 +379,11 @@ export function listActions(battle, unit, pos = null) {
     return actions;
   }
 
-  for (const mid of unit.moves) {
+  // LE CŒUR DU CHANGEMENT. On n'itère plus les dix-huit mouvements du lutteur,
+  // mais sa MAIN — plus la provocation et les paliers mérités, qui ne se
+  // piochent pas. Le reste du corps de la boucle est inchangé : une carte est
+  // un mouvement comme avant, avec les mêmes conditions.
+  for (const mid of availableMoves(unit)) {
     const m = MOVES[mid];
     if (!m) continue;
     const unlock = moveUnlock(m), cost = moveCost(m);
@@ -479,6 +485,15 @@ export function listActions(battle, unit, pos = null) {
       id: 'manager', name: `${mgr.label} (${mgr.left})`, tier: 'base', type: 'manager',
       desc: mgr.desc + (mgr.illegal && rules.dq ? ' L’arbitre peut le voir.' : ''),
       manager: mgr, targets, ok, reason,
+    });
+  }
+  // La soupape : cinq cartes injouables ne doivent jamais être une impasse.
+  if ((unit.hand || []).length) {
+    const d = deckState(unit);
+    actions.push({
+      id: 'redraw', name: `🔄 Jeter la main et repiocher (${d.main})`, tier: 'base', type: 'redraw',
+      desc: `Défausse vos ${d.main} carte(s) et en repioche autant. Termine le tour et fait reprendre son souffle. Talon ${d.talon}, défausse ${d.defausse}.`,
+      targets: [{ self: true }], ok: true,
     });
   }
   const item = battle.items.find((i) => i.x === p.x && i.y === p.y);
@@ -601,6 +616,13 @@ export function executeAction(battle, unit, actionId, target = null) {
     case 'tag': result = tagPartner(battle, unit, tgt); break;
     case 'climb': result = doClimb(battle, unit); break;
     case 'wait': heal(battle, unit, 4); unit.rested = true; break;
+    case 'redraw': {
+      const avant = unit.hand.length;
+      redraw(battle, unit);
+      unit.rested = true;
+      log(battle, `🔄 ${unit.name} n’a rien qui passe : il se replace, souffle, et repart sur autre chose. (${avant} carte(s) jetées)`);
+      break;
+    }
     case 'sell': {
       applyDamage(battle, unit, unit.maxHp * 0.08, null, { self: true });
       addHeat(battle, 12); battle.stats.sells++;
@@ -618,6 +640,22 @@ export function executeAction(battle, unit, actionId, target = null) {
       break;
     }
     default: result = resolveAttack(battle, unit, tgt, a.move); break;
+  }
+  // La carte jouée part à la défausse. Ce qu'on n'a pas joué RESTE en main :
+  // c'est ce qui permet de tenir son Lariat lancé pendant trois tours en
+  // cherchant ses quatre cases de course.
+  //
+  // IL NE LÂCHE PAS LA PRISE. Une exception, et c'est celle qui rend un plan
+  // long jouable avec une main : une soumission qui n'a pas fait abandonner
+  // revient en main si le membre qu'elle vise est DÉJÀ entamé. Sans elle, il
+  // fallait que la carte, l'usure, la position et le cœur coïncident au même
+  // tour — les abandons étaient tombés de 15 à 1 sur 135 matchs. Le
+  // matraquage reste impossible : chaque reprise de la même prise vaut moins
+  // (lassitude) et coûte du souffle.
+  if (a.move && a.move.id && isCard(a.move.id)) {
+    const garde = a.type === 'submission' && !result.tapped
+      && wearLevel(tgt || unit, movePart(a.move)) >= 1;
+    if (!garde) playCard(battle, unit, a.move.id);
   }
   if (result && result.freePin) { unit.acted = false; unit.onlyPin = true; }
   else { unit.acted = true; unit.onlyPin = false; }
@@ -780,6 +818,7 @@ export function resolveAttack(battle, attacker, target, move) {
   attacker.facing = facingTo(attacker, target);
   attacker.momentum = Math.max(0, attacker.momentum - moveCost(move));
   if (!target.down && gim(target).onAttacked && gim(target).onAttacked(battle, target, attacker, move)) {
+    beat(battle, 'gimmick', { who: target.name, uid: target.uid, gimmick: gim(target).name, kind: 'counter', on: attacker.name, move: move.name });
     checkWin(battle);
     return { countered: true };
   }
@@ -849,6 +888,17 @@ export function resolveAttack(battle, attacker, target, move) {
     if (target.down && !battle.rules.noPin && manhattan(attacker, target) === 1 && canPin(battle, attacker, target).ok) { freePin = true; log(battle, `${attacker.name} peut couvrir immédiatement !`); }
   }
   if (move.type === 'submission' && !target.eliminated) attemptSubmission(battle, attacker, target, move);
+  // LA PRÉPARATION FAIT PARTIE DU COUP. Une carte qui exige quatre cases de
+  // course EST la raison d'avoir traversé le ring, et c'est ça qu'on raconte —
+  // pas « il a fait 14 dégâts ».
+  const prep = move.requires || {};
+  if ((prep.ran && attacker.movedTiles >= prep.ran) || (prep.crossedRope && ctx.crossedRope) || prep.turnbuckle || prep.attackerOnRope) {
+    beat(battle, 'course', {
+      who: attacker.name, uid: attacker.uid, on: target.name, move: move.name,
+      travel: attacker.movedTiles,
+      depuis: prep.turnbuckle ? 'coin' : prep.attackerOnRope ? 'cordes' : prep.crossedRope ? 'rebond' : 'course',
+    });
+  }
   attacker.memory.lastHit = { uid: target.uid, type: move.type };
   if (gim(attacker).onHit) gim(attacker).onHit(battle, attacker, target, move, dmg);
   if (eff.illegal && !target.eliminated) checkDq(battle, attacker, 0.35, move.name);
@@ -935,7 +985,13 @@ export function applyDamage(battle, target, amount, source, opts = {}) {
 }
 
 function downUnit(battle, unit) {
-  if (gim(unit).beforeDown && gim(unit).beforeDown(battle, unit)) return;
+  // UN GIMMICK QUI CHANGE L'ISSUE EST UN TEMPS FORT. Les passifs agissaient
+  // pendant le match sans jamais rien raconter à la fin : un lutteur qui
+  // refuse de tomber, c'est pourtant LE moment dont on parle en sortant.
+  if (gim(unit).beforeDown && gim(unit).beforeDown(battle, unit)) {
+    beat(battle, 'gimmick', { who: unit.name, uid: unit.uid, gimmick: gim(unit).name, kind: 'save' });
+    return;
+  }
   unit.down = true; unit.downTurns = 0; unit.hp = 0; unit.climb = 0;
   delete unit.statuses.dazed;
   if (unit.grit <= 0 && !battle.rules.noPin && scriptAllowsElimination(battle, unit, 'stoppage')) {
@@ -1442,6 +1498,7 @@ export function startPhase(battle, team) {
     u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
     u.rested = false;
     u.hadTurn = true;
+    refill(battle, u);
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
       if (u.downTurns === 0) {
@@ -1481,6 +1538,7 @@ function spawnReinforcements(battle) {
       }
       const u = createUnit(def, 'enemy', x, y, { boost: spec.boost || {}, uid: `r${battle.turn}-${i}-${def.id}` });
       u.momentum = 20;
+      initHand(battle, u);
       battle.units.push(u);
       if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
     });
@@ -1542,4 +1600,5 @@ export function autoPlay(battle, maxTurns = 40) {
 }
 
 export { checkWin };
+export { availableMoves, deckState, isCard, redraw, HAND_SIZE } from './hand.js';
 export { movePart, wearLevel, wearRatio, wornParts, wearTapBonus, PARTS } from './wear.js';

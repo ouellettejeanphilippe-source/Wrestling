@@ -4,6 +4,7 @@ import { PHASES } from '../engine/phases.js';
 import { COMBOS } from '../data/combos.js';
 import { MOVE_TIERS } from '../data/moves.js';
 import { MANAGER_LIST } from '../data/managers.js';
+import { HAND_SIZE } from '../engine/hand.js';
 
 const SEEN_KEY = 'ppw-tutorial-seen';
 export const tutorialSeen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch { return false; } };
@@ -146,6 +147,21 @@ const PAGES = [
         h('li', {}, h('b', {}, '👑 Par-dessus la corde, 🪜 échelle, 🧗 cage, ⏳ survie'), ' — selon le type de match.'),
       ),
       h('p', { class: 'muted' }, 'Un lutteur lent et costaud gagnera plus souvent par usure et par arrêt de l’arbitre ; un voltigeur ira chercher un plongeon et un tombé rapide ; un technicien visera la soumission. Aucune de ces routes n’est la bonne : elles dépendent de votre roster et du match.'),
+    ],
+  },
+  {
+    title: 'Vous ne choisissez pas, vous piochez',
+    icon: '🃏',
+    body: () => [
+      h('p', {}, 'Un lutteur connaît une vingtaine de mouvements, mais il n’en a que ', h('b', {}, `${HAND_SIZE} en main`), ' à chaque tour. On ne choisit plus « le meilleur coup » — on joue ce qu’on a, et c’est ce qui force à s’adapter.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Ce qui se pioche', 'Ce qui ne se pioche jamais'].map((x) => h('th', {}, x))),
+        h('tr', {},
+          h('td', {}, 'Tout le reste : mouvements de classe, de spécialité, de course, des cordes, d’usure.'),
+          h('td', {}, h('b', {}, 'Les fondamentaux'), ' — coup de poing, prise, Irish Whip, provoquer — sont toujours là. Et la ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre.'))),
+      h('p', {}, h('b', {}, 'Ce que vous ne jouez pas, vous le gardez.'), ' C’est la règle qui compte : tenir son Lariat lancé pendant trois tours en cherchant ses quatre cases de course, c’est du catch. Une main rebattue à chaque tour, ce serait du hasard.'),
+      h('p', {}, 'Les cartes, le déplacement et l’histoire sont ', h('b', {}, 'la même affaire'), ' : une carte qui réclame de la course EST la raison de traverser le ring, et le coup qui en sort EST le moment qu’on racontera à la fin. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
+      h('p', { class: 'muted' }, 'Rien qui passe ? ', h('b', {}, '🔄 Jeter la main et repiocher'), ' : ça coûte le tour, mais ça rend du souffle comme une provocation. Le talon se reconstitue tout seul avec la défausse — on ne tombe jamais à court de son propre répertoire.'),
     ],
   },
   {

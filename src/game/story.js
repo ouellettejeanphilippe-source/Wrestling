@@ -101,6 +101,22 @@ export function matchStory(battle, opts = {}) {
   else if (nf) tournants.push(`Tour ${nf.turn} : premier vrai tombé, ${nf.who} se dégage.`);
   if (rev) tournants.push(`${rev.who} a retourné ${rev.move} contre ${rev.on} au tour ${rev.turn} — personne ne l’a vu venir.`);
   if (mgr) tournants.push(`${mgr.icon} ${mgr.who} s’en est mêlé au tour ${mgr.turn}${mgr.on ? `, aux dépens de ${mgr.on}` : ''}.`);
+  // Ce que le PASSIF du lutteur a changé. Un gimmick qui sauve une chute ou
+  // annule un finisher n'est pas une note de bas de page, c'est le moment.
+  const gim = first(b, 'gimmick');
+  if (gim) {
+    tournants.push(gim.kind === 'save'
+      ? `Et au tour ${gim.turn}, ${gim.who} a refusé de tomber : « ${gim.gimmick} », la salle debout.`
+      : `Au tour ${gim.turn}, ${gim.who} a renvoyé ${gim.move} de ${gim.on} — « ${gim.gimmick} », évidemment.`);
+  }
+  // La préparation fait partie du coup : traverser le ring, monter au coin,
+  // rebondir dans les cordes. C'est là que le déplacement devient du récit.
+  const spot = all(b, 'course').sort((x, y) => (y.travel || 0) - (x.travel || 0))[0];
+  if (spot) {
+    const d = { coin: `du haut du coin`, cordes: `depuis les cordes`, rebond: `au rebond des cordes` }[spot.depuis]
+      || `après ${spot.travel} cases de course`;
+    tournants.push(`${spot.who} a placé ${spot.move} ${d} sur ${spot.on} au tour ${spot.turn}.`);
+  }
   if (fin && !nf) tournants.push(`${fin.who} a placé ${fin.move} au tour ${fin.turn}.`);
   const dq = all(b, 'warning');
   if (dq.length) tournants.push(`L’arbitre a averti ${dq[dq.length - 1].who} ${dq.length > 1 ? `${dq.length} fois` : 'une fois'} — la corde était tendue.`);

@@ -76,6 +76,14 @@ function scoreAction(battle, unit, pos, a, tg) {
     case 'tag': return E(hpRatio(unit) < 0.45 ? 220 : 8);
     case 'taunt': return E(unit.momentum >= 100 ? 0 : 12 + (100 - unit.momentum) * 0.12 + ((a.move && a.move.effects && a.move.effects.heat) || 0) * 0.5);
     case 'wait': return 1;
+    // JETER SA MAIN N'EST PAS UNE OPTION QU'ON COMPARE, C'EST UN DERNIER
+    // RECOURS. Notée dans la boucle principale, elle était évaluée depuis
+    // chaque case atteignable, ramassait les bonus de position au passage et
+    // finissait par battre de vraies attaques : 56 % des tours de l'IA étaient
+    // une défausse, et les matchs duraient quarante tours pour vingt coups.
+    // Elle vit maintenant dans le repli, là où on ne va que si rien d'autre ne
+    // vaut le coup.
+    case 'redraw': return null;
     // Le décompte qui monte est ce qui doit la ramener, pas une préférence
     // vague : à zéro c'est un tour perdu, à cinq c'est le match.
     case 'rollin': return E(8 + (unit.outsideCount || 0) * 48);
@@ -348,8 +356,16 @@ function fallback(battle, unit) {
   if (climb) return { moveTo, action: { id: climb.id, target: null }, score: 0 };
   const pickup = actions.find((a) => a.type === 'pickup' && a.ok);
   if (pickup && !battle.rules.dq) return { moveTo, action: { id: pickup.id, target: null }, score: 0 };
+  // Provoquer OU jeter sa main : les deux font souffler, mais elles ne
+  // résolvent pas le même problème. Si la main est morte, gagner du momentum
+  // ne sert à rien — il faut d'autres cartes. Si la jauge est basse, en
+  // revanche, provoquer ouvre les paliers, qui eux ne se piochent pas.
+  const jouable = actions.some((a) => a.ok && a.move && (unit.hand || []).includes(a.move.id));
+  const jeter = actions.find((a) => a.type === 'redraw' && a.ok);
   const taunts = actions.filter((a) => a.type === 'taunt' && a.ok).sort((a, b) => (b.move.momentum || 0) - (a.move.momentum || 0));
+  if (!jouable && jeter && unit.momentum >= 40) return { moveTo, action: { id: 'redraw', target: null }, score: 0 };
   if (taunts.length && unit.momentum < 80) return { moveTo, action: { id: taunts[0].id, target: null }, score: 0 };
+  if (!jouable && jeter) return { moveTo, action: { id: 'redraw', target: null }, score: 0 };
   return { moveTo, action: { id: 'wait', target: null }, score: 0 };
 }
 

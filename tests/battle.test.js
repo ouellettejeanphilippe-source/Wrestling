@@ -65,9 +65,32 @@ test('les dégâts dépendent des stats, du coin et de la défense', () => {
   assert.ok(computeDamage(b, d, j, MOVES.punch, { noRng: true }).dmg >= 1);
 });
 
+// Depuis la main, un mouvement de classe ou de spécialité n'est proposé que
+// s'il a été pioché. Les tests qui veulent en tester un le posent en main.
+const enMain = (u, ...ids) => { u.hand = [...ids]; return u; };
+
+test('une carte qui n’est pas en main n’est pas proposée', () => {
+  const b = mk('singles', ['derby_allin'], ['jobber_1']);
+  const d = findP(b, 'derby_allin'), j = findE(b, 'jobber_1');
+  place(d, 5, 3); place(j, 6, 4);
+  d.momentum = 100;
+  enMain(d);
+  assert.equal(listActions(b, d).find((a) => a.id === 'moonsault'), undefined, 'pas en main, pas proposé');
+  // Les fondamentaux, eux, sont toujours là : une mauvaise main veut dire
+  // « je n'ai que les bases », jamais « je ne peux rien faire ».
+  for (const id of ['punch', 'grapple', 'whip', 'taunt']) {
+    assert.ok(listActions(b, d).find((a) => a.id === id), `${id} reste disponible`);
+  }
+  // Et le finisher ne se pioche pas : c'est la jauge qui l'ouvre.
+  assert.ok(listActions(b, d).find((a) => a.id === 'coffin_drop'), 'le finisher est mérité, pas pioché');
+  enMain(d, 'moonsault');
+  assert.ok(listActions(b, d).find((a) => a.id === 'moonsault'), 'en main, il revient');
+});
+
 test('portée et prérequis des mouvements filtrent les cibles', () => {
   const b = mk('singles', ['derby_allin'], ['jobber_1']);
   const d = findP(b, 'derby_allin'), j = findE(b, 'jobber_1');
+  enMain(d, 'moonsault', 'crossbody');
   place(d, 7, 5); place(j, 10, 5);
   let acts = listActions(b, d);
   assert.ok(!acts.find((a) => a.id === 'punch').ok, 'trop loin pour un coup de poing');
@@ -88,6 +111,7 @@ test('portée et prérequis des mouvements filtrent les cibles', () => {
 test('échelle de momentum : un mouvement coûte son palier et en rapporte s’il touche', () => {
   const b = mk('singles', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina'), j = findE(b, 'jobber_1');
+  enMain(s, 'bodyslam', 'kneestrike');
   place(s, 7, 5); place(j, 8, 5);
   s.momentum = 30;
   assert.ok(listActions(b, s).find((a) => a.id === 'bodyslam').ok, 'classe débloquée à 25');

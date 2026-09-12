@@ -303,6 +303,40 @@ Un match long où il ne se passe rien est pire qu'un match de six tours.
 Sans limite de temps, la médiane est de **39 tours** et le 90ᵉ centile de 59 ; la limite est posée à 60, où elle ne
 coupe plus qu'un match sur onze — et un « Broadway » de temps en temps, c'est du vrai catch.
 
+## La main — on ne choisit pas, on pioche
+
+Le menu à la Final Fantasy Tactics avait un défaut de fond : avec dix-huit mouvements par lutteur, la liste
+s'allonge mais la **décision**, elle, ne devient jamais plus intéressante. Le meilleur coup du tour est presque
+toujours le même que celui du tour précédent, et on déroule une routine au lieu de lutter.
+
+Chaque lutteur a désormais **4 cartes en main** sur la vingtaine qu'il connaît.
+
+| ce qui se pioche | ce qui ne se pioche jamais |
+| --- | --- |
+| classe, spécialité, course, cordes, usure — tout le reste | **les fondamentaux** (coup de poing, prise, Irish Whip, provoquer) sont toujours là ; la **signature** et le **finisher** s'ouvrent au momentum, pas au tirage |
+
+**Ce qu'on ne joue pas, on le garde.** C'est la règle qui compte : tenir son Lariat lancé pendant trois tours en
+cherchant ses quatre cases de course, c'est du catch ; une main rebattue chaque tour, ce serait du hasard.
+
+Les cartes, le déplacement et l'histoire sont **la même affaire**. Une carte qui réclame quatre cases de course EST la
+raison de traverser le ring, et le coup qui en sort EST le moment qu'on racontera. Survoler une carte **allume sur le
+plateau les cases qui la débloquent** : la carte devient un itinéraire.
+
+Rien qui passe ? **Jeter la main et repiocher** coûte le tour mais rend du souffle, comme une provocation. Le talon se
+reconstitue avec la défausse.
+
+| | menu | main |
+| --- | --- | --- |
+| mouvements distincts (135 matchs) | 93 | **107** |
+| le coup le plus servi d'un match | 24 % de ses coups | **21 %** |
+| tours | 33,7 | **34,8** |
+| coups qui touchent | 29,5 | **30,5** |
+
+Deux pièges trouvés en mesurant : mettre les **fondamentaux dans le talon** rendait 41 % des tours entièrement morts et
+l'IA passait 56 % de son temps à jeter sa main ; et **noter la défausse dans la boucle de décision** la faisait
+ramasser les bonus de position et battre de vraies attaques — quarante tours pour vingt coups. La défausse vit
+maintenant dans le repli, là où on ne va que si rien d'autre ne vaut le coup.
+
 ## L'usure ciblée — la stratégie longue
 
 Un match de trente tours qui n'**accumule** rien n'a pas d'arc : le trentième tour ressemble au troisième, en plus

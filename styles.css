@@ -1001,3 +1001,21 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .story-act { margin-top: 9px; }
 .story-act b { font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.72; }
 .story-act p { margin: 2px 0 0; font-size: 0.9rem; line-height: 1.45; }
+
+/* -------------------------------------------------------------------- la main
+   Les cartes, l'histoire et le déplacement sont la même affaire : une carte
+   qui réclame quatre cases de course EST la raison de traverser le ring. La
+   ligne de préparation le dit, et les cases qui la satisfont s'allument sur le
+   plateau quand on survole la carte. */
+.deck-state { font-size: 0.72rem; opacity: 0.65; padding: 4px 8px; letter-spacing: 0.02em; }
+.agroup.grp-main .tier-label { color: #ffd54f; }
+.agroup.grp-merite .tier-label { color: #80cbc4; }
+.act.card { border-left: 3px solid #ffd54f66; }
+.act-setup { display: block; font-size: 0.72rem; color: #ffab91; margin-top: 1px; }
+.act-setup.done { color: #a5d6a7; }
+.cell.setup::after {
+  content: ''; position: absolute; inset: 8%; border-radius: 4px;
+  border: 2px dashed #ffd54fcc; background: #ffd54f1f;
+  animation: setup-pulse 1.1s ease-in-out infinite; pointer-events: none;
+}
+@keyframes setup-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
