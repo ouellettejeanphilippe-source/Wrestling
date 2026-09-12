@@ -95,8 +95,14 @@ ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 
 
 ## Règles de match
 
-- **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les cordes et les coins coûtent
-  2 de mouvement ; les ennemis bloquent le passage.
+- **Déplacement puis action**, une fois par lutteur et par tour (comme Fire Emblem). Les ennemis bloquent le passage.
+- **Les cordes sont un tremplin, pas un mur.** On ne les escalade pas, on rebondit dessus : y entrer coûte 1, en
+  **repartir est gratuit**. Passer par les cordes fait donc aller plus loin qu'aller tout droit — c'est la course du
+  catch télévisé, et ça nourrit l'élan comme le combo 💨 *Course dans les cordes*. Le rebond ne vaut pas de corde à
+  corde (sinon les cordes deviennent une autoroute) et ne paie jamais le dénivelé : on rebondit vers l'avant, pas
+  par-dessus. Le **coin**, lui, coûte 2 : on y *monte*, et on y gagne de la hauteur pour les plongeons.
+- Entrer dans le ring coûte 3 (cordes + dénivelé), en sortir 2. L'asymétrie est voulue : on bascule dehors d'un pas,
+  c'est **revenir** qui coûte — et c'est là qu'est le compte de l'arbitre.
 - **L'élan : le déplacement et le coup ne sont pas deux phases séparées.** Le coup porté vaut ce que vaut la course
   qui le précède. Un lutteur planté qui frappe son voisin n'a aucun poids.
 
@@ -189,7 +195,7 @@ Ils se déclenchent tout seuls quand les conditions sont réunies, s'annoncent d
 | 🪑 Décor complice | Frapper une cible acculée à un obstacle |
 | 🔗 Enchaînement | Alterner les familles de coups sur la même cible |
 | 💨 Course dans les cordes | **Traverser** les cordes en chemin (pas s'y arrêter) avant de frapper |
-| 🌀 Pris à revers | Arriver dans le dos ou sur le flanc plutôt que de face |
+| 🌀 Pris à revers | **Arriver** exactement dans le dos — être déjà là ne compte pas |
 | 💪 Différence de force | Prise sur un adversaire nettement moins fort |
 
 ## Plusieurs façons de gagner

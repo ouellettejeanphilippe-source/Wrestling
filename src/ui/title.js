@@ -105,7 +105,7 @@ function showSetup(root, app) {
 function showExhibition(root, app) {
   clear(root);
   const typeSel = h('select', {}, EXHIBITION_TYPES.map((t) => h('option', { value: t }, `${MATCH_TYPES[t].icon} ${MATCH_TYPES[t].name}`)));
-  const sizeSel = h('select', {}, [1, 2, 3].map((n) => h('option', { value: n, selected: n === 2 }, `${n} contre ${n}`)));
+  const sizeSel = h('select', {}, [1, 2, 3].map((n) => h('option', { value: n, selected: n === 1 }, `${n} contre ${n}`)));
   const desc = h('p', { class: 'muted' }, MATCH_TYPES[typeSel.value].desc);
   typeSel.addEventListener('change', () => { desc.textContent = MATCH_TYPES[typeSel.value].desc; });
   const picked = new Set();

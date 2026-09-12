@@ -1,5 +1,5 @@
 // Moteur de match : état, actions, résolution. Aucune dépendance au DOM.
-import { tileAt, setTile, terrainAt, reachable, manhattan, key, pathIn, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, heightAt, climbOf } from './grid.js';
+import { tileAt, setTile, terrainAt, reachable, manhattan, key, pathIn, isOutside, isOnRope, isOnTurnbuckle, isAdjacentToTerrain, inBounds, buildArena, fits, sizeOf, occupies, facingTo, OPPOSITE, heightAt, climbOf } from './grid.js';
 import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
@@ -93,8 +93,12 @@ function comboContext(battle, attacker, target, move, pos = null) {
     // rebond du catch télévisé.
     crossedRope: !!path && path.length > 1
       && path.slice(0, -1).some((p) => tileAt(g, p.x, p.y) === 'rope'),
-    // Arrivé dans le dos ou sur le flanc de la cible : contourner paie.
-    blindside: !!target.facing && facingTo(target, from) !== target.facing,
+    // Arrivé DANS LE DOS, pas simplement hors de son champ de vision. Avec
+    // quatre orientations, « tout sauf de face » couvre trois angles sur
+    // quatre : le combo se déclenchait sur 76 % des coups, ce n'était plus une
+    // récompense mais une prime automatique. Le vrai contournement, c'est
+    // l'orientation opposée — un angle sur quatre.
+    blindside: !!target.facing && facingTo(target, from) === OPPOSITE[target.facing],
     phase: matchPhase(battle),
   };
 }
@@ -483,6 +487,11 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
 }
 
 export function resolveAttack(battle, attacker, target, move) {
+  // On se tourne vers qui on frappe. Sans ça, un lutteur gardait l'orientation
+  // de son dernier déplacement : son dos traînait dans n'importe quelle
+  // direction et « Pris à revers » se déclenchait par accident une fois sur
+  // deux. Le contournement ne vaut que si la cible regarde vraiment ailleurs.
+  attacker.facing = facingTo(attacker, target);
   attacker.momentum = Math.max(0, attacker.momentum - moveCost(move));
   if (!target.down && gim(target).onAttacked && gim(target).onAttacked(battle, target, attacker, move)) {
     checkWin(battle);

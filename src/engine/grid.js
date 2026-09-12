@@ -2,7 +2,7 @@
 export const TERRAIN = {
   floor: { name: 'Plancher', cost: 1, passable: true, outside: true, icon: '' },
   ring: { name: 'Ring', cost: 1, passable: true, outside: false, icon: '' },
-  rope: { name: 'Cordes', cost: 2, passable: true, outside: false, icon: '' },
+  rope: { name: 'Cordes', cost: 1, passable: true, outside: false, icon: '' },
   turnbuckle: { name: 'Coin (turnbuckle)', cost: 2, passable: true, outside: false, icon: '' },
   ramp: { name: "Rampe d'entrée", cost: 1, passable: true, outside: true, icon: '' },
   table: { name: 'Table des commentateurs', cost: 99, passable: false, outside: true, hazard: 25, breakable: true, icon: '🪑' },
@@ -19,6 +19,7 @@ export const key = (x, y) => `${x},${y}`;
 // Direction du regard sur les quatre diagonales de la projection isométrique :
 // 'se' = vers +x (bas-droite à l'écran), 'sw' = +y, 'ne' = -y, 'nw' = -x.
 export const FACINGS = ['se', 'sw', 'ne', 'nw'];
+export const OPPOSITE = { se: 'nw', nw: 'se', sw: 'ne', ne: 'sw' };
 export function facingTo(from, to) {
   const dx = (to.x ?? 0) - (from.x ?? 0), dy = (to.y ?? 0) - (from.y ?? 0);
   if (!dx && !dy) return from.facing || 'se';
@@ -174,7 +175,21 @@ export function reachable(grid, units, unit, mov, from = null) {
       const climb = climbOf(unit);
       const dh = heightAt(grid, nx, ny) - heightAt(grid, cur.x, cur.y);
       if (dh > climb || dh < -2 * climb) continue;
-      const c = cur.cost + step + Math.max(0, dh);
+      // LES CORDES SONT UN TREMPLIN, PAS UN MUR
+      //
+      // On ne les escalade pas, on rebondit dessus : le pas qui QUITTE une
+      // corde est gratuit. Passer par les cordes fait donc aller plus loin
+      // qu'aller tout droit — c'est la course du catch télévisé, et ça nourrit
+      // l'élan comme le combo « Course dans les cordes ».
+      //
+      // Trois garde-fous, chacun pour une abus trouvé en test :
+      //  · pas de corde à corde, sinon on fait le tour du ring pour rien ;
+      //  · seulement À NIVEAU (dh === 0), donc vers le tapis. Rebondir n'est
+      //    pas enjamber : sans ça on sortait du ring pour 1 point, et on
+      //    grimpait au coin depuis le plancher.
+      const springboard = dh === 0
+        && tileAt(grid, cur.x, cur.y) === 'rope' && tileAt(grid, nx, ny) !== 'rope';
+      const c = cur.cost + (springboard ? 0 : step) + Math.max(0, dh);
       if (c > mov) continue;
       const k = key(nx, ny);
       if (!best.has(k) || best.get(k).cost > c) {
