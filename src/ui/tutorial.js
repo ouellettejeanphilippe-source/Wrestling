@@ -44,6 +44,7 @@ const PAGES = [
       h('p', {}, 'Ça vaut pour les frappes, les aériens, les prises et les armes — pas pour les soumissions, qui s’appliquent au sol, ni pour les provocations.'),
       h('p', {}, 'Se replacer rapporte aussi un peu de momentum, et ', h('b', {}, 'le chemin compte autant que la destination'), ' : passer dans les cordes en courant, ou arriver dans le dos plutôt que de face, déclenche ses propres combos.'),
       h('p', { class: 'muted' }, 'Même au corps à corps il reste presque toujours une case voisine où se replacer : le malus se contourne, mais il interdit de ne jamais bouger.'),
+      h('p', {}, h('b', {}, 'Certains mouvements n’existent pas à l’arrêt.'), ' Coude en course, épaule, genou sauté, lariat lancé : ils demandent d’avoir couru un nombre de cases ce tour-ci. Ce n’est pas un bonus, c’est un interrupteur — et tout le monde en a dans son kit de base.'),
       h('p', {}, h('b', {}, 'Les cordes sont un tremplin, pas un mur.'), ' On ne les escalade pas, on rebondit dessus : y entrer coûte 1, en repartir est gratuit. Passer par les cordes fait aller ', h('b', {}, 'plus loin'), ' qu’aller tout droit — donc plus d’élan, et le combo 💨 Course dans les cordes en prime. Le coin, lui, coûte 2 : on y ', h('b', {}, 'monte'), ', et la hauteur fait mal en plongeon.'),
       h('p', {}, h('b', {}, 'Et ça s’aggrave.'), ' Un tour sur place est un choix. Trois d’affilée, c’est un match qui s’enlise : le plancher des dégâts s’enfonce encore, ', h('b', {}, 'et la foule décroche'), ' — dans le catch, le prix d’un match statique, c’est le public. Une seule case remet le compteur à zéro.'),
     ],
@@ -71,6 +72,20 @@ const PAGES = [
       h('div', { class: 'tut-combos' }, COMBOS.map((c) => h('div', { class: 'tut-combo' },
         h('b', {}, `${c.icon} ${c.name}`), h('span', { class: 'tut-hint' }, c.hint), h('p', {}, c.desc)))),
       h('p', { class: 'muted' }, 'Aucun de ces combos n’est obligatoire. Ils décrivent simplement ce que le jeu récompense : varier ses coups, préparer ses gros mouvements, et utiliser le décor.'),
+    ],
+  },
+  {
+    title: 'Le cœur décide du tombé',
+    icon: '❤️',
+    body: () => [
+      h('p', {}, 'À 0 PV un lutteur tombe. Ce n’est pas la fin : il se relève avec ', h('b', {}, '55 % de ses PV'), ' et un ', h('b', {}, 'cœur ❤️ en moins'), '. Un match, c’est cette boucle répétée jusqu’à ce que le cœur soit vide.'),
+      h('p', {}, 'Le cœur est le ', h('b', {}, 'plafond'), ' du tombé, pas un bonus parmi d’autres. C’est la règle du catch : « il s’est dégagé du finisher ! ». Tant qu’il en reste, rien ne passe.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Cœur restant', 'Tombé au maximum'].map((x) => h('th', {}, x))),
+        [['Plein', '15 %'], ['Trois quarts', '35 %'], ['Moitié', '55 %'], ['Un quart', '75 %'], ['Vide', '95 %']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, 'Vos deux premières couvertures sont donc des ', h('b', {}, 'faux départs'), ' — c’est voulu. Ce qui use le cœur, c’est de le remettre au sol, encore et encore. Couvrir quelqu’un ', h('b', {}, 'debout'), ' n’est pas un tombé : c’est un roll-up désespéré, plafonné à 15 %.'),
+      h('p', { class: 'muted' }, 'Le cœur descend aussi à chaque kick-out. Un adversaire qui refuse de perdre se vide plus vite.'),
     ],
   },
   {

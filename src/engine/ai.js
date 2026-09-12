@@ -68,7 +68,13 @@ function scoreAction(battle, unit, pos, a, tg) {
       if (m.type === 'weapon' && rules.dq && battle.refDistracted <= 0) s -= 30;
       if (t.down && !(m.requires && m.requires.targetDown)) s *= 0.6;
       if (t.climb > 0) s += 200;
-      if (rules.tag && !unit.legal) s -= 60;
+      // Attaquer sans être légal, c'est 25 % de DQ par coup. Un malus fixe ne
+      // pesait rien face au score d'un gros mouvement : le partenaire illégal
+      // entrait dans le ring à chaque tour et perdait le match. Avec des
+      // matchs deux fois plus longs, ça passait de 38 % à 68 % des fins.
+      // C'est désormais un quasi-veto : on n'y va que si rien d'autre ne vaut
+      // le coup, ou si l'arbitre regarde ailleurs.
+      if (rules.tag && !unit.legal && battle.refDistracted <= 0) s = Math.min(s * 0.15, 12);
       s -= (a.cost || 0) * 0.35;
       return s;
     }

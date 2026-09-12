@@ -2,18 +2,63 @@
 // tier : 'base' (tout le monde) | 'class' (classe) | 'specialty' (spécialité) | 'signature' | 'finisher'
 // type : strike | grapple | aerial | submission | taunt | weapon
 // stat : str | agi | tec (stat d'attaque) ; power / acc ; range [min,max] ; cost = momentum requis
-// requires : { turnbuckle, attackerOnRope, targetDown, targetOnRope, targetDazed, targetNearTable, weapon }
+// requires : { turnbuckle, attackerOnRope, targetDown, targetOnRope, targetDazed, targetNearTable, weapon,
+//              ran: n (avoir couru n cases CE TOUR — le mouvement n'existe pas
+//              à l'arrêt), crossedRope (avoir traversé les cordes en chemin) }
 // effects : { daze, push, welt, listed, drainMomentum, heat, selfMomentum, ignoreDef, selfDamageOnMiss, breakTable, illegal, charge }
 //           portée élargie — line: n (le coup continue tout droit derrière la
 //           cible), splash: f (les voisins prennent la fraction f), push: n
 //           (la cible recule). Ces trois-là font du PLACEMENT une question
 //           défensive : rester aligné ou agglutiné coûte cher.
+//           pull: n — l'inverse du recul : arrache la cible de sa position.
 export const MOVES = {
   // ---- Base ---------------------------------------------------------------
   punch: { tier: 'base', name: 'Coup de poing', type: 'strike', stat: 'str', power: 7, acc: 95, range: [1, 1], momentum: 10, desc: 'Un bon vieux coup. Fiable.' },
   grapple: { tier: 'base', name: 'Prise de base', type: 'grapple', stat: 'str', power: 10, acc: 85, range: [1, 1], momentum: 12, desc: 'Une prise simple mais efficace.' },
   taunt: { tier: 'base', name: 'Provoquer', type: 'taunt', range: [0, 0], momentum: 30, desc: '+30 momentum, chauffe la foule. Effets bonus selon le gimmick.' },
   whip: { tier: 'base', name: 'Irish Whip', type: 'special', stat: 'str', acc: 90, range: [1, 1], momentum: 5, desc: "Projette l'adversaire 2 cases. Cordes = étourdi, coin/marches/table = gros dégâts." },
+
+  // ---- La course ----------------------------------------------------------
+  // Ces mouvements n'existent pas à l'arrêt : `ran` est un interrupteur, pas
+  // un bonus. C'est la moitié du vocabulaire du catch qui ne s'ouvre qu'en
+  // mouvement — et le meilleur remède contre deux lutteurs qui se tapent
+  // dessus sans bouger.
+  running_elbow: { tier: 'base', name: 'Coude en course', type: 'strike', stat: 'str', power: 9, acc: 90, range: [1, 1], momentum: 12, requires: { ran: 2 }, effects: { push: 1 }, desc: 'Après deux cases de course. Repousse.' },
+  shoulder_block: { tier: 'class', name: 'Épaule en course', type: 'strike', stat: 'str', power: 12, acc: 88, range: [1, 1], momentum: 14, requires: { ran: 3 }, effects: { push: 2, line: 1 }, desc: 'Après trois cases. Traverse ce qui est aligné et projette de deux cases.' },
+  running_knee: { tier: 'specialty', name: 'Genou sauté', type: 'strike', stat: 'agi', power: 14, acc: 85, range: [1, 1], momentum: 15, requires: { ran: 3 }, effects: { daze: 1 }, desc: 'Après trois cases. Étourdit.' },
+  lariat_run: { tier: 'specialty', name: 'Lariat lancé', type: 'strike', stat: 'str', power: 16, acc: 80, range: [1, 1], momentum: 16, requires: { ran: 4 }, effects: { daze: 1, push: 1, line: 1 }, desc: 'Pleine course. Retourne tout ce qui est sur la trajectoire.' },
+  dropdown: { tier: 'base', name: 'Se coucher au passage', type: 'special', stat: 'agi', acc: 95, range: [1, 1], momentum: 14, requires: { ran: 2 }, desc: 'On se laisse tomber pour que l’autre saute par-dessus : vole son momentum.', effects: { drainMomentum: 20 } },
+
+  // ---- Les cordes : rebond et tremplin ------------------------------------
+  rebound_clothesline: { tier: 'class', name: 'Clothesline de rebond', type: 'strike', stat: 'str', power: 14, acc: 85, range: [1, 1], momentum: 16, requires: { crossedRope: true }, effects: { daze: 1, push: 1 }, desc: 'Il faut avoir traversé les cordes en chemin. Le rebond du catch télévisé.' },
+  springboard_dropkick: { tier: 'specialty', name: 'Dropkick springboard', type: 'aerial', stat: 'agi', power: 15, acc: 82, range: [1, 2], momentum: 16, requires: { crossedRope: true }, effects: { push: 2 }, desc: 'Appui dans les cordes, puis dropkick. Projette de deux cases.' },
+  slingshot_senton: { tier: 'specialty', name: 'Senton slingshot', type: 'aerial', stat: 'agi', power: 16, acc: 80, range: [1, 2], momentum: 17, requires: { attackerOnRope: true }, effects: { splash: 0.5 }, desc: 'Depuis les cordes, par-dessus : retombe sur le tas.' },
+  rope_walk: { tier: 'signature', name: 'Marche sur la corde', type: 'aerial', stat: 'agi', power: 19, acc: 78, range: [1, 3], unlock: 50, cost: 25, requires: { attackerOnRope: true }, effects: { daze: 1 }, desc: 'On marche sur la corde du haut avant de sauter. Portée 3.' },
+
+  // ---- Du haut du coin ----------------------------------------------------
+  diving_headbutt: { tier: 'specialty', name: 'Coup de tête plongeant', type: 'aerial', stat: 'str', power: 17, acc: 75, range: [1, 3], momentum: 18, requires: { turnbuckle: true }, effects: { selfDamage: 4, daze: 1 }, desc: 'Depuis le coin. Fait mal aux deux.' },
+  double_stomp: { tier: 'specialty', name: 'Double stomp', type: 'aerial', stat: 'agi', power: 16, acc: 80, range: [1, 3], momentum: 16, requires: { turnbuckle: true, targetDownOrDazed: true }, desc: 'Depuis le coin, sur une cible au sol ou sonnée.' },
+  super_plex: { tier: 'signature', name: 'Superplex', type: 'grapple', stat: 'str', power: 22, acc: 78, range: [1, 1], unlock: 55, cost: 30, requires: { targetOnRope: true }, effects: { daze: 1, pull: 1 }, desc: 'Cueille l’adversaire sur les cordes et l’arrache jusqu’au tapis.' },
+  avalanche: { tier: 'signature', name: 'Avalanche du coin', type: 'grapple', stat: 'str', power: 21, acc: 75, range: [1, 1], unlock: 55, cost: 30, requires: { turnbuckle: true }, effects: { splash: 0.4, daze: 1 }, desc: 'Tout le poids depuis le coin. Les voisins dégustent.' },
+
+  // ---- Par-dessus la troisième corde --------------------------------------
+  tope_con_hilo: { tier: 'signature', name: 'Tope con hilo', type: 'aerial', stat: 'agi', power: 20, acc: 75, range: [1, 3], unlock: 55, cost: 30, requires: { attackerOnRope: true }, effects: { splash: 0.5, selfDamageOnMiss: 10 }, desc: 'Par-dessus la corde, en vrille. Tout le monde en dessous déguste.' },
+  asai_moonsault: { tier: 'signature', name: 'Moonsault Asai', type: 'aerial', stat: 'agi', power: 19, acc: 75, range: [1, 3], unlock: 50, cost: 25, requires: { attackerOnRope: true }, effects: { selfDamageOnMiss: 8, daze: 1 }, desc: 'Dos aux cordes, salto arrière vers l’extérieur.' },
+
+  // ---- Reprendre la position ----------------------------------------------
+  arm_drag: { tier: 'class', name: 'Arm drag', type: 'grapple', stat: 'tec', power: 9, acc: 90, range: [1, 1], momentum: 13, effects: { pull: 1 }, desc: 'Arrache l’adversaire de sa position et le ramène vers vous.' },
+  snapmare: { tier: 'base', name: 'Snapmare', type: 'grapple', stat: 'tec', power: 8, acc: 92, range: [1, 1], momentum: 11, effects: { pull: 1 }, desc: 'Roulé d’épaule : ramène la cible devant vous et l’assoit.' },
+  headlock_takeover: { tier: 'class', name: 'Prise de tête au sol', type: 'grapple', stat: 'tec', power: 11, acc: 88, range: [1, 1], momentum: 13, effects: { pull: 1, daze: 1 }, desc: 'Emmène la cible au tapis avec vous.' },
+  irish_reversal: { tier: 'specialty', name: 'Renversement d’Irish Whip', type: 'strike', stat: 'tec', power: 10, acc: 88, range: [1, 1], momentum: 14, requires: { ran: 2 }, effects: { push: 2, daze: 1 }, desc: 'Après une course : on inverse l’élan de l’autre et on l’envoie voler.' },
+
+  // ---- Usure : le corps du match ------------------------------------------
+  // Des coups modestes qui font durer plutôt que finir : un long match a
+  // besoin de marquer, d’user, de reprendre son souffle.
+  stomp_away: { tier: 'base', name: 'Piétiner', type: 'strike', stat: 'str', power: 6, acc: 95, range: [1, 1], momentum: 9, requires: { targetDown: true }, effects: { welt: 1 }, desc: 'Sur une cible au sol. Peu de dégâts, beaucoup de marques.' },
+  knee_drop: { tier: 'base', name: 'Genou sur le crâne', type: 'strike', stat: 'str', power: 8, acc: 90, range: [1, 1], momentum: 10, requires: { targetDown: true }, desc: 'Classique, efficace, sans gloire.' },
+  chinlock: { tier: 'class', name: 'Chinlock', type: 'submission', stat: 'tec', power: 6, acc: 92, range: [1, 1], momentum: 12, effects: { drainMomentum: 12 }, desc: 'La prise de repos : use l’adversaire et lui vide la jauge.' },
+  gut_wrench: { tier: 'specialty', name: 'Gutwrench', type: 'grapple', stat: 'str', power: 12, acc: 85, range: [1, 1], momentum: 13, effects: { welt: 1 }, desc: 'Soulève par le ventre. Marque les côtes.' },
+  back_rake: { tier: 'specialty', name: 'Griffure du dos', type: 'strike', stat: 'str', power: 5, acc: 95, range: [1, 1], momentum: 10, effects: { welt: 2, heat: 4 }, desc: 'Sale, bruyant, et ça marque.' },
 
   // ---- Classe : Force (powerhouse) -----------------------------------------
   bodyslam: { tier: 'class', name: 'Body Slam', type: 'grapple', stat: 'str', power: 13, acc: 80, range: [1, 1], momentum: 15, desc: 'Soulève et écrase.' },

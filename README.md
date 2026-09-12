@@ -65,8 +65,26 @@ La saison compte 8 épisodes (salle de bingo → PPV), 2 matchs bookables par é
 
 ```
 Lutteur = classe + spécialité + gimmick (passif) + signature + finisher
-Mouvements = base (tous) + classe (3) + spécialité (2) + signature (50 momentum) + finisher (100 momentum)
+Mouvements = base (9) + classe (5) + spécialité (4) + signature + finisher ≈ 19 par lutteur
 ```
+
+Le catalogue compte **123 mouvements**. Un long match épuise un kit de trois coups : la variété est ce qui évite de
+matraquer le même bouton quinze tours de suite.
+
+### Les mouvements de course
+
+Une partie du vocabulaire **n'existe pas à l'arrêt** : `requires: { ran: n }` est un interrupteur, pas un bonus.
+Coude en course, épaule, genou sauté, lariat lancé, se coucher au passage — et `crossedRope` pour ce qui exige
+d'avoir **traversé les cordes** en chemin. Tout le monde en a dans son kit de base, jobber compris : c'est une
+raison de bouger placée dans chaque main.
+
+| depuis | mouvements |
+| --- | --- |
+| **en courant** | coude en course, épaule, genou sauté, lariat lancé, renversement d'Irish Whip |
+| **après les cordes** | clothesline de rebond, dropkick springboard |
+| **sur les cordes** | senton slingshot, marche sur la corde, tope con hilo, moonsault Asai |
+| **depuis le coin** | coup de tête plongeant, double stomp, avalanche |
+| **sur une cible aux cordes** | superplex — on l'arrache jusqu'au tapis |
 
 | Classes | Spécialités |
 | --- | --- |
@@ -132,6 +150,7 @@ ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 
   | ➡️ **Ligne** | le coup continue tout droit derrière la cible | Clothesline, Spear, Buckshot Lariat |
   | 💥 **Zone** | les voisins de la cible prennent une fraction des dégâts | Running Senton, Frog Splash, Suicide Dive |
   | ↗️ **Recul** | la cible est projetée — vers les cordes, un coin, une table | Chokeslam, Poing K.-O., Big Boot |
+  | ↙️ **Attirer** | l'inverse : arrache la cible de sa position | Arm drag, snapmare, superplex |
 
   La zone ne fait pas le tri : **un partenaire collé à la cible déguste aussi**. La prévision de combat le dit avant
   que vous confirmiez.
@@ -211,8 +230,28 @@ Cinq pages accessibles depuis l'écran titre (« Comment jouer ») et le bouton 
 au premier match : les trois actes, l'échelle de momentum, les combos, les routes de victoire, et trois approches
 possibles (rouleau compresseur, voltigeur, technicien) présentées comme des exemples et non comme la bonne façon de
 jouer.
-- **Au sol** : à 0 PV un lutteur tombe et perd un tour. C'est là qu'on le **couvre**. Il peut se dégager (kick-out),
-  mais chaque kick-out et chaque relevé use son **cœur ❤️**. Un finisher donne un tombé immédiat et +30 %.
+- **Au sol** : à 0 PV un lutteur tombe et perd un tour. C'est là qu'on le **couvre**. Il se relève avec **55 % de ses
+  PV** — le second souffle — et un **cœur ❤️ en moins**. Chaque kick-out en use aussi.
+
+- **Le cœur est le PLAFOND du tombé**, pas un modificateur parmi d'autres. C'est la règle du catch : *« il s'est
+  dégagé du finisher ! »*. Tant qu'il reste du cœur, aucun bonus — momentum, main event, finisher — ne fait passer
+  une couverture.
+
+  | cœur restant | plafond du tombé |
+  | --- | --- |
+  | plein | 15 % |
+  | ¾ | 35 % |
+  | ½ | 55 % |
+  | ¼ | 75 % |
+  | vide | 95 % |
+
+  La courbe s'ouvre **à la fin** : les deux premières couvertures sont des faux départs, la dernière est un silence
+  dans la salle. Couvrir un adversaire **debout** n'est pas un tombé mais un roll-up désespéré : plafonné à 15 %
+  quoi qu'il arrive.
+
+  Sans cette règle, une cible au sol partait à 55 % et le premier knockdown terminait le match : **5,6 tours, une
+  seule chute**. Avec, un match simple tient **14,4 tours, 16 coups et 3 chutes**, et se conclut aussi bien par
+  tombé que par soumission, arrêt de l'arbitre ou compte à l'extérieur.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).
 - **Terrain** : coin = plongeons +25 %, cordes = étourdi, coin/marches/table/cage = dégâts sur Irish Whip, table qui casse.
 - **Armes** (chaise, kendo, poubelle, batte) : illégales avec arbitre → risque de DQ, sauf s'il est distrait.

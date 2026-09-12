@@ -236,6 +236,15 @@ export function undoMove(battle, unit) {
   return true;
 }
 
+// Distance parcourue ce tour, au vrai sens : celle de la tuile candidate
+// quand l'IA simule un déplacement, celle déjà faite sinon.
+const travelOf = (unit, pos) => (pos && pos.travel != null ? pos.travel : (unit.movedTiles || 0));
+const crossedRopeIn = (battle, unit, pos) => {
+  const path = (pos && pos.path) || unit.movePath;
+  return !!path && path.length > 1
+    && path.slice(0, -1).some((p) => tileAt(battle.grid, p.x, p.y) === 'rope');
+};
+
 // ---------------------------------------------------------------- liste des actions
 function targetOk(battle, move, e, pos) {
   const req = move.requires || {};
@@ -276,6 +285,13 @@ export function listActions(battle, unit, pos = null) {
     if (unit.momentum < Math.max(unlock, cost)) { a.ok = false; a.reason = `🔒 Momentum ${Math.max(unlock, cost)} requis (vous : ${unit.momentum})`; }
     else if (req.turnbuckle && !onTb && !unit.flags.ignoreTurnbuckle) { a.ok = false; a.reason = 'Doit être sur un coin'; }
     else if (req.attackerOnRope && !onRope) { a.ok = false; a.reason = 'Doit être sur les cordes'; }
+    // `ran` : ce mouvement N'EXISTE PAS sans course. Là où l'élan est un
+    // dégradé, c'est un interrupteur — la moitié du catalogue de la vitesse
+    // et des cordes ne s'ouvre qu'en mouvement.
+    else if (req.ran && travelOf(unit, pos) < req.ran) {
+      a.ok = false; a.reason = `Doit avoir couru ${req.ran} cases ce tour (vous : ${travelOf(unit, pos)})`;
+    }
+    else if (req.crossedRope && !crossedRopeIn(battle, unit, pos)) { a.ok = false; a.reason = 'Doit avoir traversé les cordes en chemin'; }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
       a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
@@ -535,6 +551,10 @@ export function resolveAttack(battle, attacker, target, move) {
     if (eff.daze) setStatus(battle, target, 'dazed', eff.daze + 1);
     if (eff.welt) addStatus(battle, target, 'welt', eff.welt, 4);
     if (eff.push) pushUnit(battle, target, Math.sign(target.x - attacker.x), Math.sign(target.y - attacker.y), eff.push, attacker);
+    // Attirer : le recul à l'envers. Arrache l'adversaire des cordes, le sort
+    // d'un coin, le ramène au centre — la position se dispute dans les deux
+    // sens, pas seulement en se repoussant.
+    if (eff.pull) pushUnit(battle, target, Math.sign(attacker.x - target.x), Math.sign(attacker.y - target.y), eff.pull, attacker);
     if (eff.breakTable) {
       const n = battle.grid;
       for (const [nx, ny] of [[target.x + 1, target.y], [target.x - 1, target.y], [target.x, target.y + 1], [target.x, target.y - 1]]) {
@@ -644,7 +664,10 @@ function downUnit(battle, unit) {
 
 function standUp(battle, u) {
   u.down = false; u.downTurns = 0;
-  u.hp = Math.max(1, Math.round(u.maxHp * 0.3) + u.grit * 3);
+  // Le second souffle. À 30 % on repartait avec une vie et demie de coup : le
+  // lutteur se relevait pour se faire remettre au sol aussitôt. À 55 % il a de
+  // quoi raconter une reprise — et il lui reste un cœur de moins pour le faire.
+  u.hp = Math.max(1, Math.round(u.maxHp * 0.55) + u.grit * 3);
   u.grit = Math.max(0, u.grit - 1);
   addMomentum(battle, u, 25);
   if (u.team === 'player') battle.stats.playerStandUps++;
@@ -685,16 +708,51 @@ export function scriptAllowsElimination(battle, target, method) {
 }
 const SCRIPT_PENALTY = 0.3;
 
+// LE TOMBÉ EST UNE HISTOIRE, PAS UN JET DE DÉ
+//
+// Un tombé à froid ne marche jamais : c'est le principe même du catch. Ce qui
+// décide, c'est le CŒUR — combien de fois l'adversaire s'est déjà relevé. La
+// première couverture doit se solder par un kick-out à un, la dernière par un
+// silence dans la salle.
+//
+// Avant, une cible au sol partait à 55 % : le premier knockdown finissait le
+// match. Sur 60 matchs simulés, il y avait exactement UNE chute par match et
+// tout se terminait au premier tombé — un match de catch qui dure six tours.
 export function pinChance(battle, pinner, target) {
-  let c = target.down ? 0.55 : 0.05 + (1 - hpRatio(target)) * 0.3;
-  if (target.statuses.finished) c += 0.3;
-  c += (pinner.momentum / 100) * 0.1;
-  c -= target.grit * 0.07;
+  const gritLeft = target.maxGrit ? target.grit / target.maxGrit : 0;
+  // Couvrir quelqu'un DEBOUT n'est pas un tombé, c'est un roll-up désespéré :
+  // ça reste marginal quoi qu'il arrive. Tous les bonus — momentum, phase,
+  // finisher — ne s'appliquent qu'à une cible au sol. Sans cette séparation,
+  // un bonus de phase de +0,12 posé sur une base de 0,12 la doublait, et les
+  // matchs se terminaient sur une couverture à 34 % d'un adversaire debout
+  // qui n'était jamais tombé.
+  if (!target.down) {
+    let r = 0.02 + (1 - hpRatio(target)) * 0.08;
+    if (gim(pinner).modPinChance) r = gim(pinner).modPinChance(battle, pinner, pinner, target, r, 'pinner');
+    if (gim(target).modPinChance) r = gim(target).modPinChance(battle, target, pinner, target, r, 'target');
+    if (!scriptAllowsElimination(battle, target, 'pin')) r *= SCRIPT_PENALTY;
+    return clamp(r, 0.02, 0.15);
+  }
+  // La courbe du cœur n'est pas droite : elle s'ouvre à la fin. Linéaire, le
+  // deuxième knockdown suffisait déjà à conclure. Au carré, les deux premières
+  // couvertures sont des faux départs et la salle n'y croit qu'au bout.
+  const used = 1 - gritLeft;
+  let c = 0.10 + used * used * 0.60;
+  if (target.statuses.finished) c += 0.25;
+  c += (pinner.momentum / 100) * 0.08;
   const saves = alliesOf(battle, target).filter((a) => !a.down && manhattan(a, target) === 1).length;
   c -= saves * 0.2;
   if (gim(pinner).modPinChance) c = gim(pinner).modPinChance(battle, pinner, pinner, target, c, 'pinner');
   if (gim(target).modPinChance) c = gim(target).modPinChance(battle, target, pinner, target, c, 'target');
   c += matchPhase(battle).pin;
+  // LE CŒUR EST UN PLAFOND, PAS UN TERME
+  //
+  // C'est la règle du catch : « il s'est dégagé du finisher ! ». Tant qu'il
+  // reste du cœur, aucun bonus — momentum, main event, finisher — ne fait
+  // passer un tombé. Sans ce plafond, un +0,12 de phase posé sur une base de
+  // 0,14 la doublait, et le match se terminait au premier knockdown pendant
+  // que la courbe du cœur ne servait à rien.
+  c = Math.min(c, 0.15 + used * 0.80);
   if (!scriptAllowsElimination(battle, target, 'pin')) c *= SCRIPT_PENALTY;
   return clamp(c, 0.03, 0.95);
 }
