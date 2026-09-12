@@ -134,5 +134,13 @@ export function rosterPicker(defs, opts = {}) {
 
   const box = h('div', { class: 'picker' }, grid, detail);
   box.picked = picked;
+  // Poser la sélection depuis l'extérieur : le tirage au sort des adversaires
+  // doit repeindre les tuiles et prévenir l'appelant, exactement comme un clic.
+  box.setPicked = (ids) => {
+    picked.clear();
+    for (const id of ids) if (tiles.has(id)) picked.add(id);
+    paint();
+    onChange([...picked]);
+  };
   return box;
 }

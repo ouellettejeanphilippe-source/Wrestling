@@ -3,6 +3,7 @@ import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } 
 import { enemiesOf, hpRatio } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange, tapChance, novelty, DAMAGE_SCALE } from './battle.js';
 import { movePart, wearFrom, wearOf, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from './wear.js';
+import { matchPhase } from './phases.js';
 import { MOVES } from '../data/moves.js';
 
 export function planUnit(battle, unit) {
@@ -78,6 +79,40 @@ function scoreAction(battle, unit, pos, a, tg) {
     // Le décompte qui monte est ce qui doit la ramener, pas une préférence
     // vague : à zéro c'est un tour perdu, à cinq c'est le match.
     case 'rollin': return E(8 + (unit.outsideCount || 0) * 48);
+    // LE MANAGER : deux cartouches pour tout le match. Le piège serait de les
+    // griller au premier tour parce que le score est bon dans l'absolu — donc
+    // il est pondéré par le MOMENT. En ouverture, la foule n'y croit pas et il
+    // reste tout le match pour s'en servir ; en main event, c'est maintenant
+    // ou jamais.
+    case 'manager': {
+      const m = a.manager, t = tg.unit;
+      let s = 0;
+      switch (m.ability) {
+        // Du momentum ne vaut que s'il y a quelque chose à en faire tout de
+        // suite : sinon le manager offre une jauge que le lutteur aurait
+        // gagnée tout seul en frappant.
+        case 'promo': {
+          const portee = enemies.some((e) => manhattan(e, pos) <= 3);
+          s = portee ? 25 + (100 - unit.momentum) * 0.55 : 10;
+          break;
+        }
+        case 'smelling_salts':
+          s = (1 - hpRatio(unit)) * 190 + (unit.stamina < 30 ? 45 : 0) + (unit.statuses.dazed ? 40 : 0);
+          break;
+        case 'distract': {
+          const outils = unit.weapon || unit.moves.some((id) => MOVES[id] && MOVES[id].effects && MOVES[id].effects.illegal);
+          s = rules.dq ? (outils ? 110 : 45) : 15;
+          break;
+        }
+        case 'cheap_shot': s = t ? 95 + (t.hp <= 20 ? 60 : 0) : 0; break;
+        case 'rope_hold': s = t ? 80 + (wearOf(t, 'legs') > 40 ? 45 : 0) : 0; break;
+        default: s = 20;
+      }
+      const acte = { early: 0.55, mid: 1, late: 1.25 }[matchPhase(battle).key] || 1;
+      // Tricher par procuration use la même corde que tricher soi-même.
+      if (m.illegal && rules.dq && battle.refDistracted <= 0) s *= 1 - 0.5 * risqueArbitre(battle, unit);
+      return E(s * acte);
+    }
     case 'pickup': return E(rules.dq ? 12 : 70);
     // Aller fouiller sous le ring : intéressant quand les armes sont légales,
     // et seulement si on n'est pas en train de se faire compter à l'extérieur.

@@ -9,6 +9,19 @@ export function log(battle, text, cls = '') {
 }
 export function emit(battle, ev) { battle.events.push(ev); }
 
+// LES TEMPS FORTS — la matière première de l'histoire du match
+//
+// Le journal raconte tout, dans l'ordre, et c'est précisément ce qui le rend
+// inutilisable pour raconter : il n'y a pas de hiérarchie. Un temps fort est
+// une donnée STRUCTURÉE — qui, quoi, à quel tour — qu'on pourra relire à la
+// fin pour écrire trois lignes qui ressemblent à un match plutôt qu'à un
+// relevé de compteur.
+export function beat(battle, kind, data = {}) {
+  if (!battle.beats) battle.beats = [];
+  battle.beats.push({ turn: battle.turn, kind, ...data });
+  if (battle.beats.length > 300) battle.beats.shift();
+}
+
 export const living = (battle, team) => battle.units.filter((u) => !u.eliminated && (!team || u.team === team));
 export const alliesOf = (battle, unit) => living(battle, unit.team).filter((u) => u !== unit);
 export const enemiesOf = (battle, unit) => living(battle, unit.team === 'player' ? 'enemy' : 'player');

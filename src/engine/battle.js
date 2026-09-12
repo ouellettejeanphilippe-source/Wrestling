@@ -4,6 +4,7 @@ import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { MATCH_TYPES, WEAPONS } from '../data/matchTypes.js';
+import { MANAGERS } from '../data/managers.js';
 import { createUnit } from './units.js';
 import { createRng } from './rng.js';
 import { matchPhase, isFlashy } from './phases.js';
@@ -11,7 +12,7 @@ import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
 import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
-import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
+import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
   standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
@@ -22,6 +23,12 @@ const SPAWNS = {
 const WEAPON_SPOTS = [[4, 7], [15, 8], [4, 8], [15, 7], [2, 4], [16, 12], [2, 12], [16, 4]];
 const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
+// Ce que rapporte une revanche : du momentum au coup d'envoi, et une rancune
+// qui pèse un peu sur chaque coup. Petit exprès — la rivalité doit colorer le
+// match, pas le décider.
+export const RIVALRY_REVENGE = 20, GRUDGE_DAMAGE = 1.06;
+// Avant ce tour, le manager reste assis : il n'a rien à sauver.
+export const MANAGER_FIRST_TURN = 4;
 
 const gim = (u) => GIMMICKS[u.gimmick] || {};
 const HAZARD_TILES = ['table', 'steps', 'cage', 'barricade', 'turnbuckle'];
@@ -122,11 +129,22 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   const battle = {
     rng: createRng(seed), seed, grid, rules, match, mode: match.mode || 'kayfabe', script: match.script || null, units: [], items: [], turn: 1, phase: 'player', log: [], events: [],
     heat: 10, refDistracted: 0, result: null, lastElimination: null, reinforcementsDone: [],
+    // Les temps forts, dans l'ordre : de quoi écrire l'histoire du match à la fin.
+    beats: [],
     // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
     // fait partie de ce qu'on lit avant de décider de tricher.
     ref: makeReferee(createRng(seed ^ 0x9e37)),
     stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0 },
   };
+  // LES MANAGERS. Un par camp au maximum, deux interventions chacun pour tout
+  // le match. `match.managers` vient de l'écran de préparation : { player,
+  // enemy } avec des identifiants, ou rien du tout.
+  battle.managers = {};
+  for (const team of ['player', 'enemy']) {
+    const id = (match.managers || {})[team];
+    const m = MANAGERS[id];
+    if (m) battle.managers[team] = { ...m, left: m.uses };
+  }
   battle.api = {
     applyDamage: (t, dmg, src, opts) => applyDamage(battle, t, dmg, src, opts),
     isOutside: (u) => isOutside(grid, u.x, u.y),
@@ -160,7 +178,27 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     battle.items.push({ x, y, weapon: { ...WEAPONS[WEAPON_ORDER[i % WEAPON_ORDER.length]] } });
   });
 
+  // LA RIVALITÉ. Ce que les deux se doivent déjà. Elle n'ajoute pas de règle :
+  // elle ajoute de la CHALEUR au coup d'envoi (la salle connaît l'histoire) et
+  // du momentum à celui qui est venu chercher sa revanche. Un match entre deux
+  // inconnus commence froid ; la belle commence debout.
+  if (match.rivalry && match.rivalry.meetings > 0) {
+    const riv = match.rivalry;
+    battle.heat = clamp(battle.heat + (riv.heat || 0), 0, 100);
+    log(battle, `📖 ${riv.note}`, 'big');
+    for (const u of battle.units) {
+      if (riv.revenge && u.id === riv.revenge) {
+        addMomentum(battle, u, RIVALRY_REVENGE);
+        u.flags.grudge = true;
+        log(battle, `😤 ${u.name} n’a pas digéré la dernière. Il entre avec une idée fixe.`);
+      }
+    }
+  }
   log(battle, `🔔 DING DING DING ! ${match.title || rules.name} — ${rules.name}.`, 'big');
+  for (const team of ['player', 'enemy']) {
+    const m = battle.managers[team];
+    if (m) log(battle, `${m.icon} ${m.name} accompagne ${team === 'player' ? 'votre camp' : 'l’adversaire'} au bord du ring.`);
+  }
   for (const u of battle.units) if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
   startPhase(battle, 'player');
   return battle;
@@ -418,6 +456,31 @@ export function listActions(battle, unit, pos = null) {
       targets: [{ self: true }], ok: true, dest: rentree,
     });
   }
+  // L'INTERVENTION DU MANAGER. Elle coûte le tour du lutteur : un manager ne
+  // donne pas d'action gratuite, il transforme celle qu'on a. C'est ce qui en
+  // fait une décision — et ce qui empêche « appuyer sur le bouton dès que
+  // possible » d'être toujours juste.
+  // LE MANAGER N'INTERVIENT PAS AU COUP D'ENVOI. Au son de la cloche, l'arbitre
+  // regarde les deux lutteurs et personne n'est encore fatigué : une
+  // intervention n'y raconte rien, elle se dépense. Sans ce délai, l'IA
+  // grillait ses deux cartouches aux tours 1 et 2 parce que c'est là que son
+  // momentum est le plus bas — et le manager disparaissait du match.
+  const mgr = battle.managers[unit.team];
+  if (mgr && mgr.left > 0 && battle.turn >= MANAGER_FIRST_TURN) {
+    const vise = MANAGER_TARGETS[mgr.ability];
+    let targets = [{ self: true }], ok = true, reason = '';
+    if (vise === 'enemy') {
+      const bord = (e) => !mgr.needsEdge || ['rope', 'turnbuckle'].includes(tileAt(g, e.x, e.y)) || isOutside(g, e.x, e.y);
+      targets = enemies.filter((e) => !e.eliminated && bord(e)).map((e) => ({ unit: e }));
+      ok = targets.length > 0;
+      reason = mgr.needsEdge ? 'Aucun adversaire au bord du ring (cordes, coin ou extérieur)' : 'Aucun adversaire';
+    }
+    actions.push({
+      id: 'manager', name: `${mgr.label} (${mgr.left})`, tier: 'base', type: 'manager',
+      desc: mgr.desc + (mgr.illegal && rules.dq ? ' L’arbitre peut le voir.' : ''),
+      manager: mgr, targets, ok, reason,
+    });
+  }
   const item = battle.items.find((i) => i.x === p.x && i.y === p.y);
   if (item && !unit.weapon) actions.push({ id: 'pickup', name: `${item.weapon.icon} Ramasser : ${item.weapon.name}`, tier: 'base', type: 'pickup', desc: `+${item.weapon.power} dégâts, ${item.weapon.uses} utilisations.`, targets: [{ self: true }], ok: true });
   // Sous le ring : accessible depuis l'extérieur, au bord du tablier.
@@ -477,6 +540,9 @@ function rollInTarget(battle, unit, p) {
   return best;
 }
 
+// Quelles interventions visent un adversaire plutôt que son propre lutteur.
+const MANAGER_TARGETS = { cheap_shot: 'enemy', rope_hold: 'enemy' };
+
 function weaponMove(battle, unit) {
   const w = unit.weapon;
   return { id: 'weapon', name: w.name, tier: 'base', type: 'weapon', stat: 'str', power: w.power, acc: 85, range: [1, 1], momentum: 12, effects: { illegal: !!battle.rules.dq } };
@@ -531,6 +597,7 @@ export function executeAction(battle, unit, actionId, target = null) {
       log(battle, `↩️ ${unit.name} se roule sous la corde du bas et revient dans le ring.`);
       break;
     }
+    case 'manager': result = managerSpot(battle, unit, tgt, a.manager); break;
     case 'tag': result = tagPartner(battle, unit, tgt); break;
     case 'climb': result = doClimb(battle, unit); break;
     case 'wait': heal(battle, unit, 4); unit.rested = true; break;
@@ -635,6 +702,8 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   dmg *= elanMult(opts.travel ?? attacker.movedTiles, move, attacker);
   // À bout de souffle, on frappe sans appui.
   if (winded(attacker)) dmg *= 0.75;
+  // La rancune : celui qui vient chercher sa revanche frappe un peu plus fort.
+  if (attacker.flags.grudge) dmg *= GRUDGE_DAMAGE;
   // ON TAPE SUR LA ROUE VOILÉE. Frapper un membre déjà entamé fait un peu plus
   // mal que frapper du neuf : c'est le paiement de l'usure ciblée pour qui n'a
   // pas de prise de soumission. Volontairement modeste — à 15 %, les matchs
@@ -700,6 +769,7 @@ export function resolveAttack(battle, attacker, target, move) {
     addMomentum(battle, target, 20);
     addHeat(battle, 12);
     battle.stats.reversals = (battle.stats.reversals || 0) + 1;
+    beat(battle, 'reverse', { who: target.name, uid: target.uid, on: attacker.name, move: move.name });
     checkWin(battle);
     return { hit: false, reversed: true, chance: rev };
   }
@@ -774,6 +844,7 @@ export function resolveAttack(battle, attacker, target, move) {
   if (move.tier === 'finisher' && !target.eliminated) {
     setStatus(battle, target, 'finished', 2);
     battle.stats.finishers++;
+    beat(battle, 'finisher', { who: attacker.name, uid: attacker.uid, on: target.name, move: move.name });
     if (target.team === 'player') battle.stats.playerTookFinisher++;
     if (target.down && !battle.rules.noPin && manhattan(attacker, target) === 1 && canPin(battle, attacker, target).ok) { freePin = true; log(battle, `${attacker.name} peut couvrir immédiatement !`); }
   }
@@ -854,6 +925,7 @@ export function applyDamage(battle, target, amount, source, opts = {}) {
       log(battle, crossed.level >= 2
         ? `${crossed.icon} ${crossed.name.toUpperCase()} HORS SERVICE ! ${target.name} ${crossed.broken}.`
         : `${crossed.icon} ${target.name} ${crossed.hurt} — sa ${crossed.short} a pris.`, crossed.level >= 2 ? 'big' : '');
+      beat(battle, crossed.level >= 2 ? 'broken' : 'hurt', { who: target.name, uid: target.uid, part: crossed.part, icon: crossed.icon, short: crossed.short, by: source ? source.name : null });
     }
   }
   if (source && gim(target).onDamaged) gim(target).onDamaged(battle, target, source, opts.move, amount);
@@ -874,6 +946,7 @@ function downUnit(battle, unit) {
   }
   if (unit.team === 'player') battle.stats.playerDowned++;
   log(battle, `💫 ${unit.name} est au sol !`, 'down');
+  beat(battle, 'down', { who: unit.name, uid: unit.uid, grit: unit.grit });
   emit(battle, { type: 'down', x: unit.x, y: unit.y });
   addHeat(battle, 5);
 }
@@ -892,6 +965,7 @@ function standUp(battle, u) {
   addMomentum(battle, u, 25);
   if (u.team === 'player') battle.stats.playerStandUps++;
   log(battle, `🔥 ${u.name} se relève ! (${u.hp} PV, cœur ${u.grit})`, 'standup');
+  beat(battle, 'standup', { who: u.name, uid: u.uid, grit: u.grit });
   addHeat(battle, 8);
   if (gim(u).onStandUp) gim(u).onStandUp(battle, u);
 }
@@ -899,6 +973,7 @@ function standUp(battle, u) {
 export function eliminate(battle, unit, reason) {
   if (unit.eliminated) return;
   unit.eliminated = true; unit.elimReason = reason; unit.down = false;
+  beat(battle, 'finish', { who: unit.name, uid: unit.uid, reason });
   battle.lastElimination = unit;
   battle.stats.lastElimReason = reason;
   emit(battle, { type: 'eliminated', x: unit.x, y: unit.y, uid: unit.uid });
@@ -999,6 +1074,7 @@ function attemptPin(battle, pinner, target) {
   addMomentum(battle, target, 15);
   log(battle, near === 3 ? `UN ! DEUX ! TR— KICK OUT À 2,9 !!! ${target.name} refuse de perdre !` : near === 2 ? `UN ! DEUX ! … KICK OUT ! ${target.name} se dégage.` : `UN… ${target.name} se dégage facilement.`, 'big');
   emit(battle, { type: 'pin', x: target.x, y: target.y, count: near === 3 ? 2.9 : near === 2 ? 2 : 1 });
+  if (near >= 2) beat(battle, 'nearfall', { who: target.name, uid: target.uid, by: pinner.name, count: near === 3 ? 2.9 : 2, grit: target.grit });
   return { success: false, chance: c };
 }
 
@@ -1146,6 +1222,7 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
         if (t.breakable) {
           setTile(g, nx, ny, 'debris'); battle.stats.tables++; addHeat(battle, 25);
           log(battle, `💥 ${target.name} PASSE À TRAVERS LA TABLE !!!`, 'big');
+          beat(battle, 'table', { who: target.name, by: source ? source.name : null });
           x = nx; y = ny; moved++;
         } else {
           log(battle, `${target.name} s’écrase contre ${t.name} !`);
@@ -1186,6 +1263,57 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
   }
   if (!target.eliminated) { target.x = x; target.y = y; target.climb = 0; emit(battle, { type: 'move', uid: target.uid, x, y }); }
   return moved;
+}
+
+// ---------------------------------------------------------------- managers
+function managerSpot(battle, unit, target, mgr) {
+  const live = battle.managers[unit.team];
+  if (!live || live.left <= 0) return { ok: false };
+  live.left -= 1;
+  addHeat(battle, 10);
+  beat(battle, 'manager', { who: mgr.name, icon: mgr.icon, ability: mgr.ability, pour: unit.name, on: target ? target.name : null });
+  switch (mgr.ability) {
+    case 'promo':
+      addMomentum(battle, unit, 40);
+      unit.stamina = clamp(unit.stamina + 25, 0, unit.maxStamina);
+      addHeat(battle, 8);
+      log(battle, `${mgr.icon} ${mgr.name} prend le micro : « Mesdames et messieurs, MON client… » ${unit.name} reprend le dessus. (+40 momentum, +25 souffle)`, 'big');
+      break;
+    case 'smelling_salts':
+      heal(battle, unit, unit.maxHp * 0.18);
+      unit.stamina = unit.maxStamina;
+      delete unit.statuses.dazed;
+      log(battle, `${mgr.icon} ${mgr.name} colle une fiole sous le nez de ${unit.name} — il repart comme au premier tour.`, 'big');
+      break;
+    case 'distract':
+      battle.refDistracted = 4;
+      log(battle, `${mgr.icon} ${mgr.name} monte sur le tablier et embarque l’arbitre dans une conversation passionnante. Trois tours d’aveuglement.`, 'big');
+      break;
+    case 'cheap_shot': {
+      log(battle, `${mgr.icon} MÉGAPHONE ! ${mgr.name} frappe ${target.name} dans le dos pendant que l’arbitre est de l’autre côté.`, 'big');
+      emit(battle, { type: 'combo', x: target.x, y: target.y, names: [mgr.name] });
+      applyDamage(battle, target, 14, unit, { move: { id: 'manager_shot', type: 'weapon', part: 'head' } });
+      if (!target.eliminated) setStatus(battle, target, 'dazed', 2);
+      break;
+    }
+    case 'rope_hold': {
+      log(battle, `${mgr.icon} ${mgr.name} attrape la cheville de ${target.name} et ne lâche plus !`, 'big');
+      emit(battle, { type: 'combo', x: target.x, y: target.y, names: [mgr.name] });
+      applyDamage(battle, target, 8, unit, { move: { id: 'manager_hold', type: 'grapple', part: 'legs', effects: { wear: 22 } } });
+      if (!target.eliminated) {
+        setStatus(battle, target, 'dazed', 1);
+        pushUnit(battle, target, Math.sign(unit.x - target.x), Math.sign(unit.y - target.y), 1, unit);
+      }
+      break;
+    }
+    default: break;
+  }
+  // Un manager pris la main dans le sac, c'est l'arbitre qui prévient — puis
+  // qui siffle. La même tolérance que pour le lutteur : elle est partagée,
+  // donc tricher par procuration use la même corde.
+  if (mgr.illegal && !unit.eliminated) checkDq(battle, unit, 0.4, `l’intervention de ${mgr.name}`);
+  checkWin(battle);
+  return { manager: mgr.id };
 }
 
 // ---------------------------------------------------------------- tag / climb / DQ
@@ -1271,10 +1399,12 @@ function checkDq(battle, unit, base, what) {
   ref.vus++;
   ref.patience--;
   if (ref.patience > 0) {
+    beat(battle, 'warning', { who: unit.name, what, reste: ref.patience });
     log(battle, `⚠️ AVERTISSEMENT ! L’arbitre a vu ${what} de ${unit.name}. Encore ${ref.patience} et c’est fini.`, 'big');
     addHeat(battle, 6);
     return false;
   }
+  beat(battle, 'dq', { who: unit.name, what });
   log(battle, `🚨 DISQUALIFICATION ! ${what.charAt(0).toUpperCase()}${what.slice(1)} de trop : l’arbitre siffle la fin.`, 'big');
   eliminate(battle, unit, 'dq');
   return true;

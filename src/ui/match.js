@@ -14,6 +14,7 @@ import { matchPhase } from '../engine/phases.js';
 import { activeCombos } from '../engine/battle.js';
 import { winRoutes } from '../engine/rules.js';
 import { showTutorial, tutorialSeen } from './tutorial.js';
+import { matchStory } from '../game/story.js';
 
 const TIER_ORDER = ['base', 'class', 'specialty', 'signature', 'finisher', 'script'];
 const TIER_LABELS = { base: 'Base', class: `Classe · ⚡${MOVE_TIERS.class.unlock}+`, specialty: `Spécialité · ⚡${MOVE_TIERS.specialty.unlock}+`, signature: `Signature · ⚡${MOVE_TIERS.signature.unlock}+`, finisher: `Finisher · ⚡${MOVE_TIERS.finisher.unlock}`, script: 'Script' };
@@ -226,7 +227,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name),
         h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}`),
-        refBadge()),
+        refBadge(), mgrBadge('player'), mgrBadge('enemy')),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
 
@@ -678,6 +679,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       rs.blind ? '👀 Arbitre distrait' : `🦓 Arbitre ${rs.name} · ${rs.label}`);
   }
 
+  // Qui est au bord du ring, et combien il lui reste d'interventions. Une
+  // menace qu'on ne voit pas ne change pas la façon de jouer.
+  function mgrBadge(team) {
+    const m = battle.managers && battle.managers[team];
+    if (!m) return null;
+    return h('span', {
+      class: `mgrbadge team-${team}${m.left <= 0 ? ' spent' : ''}`,
+      title: `${m.name} — ${m.nick}. ${m.desc}`,
+    }, `${m.icon} ${m.name} ${'●'.repeat(m.left) || '— épuisé'}`);
+  }
+
   function renderForecast(u, t, compact = false) {
     const a = ui.action;
     const tgt = t.unit;
@@ -745,6 +757,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     } else if (a.type === 'pin') mid = [['Tombé', `${Math.round(t.chance * 100)} %`], ['Cœur adverse', '❤️'.repeat(tgt.grit) || '—'], ['Si kick-out', 'cœur -1, +15 momentum']];
     else if (a.type === 'toss') mid = [['Par-dessus la corde', `${Math.round(t.chance * 100)} %`]];
     else if (a.id === 'whip') mid = [['Précision', `${t.hit} %`], ['Projection', whipPreview(u, tgt)]];
+    else if (a.type === 'manager') mid = [[`${a.manager.icon} ${a.manager.name}`, a.manager.nick], ['Effet', a.manager.desc], ['Il reste', `${a.manager.left} intervention(s)`], a.manager.illegal && battle.rules.dq ? ['⚠️ Arbitre', refState(battle).label] : null].filter(Boolean);
+    else if (a.type === 'rollin') mid = [['Rentrer', 'se rouler sous la corde du bas'], ['Décompte', 'remis à zéro'], ['Coût', 'termine le tour']];
     else if (a.type === 'tag') mid = [['Tag', `${tgt.name} devient légal`], ['Bonus', '+15 % PV, +30 momentum']];
     else if (a.type === 'job') mid = [['Script', 'votre lutteur perd volontairement']];
     else if (a.move && a.move.effects && a.move.effects.drainMomentum) mid = [['Momentum adverse', `-${a.move.effects.drainMomentum}`]];
@@ -793,12 +807,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   // Les membres abîmés, en une ligne. Un membre hors service change ce que le
   // lutteur peut faire (plus de vol, plus d'escalade, moins de souffle) : ça
   // ne peut pas vivre uniquement dans le journal.
+  // Le seuil d'affichage est VOLONTAIREMENT sous le premier palier : voir un
+  // membre commencer à prendre, c'est ce qui donne envie d'y revenir. Attendre
+  // « touchée » à 45, c'est ne montrer la stratégie qu'une fois qu'elle a déjà
+  // réussi.
+  const WEAR_SHOW = 18;
   function wearStrip(u) {
-    const parts = wornParts(u).filter((w) => w.level > 0);
+    const parts = wornParts(u).filter((w) => w.n >= WEAR_SHOW);
     if (!parts.length) return null;
     return h('span', { class: 'pm-wear' }, parts.map((w) => h('span', {
       class: `wp lvl${w.level}`,
-      title: `${w.name} : ${Math.round(w.n)}/${WEAR_MAX} — ${w.level >= 2 ? w.broken : w.hurt}`,
+      title: `${w.name} : ${Math.round(w.n)}/${WEAR_MAX} — ${w.level >= 2 ? w.broken : w.level === 1 ? w.hurt : 'commence à prendre'}`,
     }, w.icon)));
   }
 
@@ -987,6 +1006,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       }
       box.append(h('p', { class: 'reward' }, `${summary.money >= 0 ? '+' : ''}${summary.money} $ · ${summary.fans >= 0 ? '+' : ''}${summary.fans} fans`), h('p', {}, summary.message));
     }
+    // L'HISTOIRE DU MATCH. C'est ce qu'on raconte le lendemain, et c'est ce qui
+    // manquait : le match produisait des chiffres, jamais une phrase. Elle est
+    // écrite à partir des temps forts réellement enregistrés — rien n'est
+    // inventé, et deux matchs différents ne donnent jamais le même texte.
+    const story = matchStory(battle, { rivalry: matchDef && matchDef.rivalry });
+    box.append(h('div', { class: 'story' },
+      h('div', { class: 'story-head' },
+        h('div', { class: 'story-stars', title: `Note du match : ${story.stars}/5` }, story.starsText),
+        h('h3', {}, `« ${story.headline} »`)),
+      story.acts.map((a) => h('div', { class: 'story-act' },
+        h('b', {}, `${a.icon} ${a.title}`), h('p', {}, a.text)))));
     box.append(h('button', { class: 'btn primary', onclick: onContinue }, 'Continuer'));
     root.append(h('div', { class: 'overlay' }, box));
   }
