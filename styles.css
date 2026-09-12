@@ -88,6 +88,12 @@ button { font: inherit; cursor: pointer; }
 .btn.install:hover:not(:disabled) { background: #7ade85; }
 .btn[hidden] { display: none !important; }
 .install-hint { color: var(--muted); font-size: 0.85rem; text-align: center; margin: 2px 0 0; }
+/* L'arbitre : sa tolérance se lit d'un coup d'œil, comme une jauge. */
+.refbadge { display: inline-block; margin-left: 8px; padding: 1px 7px; border: 2px solid var(--ink);
+  font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.refbadge.ref-ok { background: var(--panel3); color: var(--text); }
+.refbadge.ref-danger { background: var(--red); color: #fff; }
+.refbadge.ref-blind { background: var(--gold); color: var(--ink); }
 
 input[type=text], select {
   font: inherit; background: var(--ink); color: var(--text);

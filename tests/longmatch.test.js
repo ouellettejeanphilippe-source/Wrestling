@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, pinChance, listActions, executeAction, moveUnit, autoPlay,
-  resolveAttack, endPlayerPhase } from '../src/engine/battle.js';
+  resolveAttack, endPlayerPhase, REFEREES, refState } from '../src/engine/battle.js';
 import { planUnit } from '../src/engine/ai.js';
 import { WRESTLERS_BY_ID as W } from '../src/data/wrestlers.js';
 import { MOVES } from '../src/data/moves.js';
@@ -18,6 +18,9 @@ const mk = (type, players, enemies) => createBattle({
   match: { id: 't', title: 'T', type, enemies }, playerTeam: players.map((id) => W[id]), seed: 42,
 });
 const down = (u) => { u.hp = 0; u.down = true; u.downTurns = 0; };
+const mkSeed = (seed) => createBattle({
+  match: { id: 't', title: 'T', type: 'singles', enemies: ['gunter'] }, playerTeam: [W.jean_sina], seed,
+});
 
 test('le cœur est le PLAFOND du tombé : à cœur plein, rien ne passe', () => {
   const b = mk('singles', ['jean_sina'], ['gunter']);
@@ -109,4 +112,59 @@ test('un match simulé dure : c’est le garde-fou contre le retour aux six tour
   }
   assert.ok(tours / n >= 9, `un match doit tenir au moins neuf tours (${(tours / n).toFixed(1)})`);
   assert.ok(chutes / n >= 2, `il faut plus d’une chute par match (${(chutes / n).toFixed(1)})`);
+});
+
+// ---------------------------------------------------------------- l'arbitre
+// « C'est pas toujours une DQ en lutte. » L'arbitre voit, avertit, et finit
+// par en avoir assez — et sa tolérance change d'un soir à l'autre.
+
+test('l’arbitre avertit avant de disqualifier', () => {
+  const b = mk('singles', ['jean_sina'], ['gunter']);
+  const g = b.units.find((u) => u.team === 'enemy');
+  b.ref = { ...b.ref, oeil: 99, patience: 3, maxPatience: 3, vus: 0 };   // il voit tout
+  const illegal = { name: 'coup bas', type: 'strike', power: 5, stat: 'str', acc: 100, range: [1, 1], effects: { illegal: true } };
+  g.x = b.units[0].x + 1; g.y = b.units[0].y;
+  for (let i = 0; i < 2; i++) {
+    resolveAttack(b, b.units[0], g, illegal);
+    assert.ok(!b.result, `pas de DQ au ${i + 1}e acte : l’arbitre avertit`);
+  }
+  assert.equal(b.ref.patience, 1, 'deux avertissements consommés');
+  resolveAttack(b, b.units[0], g, illegal);
+  assert.ok(b.result && /disqualifi|siffle/.test(b.result.reason), 'le troisième coûte le match');
+});
+
+test('un arbitre distrait ne voit rien et n’use pas sa patience', () => {
+  const b = mk('singles', ['jean_sina'], ['gunter']);
+  const g = b.units.find((u) => u.team === 'enemy');
+  b.ref = { ...b.ref, oeil: 99, patience: 1, maxPatience: 3 };
+  b.refDistracted = 3;
+  g.x = b.units[0].x + 1; g.y = b.units[0].y;
+  resolveAttack(b, b.units[0], g, { type: 'strike', power: 5, stat: 'str', acc: 100, range: [1, 1], effects: { illegal: true } });
+  assert.ok(!b.result, 'aucune DQ quand il regarde ailleurs');
+  assert.equal(b.ref.patience, 1, 'et sa patience est intacte');
+});
+
+test('les arbitres n’ont pas la même tolérance', () => {
+  const ids = new Set(REFEREES.map((r) => r.id));
+  assert.ok(ids.size >= 3, 'plusieurs tempéraments');
+  const strict = REFEREES.find((r) => r.id === 'strict');
+  const lax = REFEREES.find((r) => r.id === 'lax');
+  assert.ok(strict.oeil > lax.oeil, 'le pointilleux remarque plus');
+  assert.ok(strict.patience < lax.patience, 'et pardonne moins');
+  // et chaque match en tire un
+  const vus = new Set();
+  for (let seed = 1; seed <= 30; seed++) vus.add(mkSeed(seed).ref.id);
+  assert.ok(vus.size >= 2, 'la tolérance change d’un match à l’autre');
+});
+
+test('l’état de l’arbitre est lisible avant de tricher', () => {
+  const b = mk('singles', ['jean_sina'], ['gunter']);
+  b.ref.patience = 3; b.ref.maxPatience = 3;
+  assert.match(refState(b).label, /avertissement/);
+  b.ref.patience = 1;
+  assert.equal(refState(b).danger, true, 'le dernier avertissement se signale');
+  b.refDistracted = 2;
+  assert.equal(refState(b).blind, true);
+  const sansRegle = mk('hardcore', ['jean_sina'], ['gunter']);
+  assert.equal(refState(sansRegle).free, true, 'en hardcore il n’y a rien à surveiller');
 });

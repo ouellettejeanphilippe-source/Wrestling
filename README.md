@@ -254,7 +254,22 @@ jouer.
   tombé que par soumission, arrêt de l'arbitre ou compte à l'extérieur.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).
 - **Terrain** : coin = plongeons +25 %, cordes = étourdi, coin/marches/table/cage = dégâts sur Irish Whip, table qui casse.
-- **Armes** (chaise, kendo, poubelle, batte) : illégales avec arbitre → risque de DQ, sauf s'il est distrait.
+- **Armes** (chaise, kendo, poubelle, batte) : illégales avec arbitre → il faut compter avec sa tolérance.
+
+- **L'arbitre a une tolérance, et elle change d'un soir à l'autre.** En catch, ce n'est presque jamais une DQ du
+  premier coup : il voit, il avertit, il compte — et il finit par en avoir assez.
+
+  | arbitre | il remarque | il pardonne |
+  | --- | --- | --- |
+  | 🦓 pointilleux | ×1,5 | 2 avertissements |
+  | 🦓 à l'ancienne | ×1,0 | 3 avertissements |
+  | 🦓 complaisant | ×0,6 | 5 avertissements |
+
+  Son état est affiché en haut de l'écran et dans la prévision de combat : on ne triche pas sans savoir combien il en
+  reste. Un arbitre **distrait** ne voit rien du tout, et n'use donc pas sa patience.
+
+  Les **heels** poussent leur chance là où les faces se rangent. Sur des matchs simulés, l'arbitre pointilleux produit
+  six des sept disqualifications et le complaisant aucune : la tolérance décide vraiment.
 - **Tag** : un seul lutteur légal par équipe ; tag avec un partenaire adjacent (soigne, +30 momentum, « HOT TAG »).
   Attaquer sans être légal = risque de DQ.
 - **Compte à l'extérieur** : 6 tours sur le plancher = éliminé (matchs avec arbitre).

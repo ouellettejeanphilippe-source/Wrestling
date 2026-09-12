@@ -121,6 +121,9 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   const battle = {
     rng: createRng(seed), seed, grid, rules, match, mode: match.mode || 'kayfabe', script: match.script || null, units: [], items: [], turn: 1, phase: 'player', log: [], events: [],
     heat: 10, refDistracted: 0, result: null, lastElimination: null, reinforcementsDone: [],
+    // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
+    // fait partie de ce qu'on lit avant de décider de tricher.
+    ref: makeReferee(createRng(seed ^ 0x9e37)),
     stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0 },
   };
   battle.api = {
@@ -958,18 +961,70 @@ function doClimb(battle, unit) {
   return {};
 }
 
+// L'ARBITRE A UNE TOLÉRANCE
+//
+// Un arbitre de catch ne disqualifie presque jamais au premier coup. Il voit,
+// il avertit, il compte jusqu'à cinq — et il finit par en avoir assez. C'est
+// ce qui rend la triche jouable : on tire sur la corde jusqu'à ce qu'elle
+// casse, et on sait combien il en reste.
+//
+// Avant, chaque acte illégal était un lancer de dé indépendant : 25 % de
+// perdre le match sur-le-champ, sans avertissement, sans mémoire. Un lutteur
+// sournois n'avait aucune marge et l'IA n'avait aucun moyen de doser.
+//
+// `oeil` multiplie la flagrance de l'acte : ce que l'arbitre REMARQUE.
+// `patience` est le nombre d'actes remarqués qu'il laisse passer avant de
+// siffler la fin.
+export const REFEREES = [
+  { id: 'strict', name: 'pointilleux', oeil: 1.5, patience: 2,
+    trait: 'Il voit tout et n’a pas d’humour.' },
+  { id: 'normal', name: 'à l’ancienne', oeil: 1.0, patience: 3,
+    trait: 'Il laisse lutter, mais il compte.' },
+  { id: 'lax', name: 'complaisant', oeil: 0.6, patience: 5,
+    trait: 'Il regarde souvent ailleurs. Profitez-en.' },
+];
+
+export function makeReferee(rng) {
+  const r = REFEREES[Math.min(REFEREES.length - 1, Math.floor(rng.next() * REFEREES.length))];
+  return { ...r, patience: r.patience, maxPatience: r.patience, vus: 0 };
+}
+// Ce que l'interface doit annoncer avant qu'on triche.
+export function refState(battle) {
+  const r = battle.ref;
+  if (!battle.rules.dq) return { free: true, label: 'Aucune règle ici' };
+  if (battle.refDistracted > 0) return { blind: true, label: 'Arbitre distrait — il ne verra rien' };
+  const reste = r.patience;
+  return {
+    label: reste <= 1 ? 'Dernier avertissement !' : `${reste} avertissement${reste > 1 ? 's' : ''} avant DQ`,
+    reste, danger: reste <= 1, name: r.name, trait: r.trait,
+  };
+}
+
 function checkDq(battle, unit, base, what) {
+  // Le libellé sert à écrire la phrase de l'arbitre. Le mettre en majuscule
+  // faisait planter le moteur quand il manquait, là où l'ancien code se
+  // contentait d'un texte bizarre : un journal moche ne doit pas arrêter un
+  // match.
+  what = what || 'ce qu’il vient de faire';
   if (!battle.rules.dq) return false;
-  if (battle.refDistracted > 0) { log(battle, `L’arbitre ne voit pas ${what}.`); return false; }
-  let c = base;
+  if (battle.refDistracted > 0) { log(battle, `👀 L’arbitre ne voit pas ${what}.`); return false; }
+  const ref = battle.ref;
+  let c = base * ref.oeil;
   if (gim(unit).modDqChance) c = gim(unit).modDqChance(battle, unit, c);
-  if (battle.rng.chance(c)) {
-    log(battle, `🚨 DISQUALIFICATION ! L’arbitre a vu ${what} de ${unit.name} !`, 'big');
-    eliminate(battle, unit, 'dq');
-    return true;
+  if (!battle.rng.chance(clamp(c, 0.02, 0.95))) {
+    log(battle, `L’arbitre n’a rien vu : ${what}.`);
+    return false;
   }
-  log(battle, `L’arbitre a raté ${what}… (${Math.round(c * 100)} % de risque)`);
-  return false;
+  ref.vus++;
+  ref.patience--;
+  if (ref.patience > 0) {
+    log(battle, `⚠️ AVERTISSEMENT ! L’arbitre a vu ${what} de ${unit.name}. Encore ${ref.patience} et c’est fini.`, 'big');
+    addHeat(battle, 6);
+    return false;
+  }
+  log(battle, `🚨 DISQUALIFICATION ! ${what.charAt(0).toUpperCase()}${what.slice(1)} de trop : l’arbitre siffle la fin.`, 'big');
+  eliminate(battle, unit, 'dq');
+  return true;
 }
 
 // ---------------------------------------------------------------- phases

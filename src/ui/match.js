@@ -4,7 +4,7 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel } from '../engine/battle.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState } from '../engine/battle.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
@@ -223,7 +223,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       h('div', { class: `phase-badge ${battle.phase}` }, h('b', {}, `Tour ${battle.turn}`), h('span', {}, phase + survive)),
       h('div', { class: `act-badge act-${mp.key}`, title: mp.desc },
         h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
-      h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name), h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}${battle.refDistracted > 0 ? ' · 👀 arbitre distrait' : ''}`)),
+      h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name),
+        h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}`),
+        refBadge()),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
 
@@ -665,6 +667,16 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     return out;
   }
 
+  // L'état de l'arbitre, toujours lisible en haut : sa tolérance change d'un
+  // match à l'autre, et on ne triche pas sans savoir combien il en reste.
+  function refBadge() {
+    if (!battle.rules.dq) return null;
+    const rs = refState(battle);
+    const cls = rs.blind ? 'ref-blind' : rs.danger ? 'ref-danger' : 'ref-ok';
+    return h('span', { class: `refbadge ${cls}`, title: rs.trait || '' },
+      rs.blind ? '👀 Arbitre distrait' : `🦓 Arbitre ${rs.name} · ${rs.label}`);
+  }
+
   function renderForecast(u, t, compact = false) {
     const a = ui.action;
     const tgt = t.unit;
@@ -694,8 +706,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       if (a.type === 'submission') mid.push(['Abandon', 'possible si affaibli']);
       if (a.move.tier === 'finisher') mid.push(['Finisher', 'tombé immédiat +30 %']);
       if (tgt.gimmick === 'outta_nowhere' && tgt.momentum >= 50) mid.push(['⚠️ Risque', 'contre RKO 35 %']);
-      if (a.move.effects && a.move.effects.illegal && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
-      if (a.type === 'weapon' && battle.rules.dq && battle.refDistracted <= 0) mid.push(['⚠️ DQ', '~35 %']);
+      // Ce n'est plus un pourcentage de DQ mais l'état de l'arbitre : il voit,
+      // il avertit, et c'est le dernier avertissement qui coûte le match.
+      const illegal = (a.move.effects && a.move.effects.illegal) || a.type === 'weapon';
+      if (illegal && battle.rules.dq) {
+        const rs = refState(battle);
+        mid.push([rs.blind ? '👀 Arbitre' : rs.danger ? '🚨 Arbitre' : '⚠️ Arbitre', rs.label]);
+      }
       if (a.move.effects && a.move.effects.selfDamage) afterU = u.hp - a.move.effects.selfDamage;
       mid.push(['Momentum', `${u.momentum} → ${Math.min(100, Math.max(0, u.momentum - (a.cost || 0)) + (a.move.momentum || 0))}`]);
     } else if (a.type === 'pin') mid = [['Tombé', `${Math.round(t.chance * 100)} %`], ['Cœur adverse', '❤️'.repeat(tgt.grit) || '—'], ['Si kick-out', 'cœur -1, +15 momentum']];

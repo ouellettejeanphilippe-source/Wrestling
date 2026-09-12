@@ -89,6 +89,19 @@ const PAGES = [
     ],
   },
   {
+    title: 'L’arbitre a une tolérance',
+    icon: '🦓',
+    body: () => [
+      h('p', {}, 'En catch, ce n’est presque jamais une disqualification du premier coup. L’arbitre ', h('b', {}, 'voit, avertit, compte'), ' — et il finit par en avoir assez. Sa tolérance ', h('b', {}, 'change d’un match à l’autre'), '.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Arbitre', 'Il remarque', 'Il pardonne'].map((x) => h('th', {}, x))),
+        [['Pointilleux', 'beaucoup', '2 avertissements'], ['À l’ancienne', 'normalement', '3 avertissements'], ['Complaisant', 'peu', '5 avertissements']]
+          .map(([a, o, pa]) => h('tr', {}, h('td', {}, a), h('td', {}, o), h('td', {}, pa)))),
+      h('p', {}, 'Son état est affiché en haut de l’écran et dans la prévision : ', h('b', {}, 'on ne triche pas sans savoir combien il en reste'), '. Un arbitre distrait ne voit rien — et n’use donc pas sa patience.'),
+      h('p', { class: 'muted' }, 'Les coups bas, les armes et le fait d’entrer dans le ring sans être légal passent tous par lui. Avec un arbitre complaisant, une carrière de tricheur est jouable.'),
+    ],
+  },
+  {
     title: 'Plusieurs façons de gagner',
     icon: '🏆',
     body: () => [
