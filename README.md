@@ -154,6 +154,20 @@ ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 
 
   La zone ne fait pas le tri : **un partenaire collé à la cible déguste aussi**. La prévision de combat le dit avant
   que vous confirmiez.
+- **Deux jauges opposées.** Le **momentum** monte et ouvre des portes ; le **souffle** descend et les referme.
+  Sans la seconde, la seule question d'un tour était « quel coup fait le plus mal », et la réponse ne changeait
+  jamais.
+
+  | | momentum ⚡ | souffle 😮‍💨 |
+  | --- | --- | --- |
+  | sens | monte quand on frappe | descend quand on frappe |
+  | rôle | **ouvre** les paliers | les **referme** sous 25 |
+  | coût d'un coup | palier signature/finisher seulement | 4 (base) à 22 (finisher), +3 en courant |
+  | se refait | en frappant, en provoquant | +5 par tour, **+14 si on a soufflé** (attendre, provoquer) |
+
+  À bout de souffle : −25 % de dégâts, −10 de précision, et **plus de signature ni de finisher**. C'est la prise de
+  repos du catch : on ne peut pas enchaîner les gros coups, il faut reprendre son air — et l'adversaire le voit.
+
 - **Momentum** (0–100) : gagné en frappant, en encaissant, en provoquant (+5 par tour). Il **débloque les paliers de
   mouvements** et se dépense à l'usage :
 
@@ -168,6 +182,24 @@ ancré en haut à gauche : `size` s'écrit `2` (carré 2×2), `[3, 2]` ou `{ w: 
   Le palier donne l'**accès** ; seuls le signature et le finisher **consomment** la jauge. Un coup qui touche rapporte
   son propre momentum (10 à 20), donc la jauge monte pendant que le match s'installe, puis se vide sur les grands coups.
   Les provocations sont toujours gratuites.
+
+- **🔄 Le renversement.** *« Il l'a renversé ! »* — le moment le plus fiable du catch. Un gros mouvement lancé sur un
+  adversaire encore frais peut se retourner contre son auteur : l'attaque échoue et **c'est l'attaquant qui encaisse**.
+
+  | palier | risque de base |
+  | --- | --- |
+  | base | 2 % |
+  | classe | 5 % |
+  | spécialité | 7 % |
+  | signature | 11 % |
+  | finisher | **15 %** |
+
+  Trois choses le rendent probable, et ce sont trois décisions : la **vitesse et la technique** du défenseur contre
+  celles de l'attaquant ; le **souffle** (frapper sans appui, +5 % ; défendre à bout de forces, −4 %) ; et la
+  **taille du mouvement** — un gros coup est lent, c'est justement le finisher qui se renverse. Une cible **au sol ou
+  étourdie** ne renverse rien, sinon la chute ne voudrait plus rien dire.
+
+  Le risque est affiché dans la prévision de combat : lancer son finisher trop tôt est un pari, pas une formalité.
 
 - **Étourdissement** : un coup qui étourdit dure jusqu'à votre tour suivant, ce qui permet des enchaînements
   (doigt dans l'œil puis Elbow Drop, coup de pied retourné puis finisher, étourdir puis jeter par-dessus la corde).
@@ -249,9 +281,25 @@ jouer.
   dans la salle. Couvrir un adversaire **debout** n'est pas un tombé mais un roll-up désespéré : plafonné à 15 %
   quoi qu'il arrive.
 
-  Sans cette règle, une cible au sol partait à 55 % et le premier knockdown terminait le match : **5,6 tours, une
-  seule chute**. Avec, un match simple tient **14,4 tours, 16 coups et 3 chutes**, et se conclut aussi bien par
-  tombé que par soumission, arrêt de l'arbitre ou compte à l'extérieur.
+  **Un kick-out raté coûte quand même un cœur à celui qui se dégage.** Couvrir tôt n'est donc pas un tour perdu :
+  c'est un investissement — et c'est la stratégie centrale d'un long match.
+
+## Le rythme d'un match
+
+Un match doit durer, mais avec des tours **rapides** : beaucoup de petites décisions, pas quinze tours de gros coups.
+Un match long où il ne se passe rien est pire qu'un match de six tours.
+
+| | au départ | aujourd'hui |
+| --- | --- | --- |
+| tours | 5,6 | **37,6** |
+| coups qui touchent | 5,9 | **30,3** |
+| chutes au sol | 1,0 | **5,4** |
+| kick-outs | 1,2 | **3,3** |
+| part d'un coup dans la barre de PV | 27 % | **10 %** |
+| renversements | — | 2,6/match |
+
+Sans limite de temps, la médiane est de **39 tours** et le 90ᵉ centile de 59 ; la limite est posée à 60, où elle ne
+coupe plus qu'un match sur onze — et un « Broadway » de temps en temps, c'est du vrai catch.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).
 - **Terrain** : coin = plongeons +25 %, cordes = étourdi, coin/marches/table/cage = dégâts sur Irish Whip, table qui casse.
 - **Armes** (chaise, kendo, poubelle, batte) : illégales avec arbitre → il faut compter avec sa tolérance.

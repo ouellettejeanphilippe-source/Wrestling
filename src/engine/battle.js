@@ -222,6 +222,10 @@ export function moveUnit(battle, unit, x, y) {
   // immobile ne doit jamais être le choix confortable.
   unit.moveMomentum = Math.min(MOVE_MOMENTUM_CAP, unit.movedTiles);
   addMomentum(battle, unit, unit.moveMomentum);
+  // Courir coûte du souffle. C'est le contrepoids de l'élan : on ne traverse
+  // pas l'aréna à chaque tour sans le payer.
+  unit.moveStamina = unit.movedTiles * STAMINA_MOVE;
+  spendStamina(battle, unit, unit.moveStamina);
   unit.facing = facingTo(unit, { x, y });          // on regarde là où on va
   unit.x = x; unit.y = y; unit.moved = true; unit.climb = 0;
   emit(battle, { type: 'move', uid: unit.uid, x, y });
@@ -234,8 +238,9 @@ export function undoMove(battle, unit) {
   if (!unit.prev || unit.acted) return false;
   unit.x = unit.prev.x; unit.y = unit.prev.y; unit.facing = unit.prev.facing || unit.facing;
   addMomentum(battle, unit, -(unit.moveMomentum || 0));
+  unit.stamina = clamp(unit.stamina + (unit.moveStamina || 0), 0, unit.maxStamina);
   unit.prev = null; unit.moved = false; unit.movedTiles = 0;
-  unit.movePath = null; unit.moveMomentum = 0;
+  unit.movePath = null; unit.moveMomentum = 0; unit.moveStamina = 0;
   return true;
 }
 
@@ -247,6 +252,31 @@ const crossedRopeIn = (battle, unit, pos) => {
   return !!path && path.length > 1
     && path.slice(0, -1).some((p) => tileAt(battle.grid, p.x, p.y) === 'rope');
 };
+
+// ---------------------------------------------------------------- le souffle
+//
+// Ce que coûte un coup, par palier. Un finisher vide un cinquième du souffle :
+// on ne le lance pas deux fois de suite, il faut se refaire.
+export const STAMINA_COST = { base: 4, class: 7, specialty: 10, signature: 16, finisher: 22 };
+export const STAMINA_MOVE = 1;                  // par case parcourue
+export const STAMINA_LOW = 25;                  // sous ce seuil, on est cuit
+export const STAMINA_REST = 14;                 // en soufflant (attendre, provoquer)
+export const STAMINA_TICK = 5;                  // récupération passive par tour
+
+export const staminaCost = (move) => {
+  if (!move) return 0;
+  const base = STAMINA_COST[move.tier] ?? STAMINA_COST.base;
+  // Les mouvements de course coûtent plus : c'est une course, pas un pas.
+  return base + ((move.requires && move.requires.ran) ? 3 : 0);
+};
+export const winded = (u) => u.stamina < STAMINA_LOW;
+export function spendStamina(battle, unit, n) {
+  const avant = unit.stamina;
+  unit.stamina = clamp(unit.stamina - n, 0, unit.maxStamina);
+  if (avant >= STAMINA_LOW && winded(unit)) {
+    log(battle, `😮‍💨 ${unit.name} est à bout de souffle — ses coups portent moins et ses gros mouvements se referment.`);
+  }
+}
 
 // ---------------------------------------------------------------- liste des actions
 function targetOk(battle, move, e, pos) {
@@ -295,6 +325,12 @@ export function listActions(battle, unit, pos = null) {
       a.ok = false; a.reason = `Doit avoir couru ${req.ran} cases ce tour (vous : ${travelOf(unit, pos)})`;
     }
     else if (req.crossedRope && !crossedRopeIn(battle, unit, pos)) { a.ok = false; a.reason = 'Doit avoir traversé les cordes en chemin'; }
+    // À bout de souffle, les grands mouvements se referment. C'est ce qui
+    // impose le rythme : on ne peut pas enchaîner les finishers, il faut
+    // reprendre son air — et l'adversaire le voit.
+    else if (winded(unit) && ['signature', 'finisher'].includes(m.tier)) {
+      a.ok = false; a.reason = `😮‍💨 Trop essoufflé (${Math.round(unit.stamina)}/${STAMINA_LOW} requis)`;
+    }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
       a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
@@ -411,7 +447,7 @@ export function executeAction(battle, unit, actionId, target = null) {
     }
     case 'tag': result = tagPartner(battle, unit, tgt); break;
     case 'climb': result = doClimb(battle, unit); break;
-    case 'wait': heal(battle, unit, 4); break;
+    case 'wait': heal(battle, unit, 4); unit.rested = true; break;
     case 'sell': {
       applyDamage(battle, unit, unit.maxHp * 0.08, null, { self: true });
       addHeat(battle, 12); battle.stats.sells++;
@@ -438,6 +474,9 @@ export function executeAction(battle, unit, actionId, target = null) {
 }
 
 function doTaunt(battle, unit, move) {
+  // Provoquer, c'est aussi reprendre son air : le lutteur qui joue avec la
+  // foule est celui qui souffle. Les deux vont ensemble dans le vrai catch.
+  unit.rested = true;
   addMomentum(battle, unit, move.momentum || 30);
   const eff = move.effects || {};
   addHeat(battle, Math.round(getStats(battle, unit).cha / 3) + (eff.heat || 0));
@@ -472,10 +511,24 @@ export function hitChance(battle, attacker, target, move, opts = {}) {
   c += clamp(heightAt(battle.grid, from.x, from.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
+  if (winded(attacker)) c -= 10;
   if (gim(attacker).modHitChance) c = gim(attacker).modHitChance(battle, attacker, attacker, target, move, c, 'attacker');
   if (gim(target).modHitChance) c = gim(target).modHitChance(battle, target, attacker, target, move, c, 'target');
   return clamp(Math.round(c), 25, 100);
 }
+
+// LE POIDS D'UN COUP
+//
+// Un match doit tenir trente tours, pas quinze. Le levier n'est pas la barre
+// de PV — l'allonger rend les coups mous et la lecture pénible — mais ce que
+// chaque coup y prend. À 27 % de la barre, quatre coups suffisaient : il n'y
+// avait pas de place pour une histoire.
+//
+// Le facteur s'applique à la fin, sur le total, pour que la STRUCTURE reste
+// intacte : un critique vaut toujours une fois et demie la moyenne du moment,
+// un finisher domine toujours une prise de base. On raccourcit le pas, pas la
+// foulée.
+export const DAMAGE_SCALE = 0.5;
 
 export function computeDamage(battle, attacker, target, move, opts = {}) {
   const A = getStats(battle, attacker), D = getStats(battle, target);
@@ -491,6 +544,8 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   if (eff.charge && (opts.travel ?? attacker.movedTiles) >= 3) dmg += 8;
   // L'élan : le trajet de ce tour-ci pèse sur le coup qui le termine.
   dmg *= elanMult(opts.travel ?? attacker.movedTiles, move, attacker);
+  // À bout de souffle, on frappe sans appui.
+  if (winded(attacker)) dmg *= 0.75;
   // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
   if (gim(target).modInDamage) dmg = gim(target).modInDamage(battle, target, attacker, move, dmg);
@@ -502,10 +557,56 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
     if (battle.rng.chance(0.04 + A.tec * 0.007)) { crit = true; dmg *= 1.5; }
     dmg *= 0.9 + battle.rng.next() * 0.2;
   }
-  return { dmg: Math.max(1, Math.round(dmg)), crit };
+  return { dmg: Math.max(1, Math.round(dmg * DAMAGE_SCALE)), crit };
+}
+
+// LE RENVERSEMENT
+//
+// « Il l'a renversé ! » — c'est le moment le plus fiable du catch, et le
+// moteur ne l'avait pas. Sans lui, lancer son finisher n'est jamais un pari :
+// on attend d'avoir la jauge et on appuie. Avec lui, un gros mouvement lancé
+// sur un adversaire encore frais peut se retourner contre son auteur.
+//
+// Trois choses le rendent probable, et ce sont trois décisions :
+//   · la VITESSE et la TECHNIQUE du défenseur contre celles de l'attaquant ;
+//   · le SOUFFLE — on ne renverse pas à bout de forces, et on se fait
+//     renverser quand on frappe sans appui ;
+//   · la TAILLE du mouvement. Un gros coup est lent : c'est justement le
+//     finisher qui se renverse, pas le coup de poing.
+//
+// Une cible au sol ou étourdie ne renverse rien : sinon le knockdown ne
+// voudrait plus rien dire.
+const REVERSE_BY_TIER = { base: 0.02, class: 0.05, specialty: 0.07, signature: 0.11, finisher: 0.15 };
+
+export function reverseChance(battle, attacker, target, move) {
+  if (!move || target.down || target.statuses.dazed || target.eliminated) return 0;
+  if (['taunt', 'special'].includes(move.type)) return 0;
+  const A = getStats(battle, attacker), D = getStats(battle, target);
+  let c = REVERSE_BY_TIER[move.tier] ?? REVERSE_BY_TIER.base;
+  c += clamp((D.tec + D.agi) - (A.tec + A.agi), -8, 8) * 0.006;
+  if (winded(attacker)) c += 0.05;              // il frappe sans appui
+  if (winded(target)) c -= 0.04;                // il n'a plus les jambes
+  if (target.statuses.finished) c -= 0.05;      // encore sonné par le dernier gros coup
+  return clamp(c, 0, 0.35);
 }
 
 export function resolveAttack(battle, attacker, target, move) {
+  spendStamina(battle, attacker, staminaCost(move));
+  // Le renversement se joue AVANT le jet de précision : ce n'est pas un coup
+  // raté, c'est un coup retourné.
+  const rev = reverseChance(battle, attacker, target, move);
+  if (rev > 0 && battle.rng.chance(rev)) {
+    const { dmg } = computeDamage(battle, target, attacker, move, { noRng: true });
+    const riposte = Math.max(1, Math.round(dmg * 0.6));
+    log(battle, `🔄 RENVERSÉ ! ${target.name} retourne ${move.name} contre ${attacker.name} : ${riposte} dégâts.`, 'big');
+    emit(battle, { type: 'reverse', x: attacker.x, y: attacker.y });
+    applyDamage(battle, attacker, riposte, target, { move });
+    addMomentum(battle, target, 20);
+    addHeat(battle, 12);
+    battle.stats.reversals = (battle.stats.reversals || 0) + 1;
+    checkWin(battle);
+    return { hit: false, reversed: true, chance: rev };
+  }
   // On se tourne vers qui on frappe. Sans ça, un lutteur gardait l'orientation
   // de son dernier déplacement : son dos traînait dans n'importe quelle
   // direction et « Pris à revers » se déclenchait par accident une fois sur
@@ -1053,6 +1154,11 @@ export function startPhase(battle, team) {
         }
       }
     }
+    // On reprend son air à chaque tour. Celui qui a soufflé (attendre,
+    // provoquer) en récupère bien plus : c'est la prise de repos du catch,
+    // et c'est ce qui rend un long match jouable au lieu d'épuisant.
+    u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK), 0, u.maxStamina);
+    u.rested = false;
     u.hadTurn = true;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {

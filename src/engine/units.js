@@ -29,6 +29,7 @@ export function movesFor(def) {
 // aussitôt. Le facteur se pose ici plutôt que dans les 33 fiches, pour garder
 // les écarts entre lutteurs exactement tels qu'ils sont écrits.
 const HP_SCALE = 1.5;
+const GRIT_BONUS = 2;
 
 export function createUnit(def, team, x, y, opts = {}) {
   const bonus = opts.bonus || {};
@@ -38,13 +39,22 @@ export function createUnit(def, team, x, y, opts = {}) {
     stats[k] = (stats[k] || 0) + (bonus[k] || 0) + (boost.stats || 0);
   }
   const maxHp = Math.round((def.stats.hp + (bonus.hp || 0) + (boost.hp || 0)) * HP_SCALE);
-  const grit = (def.grit ?? 3) + (bonus.grit || 0);
+  // LE CŒUR EST LA LONGUEUR DU MATCH. Chaque cœur, c'est une chute de plus,
+  // une reprise de plus, un near-fall de plus. Allonger la barre de PV rend
+  // les coups mous ; ajouter un cœur ajoute un ACTE. C'est le bon levier.
+  const grit = (def.grit ?? 3) + GRIT_BONUS + (bonus.grit || 0);
   return {
     uid: opts.uid || `${def.id}-${team}-${x}-${y}`,
     id: def.id, name: def.name, nick: def.nick, team, x, y,
     // direction du regard : les deux camps se font face au coup d'envoi
     facing: opts.facing || (team === 'player' ? 'se' : 'nw'),
     hp: maxHp, maxHp, momentum: opts.momentum ?? 0, grit, maxGrit: grit,
+    // LE SOUFFLE. Le momentum est une jauge qui MONTE et qui ouvre des
+    // portes ; le souffle est une jauge qui DESCEND et qui les referme. Sans
+    // lui, la seule question d'un tour était « quel coup fait le plus mal » —
+    // et la réponse ne changeait jamais. Avec lui, il faut doser : souffler,
+    // user l'adversaire, garder de quoi finir.
+    stamina: 100, maxStamina: 100,
     stats, cls: def.cls, spec: def.spec, gimmick: def.gimmick, alignment: def.alignment,
     moves: movesFor(def), weight: def.weight || 'heavy', color: def.color, initials: def.initials,
     // gabarit sur la grille : `size` accepte 2, [3, 2] ou { w, h }.

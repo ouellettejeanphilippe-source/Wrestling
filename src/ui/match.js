@@ -4,7 +4,7 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState } from '../engine/battle.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, STAMINA_LOW } from '../engine/battle.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
@@ -693,6 +693,12 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       mid = [['Précision', `${hit} %`], ['Dégâts', `~${dmg}`], ['Critique', `${crit} %`]];
       // L'élan doit se voir AVANT de confirmer, sinon le joueur subit un
       // malus qu'il ne peut pas relier à son déplacement.
+      // Le risque de renversement est LE pari du jeu : lancer son finisher sur
+      // un adversaire frais peut le retourner contre soi. Il doit se lire
+      // avant de confirmer, sinon ce n'est plus une décision.
+      const rev = reverseChance(battle, u, tgt, a.move);
+      if (rev > 0.005) mid.push(['🔄 Risque de renversement', `${Math.round(rev * 100)} %`]);
+      if (winded(u)) mid.push(['😮‍💨 À bout de souffle', '−25 % dégâts, −10 précision']);
       const el = elanLabel(u.movedTiles, a.move, u);
       if (el) mid.push([`🏃 ${el.name}`, `${el.travel} case${el.travel > 1 ? 's' : ''} · ${el.good ? '+' : ''}${Math.round((el.mult - 1) * 100)} % dégâts`]);
       if (el && el.static >= 2) mid.push(['😴 Immobile depuis', `${el.static} tour${el.static > 1 ? 's' : ''} — la foule décroche`]);
@@ -748,7 +754,15 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const def = WRESTLERS_BY_ID[u.id];
       const st = [u.down ? '💫' : '', u.statuses.dazed ? '😵' : '', u.statuses.finished ? '☠️' : '', u.weapon ? u.weapon.icon : '', battle.rules.tag && u.legal ? '⭐' : ''].join('');
       return h('div', { class: `pm team-${u.team}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}${u.eliminated ? ' out' : ''}${ui.sel === u ? ' sel' : ''}`, onclick: () => { if (u.eliminated) return; if (u.team === 'player' && canSelect(u)) select(u); else { ui.inspect = u; render(); } }, onpointerenter: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = u; renderRight(); renderBoard(); }, onpointerleave: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = null; renderRight(); renderBoard(); } },
-        avatar(def, 44), h('div', { class: 'pm-info' }, h('b', {}, u.name), bar(u.hp, u.maxHp, 'hpbar', `${u.hp}`), bar(u.momentum, 100, 'mombar', `${u.momentum}`)), h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
+        avatar(def, 44), h('div', { class: 'pm-info' }, h('b', {}, u.name),
+          bar(u.hp, u.maxHp, 'hpbar', `${u.hp}`),
+          bar(u.momentum, 100, 'mombar', `${u.momentum}`),
+          // Le souffle : la jauge qui DESCEND. Sans elle à l'écran, le joueur
+          // subit un malus et une fermeture de ses gros mouvements sans
+          // comprendre d'où ça vient.
+          bar(u.stamina, u.maxStamina, `stambar${winded(u) ? ' low' : ''}`, `${Math.round(u.stamina)}`),
+          h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—')),
+        h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
     };
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Votre équipe'), battle.units.filter((u) => u.team === 'player').map(mk)));
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Adversaires'), battle.units.filter((u) => u.team === 'enemy').map(mk)));

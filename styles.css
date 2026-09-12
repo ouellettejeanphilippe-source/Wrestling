@@ -121,6 +121,10 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--gold);
 .bar-label { position: absolute; inset: 0; font-size: 0.64rem; line-height: 11px; text-align: center; color: #fff; text-shadow: 1px 1px 0 #000; font-weight: 700; letter-spacing: 0.05em; z-index: 2; }
 .hpbar .bar-fill { background: linear-gradient(180deg, #ff6b5e, #c62828); }
 .mombar .bar-fill { background: linear-gradient(180deg, #ffe066, #f2a03c); }
+/* Le souffle descend : bleu quand il en reste, rouge quand il n'y en a plus. */
+.stambar .bar-fill { background: linear-gradient(180deg, #7fd4ff, #3fa9f5); }
+.stambar.low .bar-fill { background: linear-gradient(180deg, #ff9a8a, #e8433f); }
+.pm-grit { display: block; font-size: 0.7rem; letter-spacing: -1px; line-height: 1; }
 .heatbar .bar-fill { background: linear-gradient(180deg, #ffb03a, #e8433f); }
 .stat-bar .bar-fill { background: linear-gradient(180deg, #7a8dff, #4a5bd6); }
 
