@@ -4,7 +4,8 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, STAMINA_LOW } from '../engine/battle.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, tapChance, novelty, moveUses, STAMINA_LOW } from '../engine/battle.js';
+import { movePart, wearFrom, wearOf, wearLevel, wornParts, PARTS, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from '../engine/wear.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
@@ -699,6 +700,26 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const rev = reverseChance(battle, u, tgt, a.move);
       if (rev > 0.005) mid.push(['🔄 Risque de renversement', `${Math.round(rev * 100)} %`]);
       if (winded(u)) mid.push(['😮‍💨 À bout de souffle', '−25 % dégâts, −10 précision']);
+      // L'USURE CIBLÉE DOIT SE LIRE AVANT DE FRAPPER. C'est une stratégie
+      // longue : si le joueur ne voit pas où il en est sur la jambe qu'il
+      // travaille depuis dix tours, il n'y a pas de stratégie, il y a un
+      // hasard qui finit par payer.
+      const us = wearFrom(a.move, dmg);
+      if (us) {
+        const P = PARTS[us.part];
+        const avant = wearOf(tgt, us.part), apres = Math.min(WEAR_MAX, avant + us.n);
+        const seuil = apres >= WEAR_BROKEN ? ' — HORS SERVICE' : apres >= WEAR_HURT ? ' — touchée' : '';
+        mid.push([`${P.icon} ${P.name}${us.aimed ? ' (visée)' : ''}`,
+          `${Math.round(avant)} → ${Math.round(apres)}${seuil}`]);
+      }
+      if (a.type === 'submission') {
+        const tap = tapChance(battle, u, tgt, a.move);
+        const p = movePart(a.move);
+        mid.push(['🔗 Abandon', `${Math.round(tap * 100)} %${p ? ` (${PARTS[p].short} à ${Math.round(wearOf(tgt, p))})` : ''}`]);
+      }
+      // Ce que la foule a déjà vu ne rapporte plus autant.
+      const nv = novelty(u, a.move);
+      if (nv < 0.99) mid.push(['👥 Déjà vu', `${moveUses(u, a.move)}× — momentum et chaleur ×${nv.toFixed(2)}`]);
       const el = elanLabel(u.movedTiles, a.move, u);
       if (el) mid.push([`🏃 ${el.name}`, `${el.travel} case${el.travel > 1 ? 's' : ''} · ${el.good ? '+' : ''}${Math.round((el.mult - 1) * 100)} % dégâts`]);
       if (el && el.static >= 2) mid.push(['😴 Immobile depuis', `${el.static} tour${el.static > 1 ? 's' : ''} — la foule décroche`]);
@@ -761,11 +782,24 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           // subit un malus et une fermeture de ses gros mouvements sans
           // comprendre d'où ça vient.
           bar(u.stamina, u.maxStamina, `stambar${winded(u) ? ' low' : ''}`, `${Math.round(u.stamina)}`),
-          h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—')),
+          h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—'),
+          wearStrip(u)),
         h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
     };
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Votre équipe'), battle.units.filter((u) => u.team === 'player').map(mk)));
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Adversaires'), battle.units.filter((u) => u.team === 'enemy').map(mk)));
+  }
+
+  // Les membres abîmés, en une ligne. Un membre hors service change ce que le
+  // lutteur peut faire (plus de vol, plus d'escalade, moins de souffle) : ça
+  // ne peut pas vivre uniquement dans le journal.
+  function wearStrip(u) {
+    const parts = wornParts(u).filter((w) => w.level > 0);
+    if (!parts.length) return null;
+    return h('span', { class: 'pm-wear' }, parts.map((w) => h('span', {
+      class: `wp lvl${w.level}`,
+      title: `${w.name} : ${Math.round(w.n)}/${WEAR_MAX} — ${w.level >= 2 ? w.broken : w.hurt}`,
+    }, w.icon)));
   }
 
   function renderLog() {

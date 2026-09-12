@@ -125,6 +125,13 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--gold);
 .stambar .bar-fill { background: linear-gradient(180deg, #7fd4ff, #3fa9f5); }
 .stambar.low .bar-fill { background: linear-gradient(180deg, #ff9a8a, #e8433f); }
 .pm-grit { display: block; font-size: 0.7rem; letter-spacing: -1px; line-height: 1; }
+/* L'usure ciblée : un membre touché clignote doucement, un membre hors service
+   est rouge et fixe. Le joueur doit repérer la jambe morte d'un coup d'œil, y
+   compris sur celle de son propre lutteur. */
+.pm-wear { display: block; line-height: 1; margin-top: 1px; }
+.pm-wear .wp { font-size: 0.72rem; filter: grayscale(0.3); opacity: 0.85; }
+.pm-wear .wp.lvl2 { filter: none; opacity: 1; text-shadow: 0 0 4px #e53935, 0 0 2px #e53935; }
+
 .heatbar .bar-fill { background: linear-gradient(180deg, #ffb03a, #e8433f); }
 .stat-bar .bar-fill { background: linear-gradient(180deg, #7a8dff, #4a5bd6); }
 

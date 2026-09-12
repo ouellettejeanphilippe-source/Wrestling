@@ -35,6 +35,7 @@ const ASSETS = [
   './src/engine/rules.js',
   './src/engine/units.js',
   './src/engine/util.js',
+  './src/engine/wear.js',
   './src/game/script.js',
   './src/game/state.js',
   './src/main.js',

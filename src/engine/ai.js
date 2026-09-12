@@ -1,7 +1,8 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
 import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
-import { listActions, getReachable, hitChance, computeDamage, moveRange, DAMAGE_SCALE } from './battle.js';
+import { listActions, getReachable, hitChance, computeDamage, moveRange, tapChance, novelty, DAMAGE_SCALE } from './battle.js';
+import { movePart, wearFrom, wearOf, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from './wear.js';
 import { MOVES } from '../data/moves.js';
 
 export function planUnit(battle, unit) {
@@ -21,7 +22,7 @@ export function planUnit(battle, unit) {
         let score = scoreAction(battle, unit, pos, a, tg);
         if (score == null) continue;
         score -= t.cost * 0.5;
-        score += positional(battle, unit, pos);
+        score += positional(battle, unit, pos, a);
         if (!best || score > best.score) {
           best = { score, moveTo: pos.x !== unit.x || pos.y !== unit.y ? pos : null, action: { id: a.id, target: tg.unit ? { unit: tg.unit } : null } };
         }
@@ -74,6 +75,9 @@ function scoreAction(battle, unit, pos, a, tg) {
     case 'tag': return E(hpRatio(unit) < 0.45 ? 220 : 8);
     case 'taunt': return E(unit.momentum >= 100 ? 0 : 12 + (100 - unit.momentum) * 0.12 + ((a.move && a.move.effects && a.move.effects.heat) || 0) * 0.5);
     case 'wait': return 1;
+    // Le décompte qui monte est ce qui doit la ramener, pas une préférence
+    // vague : à zéro c'est un tour perdu, à cinq c'est le match.
+    case 'rollin': return E(8 + (unit.outsideCount || 0) * 48);
     case 'pickup': return E(rules.dq ? 12 : 70);
     // Aller fouiller sous le ring : intéressant quand les armes sont légales,
     // et seulement si on n'est pas en train de se faire compter à l'extérieur.
@@ -90,7 +94,13 @@ function scoreAction(battle, unit, pos, a, tg) {
       s += spreadValue(battle, unit, pos, t, m, dmg) * hit;
       if (!t.down && dmg >= t.hp) s += 90;
       if (m.tier === 'finisher') s += 30 + (t.hp <= dmg * 1.3 ? 70 : 0);
-      if (m.type === 'submission') s += hit * Math.max(0, (1 - hpRatio(t)) * 0.6 - t.grit * 0.06) * 250;
+      // La soumission suit exactement la formule d'abandon, usure ciblée
+      // comprise. Sans ça, l'IA ne voyait pas que sa clé de jambe vaut trois
+      // fois plus après dix tours de travail sur cette jambe — et le seul
+      // vrai plan long du catch restait un plan que personne ne jouait.
+      if (m.type === 'submission') s += hit * tapChance(battle, unit, t, m) * 250;
+      // Ce que le coup laisse SUR LE CORPS, en plus de ce qu'il retire aux PV.
+      s += wearValue(battle, unit, t, m, dmg) * hit;
       // La prudence se mesure à ce qu'il reste de patience à l'arbitre. Tant
       // qu'il y a de la marge, tricher est un calcul ; au dernier
       // avertissement, c'est jeter le match.
@@ -114,10 +124,54 @@ function scoreAction(battle, unit, pos, a, tg) {
         const marge = risqueArbitre(battle, unit);
         s = marge >= 0.9 ? Math.min(s * 0.15, 12) : s * (1 - 0.55 * marge);
       }
+      // Elle joue un SPECTACLE, pas un solveur. Un mouvement déjà servi rapporte
+      // moins de momentum et moins de chaleur (le moteur s'en charge), et l'IA
+      // doit le voir : sans ce terme, elle trouvait la meilleure prise du tour
+      // et la rejouait jusqu'à la fin — 22 % de tous les coups du jeu étaient
+      // le même chinlock. Borné, pour qu'un finisher reste un finisher.
+      s *= Math.max(0.45, novelty(unit, m));
       s -= (a.cost || 0) * 0.35;
       return s;
     }
   }
+}
+
+// CHOISIR UN MEMBRE ET S'Y TENIR
+//
+// Sans ce terme, l'IA répartit ses coups au hasard des opportunités et
+// n'arrive jamais à rien : l'usure ciblée existe dans le moteur mais personne
+// ne la joue. Avec, elle fait ce que fait un vrai heel — elle trouve la jambe,
+// elle y revient, et elle attend sa prise.
+//
+// La valeur d'un point d'usure n'est pas constante : elle monte à l'approche
+// d'un seuil (c'est le palier qui change quelque chose, pas le point) et elle
+// dépend de ce que le membre vaut CONTRE CETTE CIBLE — une jambe morte ne
+// coûte pas la même chose à un voltigeur qu'à un colosse.
+function partWorth(battle, unit, target, part) {
+  let w = 10;
+  // Le paiement : une prise de soumission sur le membre qu'on travaille.
+  if (unit.moves.some((id) => MOVES[id] && MOVES[id].type === 'submission' && movePart(MOVES[id]) === part)) w += 34;
+  if (part === 'legs') {
+    if (target.moves.some((id) => MOVES[id] && MOVES[id].type === 'aerial')) w += 16;
+    if (battle.rules.victory === 'belt' || battle.rules.cage) w += 22;
+    w += 8;                                   // et le second souffle amputé
+  }
+  if (part === 'head' && !battle.rules.noPin) w += 12;
+  if (part === 'torso') w += 6;
+  return w;
+}
+
+function wearValue(battle, unit, target, move, dmg) {
+  const u = wearFrom(move, dmg);
+  if (!u) return 0;
+  const now = wearOf(target, u.part);
+  if (now >= WEAR_MAX) return 0;
+  const gain = Math.min(WEAR_MAX - now, u.n);
+  const apres = now + gain;
+  let palier = 0;
+  if (now < WEAR_HURT && apres >= WEAR_HURT) palier += 0.5;
+  if (now < WEAR_BROKEN && apres >= WEAR_BROKEN) palier += 1;
+  return (gain / WEAR_MAX + palier) * partWorth(battle, unit, target, u.part) * 0.6;
 }
 
 // Ce que le coup touche EN PLUS de sa cible. Sans ça l'IA voit une ligne et
@@ -202,7 +256,7 @@ function perchValue(battle, unit, pos) {
   return best;
 }
 
-function positional(battle, unit, pos) {
+function positional(battle, unit, pos, action = null) {
   const rules = battle.rules, g = battle.grid;
   let s = perchValue(battle, unit, pos);
   // SE RAPPROCHER VAUT QUELQUE CHOSE. Tant que personne n'est à portée, aucun
@@ -225,7 +279,17 @@ function positional(battle, unit, pos) {
     const theirs = near.reduce((a, e) => a + heightAt(g, e.x, e.y), 0) / near.length;
     s += Math.max(-12, Math.min(12, (mine - theirs) * 7));
   }
-  if (rules.countOut > 0 && isOutside(g, pos.x, pos.y)) s -= 35;
+  // Le compte qui monte est une URGENCE, pas une gêne. Un malus fixe ne
+  // distinguait pas « je viens de sortir » de « l'arbitre en est à cinq », et
+  // un lutteur ralenti par une jambe abîmée se faisait compter sans réagir.
+  //
+  // Il ne s'applique PAS à l'action qui sert justement à rentrer : elle se
+  // joue depuis la case extérieure, donc le malus la frappait de plein fouet
+  // et la faisait passer sous le seuil. L'IA voyait « rentrer dans le ring » à
+  // -49 et attendait sur place jusqu'au décompte. Un garde-fou qui punit le
+  // remède est pire que pas de garde-fou du tout.
+  const rentre = action && action.type === 'rollin';
+  if (rules.countOut > 0 && isOutside(g, pos.x, pos.y) && !rentre) s -= 35 + (unit.outsideCount || 0) * 30;
   if (rules.toss && ['rope', 'turnbuckle'].includes(tileAt(g, pos.x, pos.y))) s -= 30;
   if (rules.cage && hpRatio(unit) < 0.4 && tileAt(g, pos.x, pos.y) === 'turnbuckle') s += 25;
   return s;
