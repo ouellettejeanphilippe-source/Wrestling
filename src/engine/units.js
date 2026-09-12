@@ -2,6 +2,7 @@
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { MOVES } from '../data/moves.js';
+import { newWear } from './wear.js';
 
 // Le fonds commun. Il s'est étoffé pour une raison : un long match a besoin
 // d'un vocabulaire de remplissage — piétiner, un genou sur le crâne, un
@@ -9,8 +10,13 @@ import { MOVES } from '../data/moves.js';
 // le monde possède. `running_elbow` et `dropdown` n'existent pas à l'arrêt :
 // les avoir dans le kit de base, c'est mettre une raison de bouger dans la
 // main de chaque lutteur, y compris du jobber.
+// `chop_block` et `arm_wringer` y sont pour une raison précise : TRAVAILLER UN
+// MEMBRE doit être à la portée de n'importe qui. Si l'usure ciblée n'était
+// ouverte qu'aux spécialistes de la soumission, elle ne serait pas une
+// stratégie, elle serait une classe.
 export const BASE_MOVES = ['punch', 'grapple', 'whip', 'taunt',
-  'running_elbow', 'dropdown', 'snapmare', 'stomp_away', 'knee_drop'];
+  'running_elbow', 'dropdown', 'snapmare', 'stomp_away', 'knee_drop',
+  'chop_block', 'arm_wringer'];
 
 export function movesFor(def) {
   const cls = CLASSES[def.cls] || { moves: [] };
@@ -28,8 +34,8 @@ export function movesFor(def) {
 // que trois coups : le lutteur se relevait pour se faire remettre au sol
 // aussitôt. Le facteur se pose ici plutôt que dans les 33 fiches, pour garder
 // les écarts entre lutteurs exactement tels qu'ils sont écrits.
-const HP_SCALE = 1.5;
-const GRIT_BONUS = 2;
+const HP_SCALE = 1.65;
+const GRIT_BONUS = 3;
 
 export function createUnit(def, team, x, y, opts = {}) {
   const bonus = opts.bonus || {};
@@ -60,6 +66,10 @@ export function createUnit(def, team, x, y, opts = {}) {
     // gabarit sur la grille : `size` accepte 2, [3, 2] ou { w, h }.
     // Par défaut les colosses tiennent sur 2×2, les autres sur une case.
     size: def.size || (def.weight === 'super' ? 2 : 1),
+    // L'usure ciblée : ce que chaque partie du corps a encaissé. C'est la
+    // mémoire longue du match — la seule chose qui rende le trentième tour
+    // différent du troisième.
+    wear: newWear(),
     statuses: {}, down: false, downTurns: 0, acted: false, moved: false, movedTiles: 0, movePath: null, moveMomentum: 0, static: 0, hadTurn: false,
     eliminated: false, elimReason: null, weapon: null, outsideCount: 0, climb: 0, legal: true,
     onlyPin: false, flags: {}, memory: {}, prev: null, boss: !!def.boss,

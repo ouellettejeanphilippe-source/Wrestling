@@ -3,6 +3,8 @@ import { h, clear } from './dom.js';
 import { PHASES } from '../engine/phases.js';
 import { COMBOS } from '../data/combos.js';
 import { MOVE_TIERS } from '../data/moves.js';
+import { MANAGER_LIST } from '../data/managers.js';
+import { HAND_SIZE } from '../engine/hand.js';
 
 const SEEN_KEY = 'ppw-tutorial-seen';
 export const tutorialSeen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch { return false; } };
@@ -145,6 +147,62 @@ const PAGES = [
         h('li', {}, h('b', {}, '👑 Par-dessus la corde, 🪜 échelle, 🧗 cage, ⏳ survie'), ' — selon le type de match.'),
       ),
       h('p', { class: 'muted' }, 'Un lutteur lent et costaud gagnera plus souvent par usure et par arrêt de l’arbitre ; un voltigeur ira chercher un plongeon et un tombé rapide ; un technicien visera la soumission. Aucune de ces routes n’est la bonne : elles dépendent de votre roster et du match.'),
+    ],
+  },
+  {
+    title: 'Vous ne choisissez pas, vous piochez',
+    icon: '🃏',
+    body: () => [
+      h('p', {}, 'Un lutteur connaît une vingtaine de mouvements, mais il n’en a que ', h('b', {}, `${HAND_SIZE} en main`), ' à chaque tour. On ne choisit plus « le meilleur coup » — on joue ce qu’on a, et c’est ce qui force à s’adapter.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Ce qui se pioche', 'Ce qui ne se pioche jamais'].map((x) => h('th', {}, x))),
+        h('tr', {},
+          h('td', {}, 'Tout le reste : mouvements de classe, de spécialité, de course, des cordes, d’usure.'),
+          h('td', {}, h('b', {}, 'Les fondamentaux'), ' — coup de poing, prise, Irish Whip, provoquer — sont toujours là. Et la ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre.'))),
+      h('p', {}, h('b', {}, 'Ce que vous ne jouez pas, vous le gardez.'), ' C’est la règle qui compte : tenir son Lariat lancé pendant trois tours en cherchant ses quatre cases de course, c’est du catch. Une main rebattue à chaque tour, ce serait du hasard.'),
+      h('p', {}, 'Les cartes, le déplacement et l’histoire sont ', h('b', {}, 'la même affaire'), ' : une carte qui réclame de la course EST la raison de traverser le ring, et le coup qui en sort EST le moment qu’on racontera à la fin. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
+      h('p', { class: 'muted' }, 'Rien qui passe ? ', h('b', {}, '🔄 Jeter la main et repiocher'), ' : ça coûte le tour, mais ça rend du souffle comme une provocation. Le talon se reconstitue tout seul avec la défausse — on ne tombe jamais à court de son propre répertoire.'),
+    ],
+  },
+  {
+    title: 'Choisissez un membre, et tenez-vous-y',
+    icon: '🦴',
+    body: () => [
+      h('p', {}, 'C’est la seule stratégie ', h('b', {}, 'longue'), ' du jeu, et celle qui transforme un match de trente tours en histoire : ', h('b', {}, 'travaillez une partie du corps'), '. Chaque coup marque la tête, les bras, les côtes ou la jambe. Deux seuils : ', h('b', {}, 'touchée'), ' à 45, ', h('b', {}, 'hors service'), ' à 85.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Membre', 'Touchée', 'Hors service'].map((x) => h('th', {}, x))),
+        [['🦵 Jambe', '-2 AGI', '-4 AGI, -1 MOV, plus aucun mouvement aérien ni escalade, et il ne se relève plus qu’à 38 %'],
+         ['💪 Bras', '-2 FOR', '-4 FOR, les prises accrochent mal, plus de renversement'],
+         ['🫁 Côtes', '-1 DEF, souffle ×0,6', '-3 DEF, souffle ×0,3 : il ne reprend plus son air'],
+         ['🤕 Tête', '-1 TEC, -1 DEF', '-3 TEC, -2 DEF, et il se fait compter plus facilement']]
+          .map((r) => h('tr', {}, r.map((c) => h('td', {}, c))))),
+      h('p', {}, h('b', {}, 'Le paiement, c’est la soumission.'), ' Une clé de jambe sur une jambe fraîche ne fait rien. La même après dix tours de travail finit le match — la chance d’abandon dépend d’abord de l’usure du membre visé, ensuite des PV, et le cœur ❤️ la plafonne comme pour le tombé.'),
+      h('p', { class: 'muted' }, 'Un coup qui ', h('b', {}, 'vise'), ' le membre l’use quatre fois plus qu’un coup qui l’atteint au passage. Tout le monde a « Coup dans le genou » et « Clé de poignet » dans son kit de base : ce n’est pas réservé aux spécialistes. La prévision affiche toujours le membre visé et son état avant/après.'),
+    ],
+  },
+  {
+    title: 'Quelqu’un au bord du ring',
+    icon: '🎩',
+    body: () => [
+      h('p', {}, 'Un manager n’est pas un lutteur de plus : c’est une ', h('b', {}, 'menace permanente qui ne se joue que deux fois'), '. Son intervention coûte le tour de votre lutteur — elle ne s’ajoute pas à votre action, elle la remplace.'),
+      h('div', { class: 'tut-plans' }, MANAGER_LIST.map((m) => h('div', { class: 'tut-plan' },
+        h('b', {}, `${m.icon} ${m.name}`), h('p', {}, m.desc)))),
+      h('p', {}, 'Deux d’entre eux sont ', h('b', {}, 'illégaux'), ' : l’arbitre peut les voir, et ils usent la même tolérance que vos propres coups bas. Rien n’interdit d’envoyer Bobby occuper l’arbitre d’abord.'),
+      h('p', { class: 'muted' }, 'Personne n’intervient avant le tour 4 : au son de la cloche, l’arbitre regarde les deux lutteurs et il n’y a encore rien à sauver.'),
+    ],
+  },
+  {
+    title: 'Ils se souviennent',
+    icon: '📖',
+    body: () => [
+      h('p', {}, 'En exhibition un contre un, le résultat est ', h('b', {}, 'gardé'), '. La prochaine fois que ces deux-là se croisent, le jeu le sait — et le match ne commence pas pareil.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Ce que change une rivalité', 'Effet'].map((x) => h('th', {}, x))),
+        [['La salle connaît l’histoire', 'jusqu’à +28 de chaleur au coup d’envoi'],
+         ['Celui qui a perdu la dernière', '+20 momentum et une rancune qui pèse sur ses coups'],
+         ['La fiche', 'le score, la série en cours, et la manchette du dernier match']]
+          .map((r) => h('tr', {}, r.map((c) => h('td', {}, c))))),
+      h('p', {}, 'À la fin de chaque match, le jeu écrit son ', h('b', {}, 'histoire'), ' : le contexte, le membre sur lequel tout s’est joué, le moment où ça a failli basculer, et la fin. Plus une note sur cinq étoiles. Rien n’est inventé — tout vient de ce qui s’est réellement passé sur le plateau.'),
     ],
   },
   {

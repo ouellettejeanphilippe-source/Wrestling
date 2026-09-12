@@ -125,6 +125,14 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--gold);
 .stambar .bar-fill { background: linear-gradient(180deg, #7fd4ff, #3fa9f5); }
 .stambar.low .bar-fill { background: linear-gradient(180deg, #ff9a8a, #e8433f); }
 .pm-grit { display: block; font-size: 0.7rem; letter-spacing: -1px; line-height: 1; }
+/* L'usure ciblée : un membre touché clignote doucement, un membre hors service
+   est rouge et fixe. Le joueur doit repérer la jambe morte d'un coup d'œil, y
+   compris sur celle de son propre lutteur. */
+.pm-wear { display: block; line-height: 1; margin-top: 1px; }
+.pm-wear .wp { font-size: 0.72rem; filter: grayscale(0.8); opacity: 0.5; }
+.pm-wear .wp.lvl1 { filter: grayscale(0.2); opacity: 0.9; }
+.pm-wear .wp.lvl2 { filter: none; opacity: 1; text-shadow: 0 0 4px #e53935, 0 0 2px #e53935; }
+
 .heatbar .bar-fill { background: linear-gradient(180deg, #ffb03a, #e8433f); }
 .stat-bar .bar-fill { background: linear-gradient(180deg, #7a8dff, #4a5bd6); }
 
@@ -970,3 +978,44 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .view-iso .t-rope {
   background: linear-gradient(180deg, #cbbb99 0 22%, var(--canvas) 22% 100%);
 }
+
+/* ------------------------------------------------------------------ managers
+   Une menace permanente doit être lisible en permanence : le badge reste en
+   haut, avec le nombre d'interventions restantes en pastilles. */
+.mgrbadge { font-size: 0.72rem; padding: 2px 7px; border-radius: 999px; border: 1px solid #ffffff2e; margin-left: 6px; white-space: nowrap; }
+.mgrbadge.team-player { background: #1b5e2033; color: #a5d6a7; }
+.mgrbadge.team-enemy { background: #4a148c33; color: #ce93d8; }
+.mgrbadge.spent { opacity: 0.45; text-decoration: line-through; }
+.mgr-note .foe { color: #ce93d8; }
+
+/* ------------------------------------------------ rivalités et histoire du match
+   La rivalité s'annonce avant le coup d'envoi, l'histoire se lit après : ce
+   sont les deux bouts du même fil. */
+.riv-note { margin: 10px 0; }
+.riv { font-size: 0.86rem; padding: 8px 12px; border-radius: 8px; background: #ffffff0d; border-left: 3px solid #ffffff26; }
+.riv.on { background: #b71c1c26; border-left-color: #ef5350; }
+.story { margin: 14px 0; text-align: left; border-top: 1px solid #ffffff1f; padding-top: 12px; }
+.story-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.story-stars { color: #ffd54f; letter-spacing: 1px; }
+.story-head h3 { margin: 0; font-size: 1.02rem; line-height: 1.3; }
+.story-act { margin-top: 9px; }
+.story-act b { font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.72; }
+.story-act p { margin: 2px 0 0; font-size: 0.9rem; line-height: 1.45; }
+
+/* -------------------------------------------------------------------- la main
+   Les cartes, l'histoire et le déplacement sont la même affaire : une carte
+   qui réclame quatre cases de course EST la raison de traverser le ring. La
+   ligne de préparation le dit, et les cases qui la satisfont s'allument sur le
+   plateau quand on survole la carte. */
+.deck-state { font-size: 0.72rem; opacity: 0.65; padding: 4px 8px; letter-spacing: 0.02em; }
+.agroup.grp-main .tier-label { color: #ffd54f; }
+.agroup.grp-merite .tier-label { color: #80cbc4; }
+.act.card { border-left: 3px solid #ffd54f66; }
+.act-setup { display: block; font-size: 0.72rem; color: #ffab91; margin-top: 1px; }
+.act-setup.done { color: #a5d6a7; }
+.cell.setup::after {
+  content: ''; position: absolute; inset: 8%; border-radius: 4px;
+  border: 2px dashed #ffd54fcc; background: #ffd54f1f;
+  animation: setup-pulse 1.1s ease-in-out infinite; pointer-events: none;
+}
+@keyframes setup-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }

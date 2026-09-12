@@ -4,8 +4,10 @@ import { h, clear, sleep, bar, toast } from './dom.js';
 import { unitCard } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, STAMINA_LOW } from '../engine/battle.js';
-import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt } from '../engine/grid.js';
+import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, tapChance, novelty, moveUses, STAMINA_LOW } from '../engine/battle.js';
+import { movePart, wearFrom, wearOf, wearLevel, wornParts, PARTS, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from '../engine/wear.js';
+import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt, pathIn } from '../engine/grid.js';
+import { deckState, isCard } from '../engine/hand.js';
 import { unitAt, living } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
@@ -13,6 +15,7 @@ import { matchPhase } from '../engine/phases.js';
 import { activeCombos } from '../engine/battle.js';
 import { winRoutes } from '../engine/rules.js';
 import { showTutorial, tutorialSeen } from './tutorial.js';
+import { matchStory } from '../game/story.js';
 
 const TIER_ORDER = ['base', 'class', 'specialty', 'signature', 'finisher', 'script'];
 const TIER_LABELS = { base: 'Base', class: `Classe · ⚡${MOVE_TIERS.class.unlock}+`, specialty: `Spécialité · ⚡${MOVE_TIERS.specialty.unlock}+`, signature: `Signature · ⚡${MOVE_TIERS.signature.unlock}+`, finisher: `Finisher · ⚡${MOVE_TIERS.finisher.unlock}`, script: 'Script' };
@@ -31,12 +34,22 @@ const TILE_HELP = {
   cage: 'Mur de la cage : infranchissable. Y être projeté = 15 dégâts.',
   void: '',
 };
+// LE MENU S'OUVRE SUR LA MAIN
+//
+// Classé par famille de coup, il décrivait un catalogue — « Attaquer », et
+// dedans les dix-huit mouvements du lutteur. Il décrit maintenant une
+// SITUATION : ce que j'ai pioché ce tour-ci, ce que je peux toujours faire, ce
+// que la jauge a ouvert, et le ring. C'est dans cet ordre qu'on décide.
+const enMain = (a, u) => !!(a.move && a.move.id && (u.hand || []).includes(a.move.id));
+const estMerite = (a) => !!(a.move && ['signature', 'finisher'].includes(a.move.tier));
 const CATS = [
-  { id: 'attack', icon: '⚔️', name: 'Attaquer', match: (a) => ATTACK_TYPES.has(a.type) },
+  { id: 'main', icon: '🃏', name: 'Votre main', match: (a, u) => enMain(a, u) },
+  { id: 'base', icon: '👊', name: 'Fondamentaux', match: (a, u) => !!a.move && !enMain(a, u) && !estMerite(a) && a.type !== 'taunt' },
+  { id: 'merite', icon: '⚡', name: 'Mérité', match: (a) => estMerite(a) },
   { id: 'pin', icon: '🤝', name: 'Tombé', match: (a) => a.type === 'pin' },
   { id: 'taunt', icon: '📣', name: 'Provoquer', match: (a) => a.type === 'taunt' },
-  { id: 'special', icon: '🎯', name: 'Spécial', match: (a) => ['special', 'toss', 'climb', 'tag', 'pickup', 'sell', 'job'].includes(a.type) },
-  { id: 'wait', icon: '⏳', name: 'Attendre', match: (a) => a.type === 'wait' },
+  { id: 'ring', icon: '🔔', name: 'Le ring', match: (a) => ['toss', 'climb', 'tag', 'pickup', 'scavenge', 'rollin', 'manager', 'sell', 'job'].includes(a.type) },
+  { id: 'wait', icon: '⏳', name: 'Souffler', match: (a) => ['wait', 'redraw'].includes(a.type) },
 ];
 
 const TOUCH = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse), (max-width: 800px)').matches;
@@ -225,7 +238,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${mp.icon} ${mp.name}`), h('span', {}, mp.short)),
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name),
         h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}`),
-        refBadge()),
+        refBadge(), mgrBadge('player'), mgrBadge('enemy')),
       h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
 
@@ -279,6 +292,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
+    // Les cases qui débloqueraient la carte survolée.
+    const setup = ui.setupFor && ui.sel ? setupTiles(ui.sel, ui.setupFor) : null;
     // Ordre du peintre : on dessine du fond vers l'avant, sinon une case
     // surélevée recouvre les lutteurs qui se tiennent derrière elle. La
     // profondeur écran dépend de l'angle de caméra ; la position dans la
@@ -300,6 +315,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         if (path.has(k)) cell.classList.add('path');
         else if (atk && atk.has(k)) cell.classList.add('atk');
         if (threat && threat.has(k)) cell.classList.add('threat');
+        if (setup && setup.has(k)) cell.classList.add('setup');
         if (targets && targets.has(k)) {
           cell.classList.add('target');
           const t = targets.get(k);
@@ -500,7 +516,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = ui.sel;
     if (TOUCH && ui.mode === 'list') {
       pop.append(h('div', { class: 'pop-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
-      pop.append(renderActionList(u, listActions(battle, u).filter(ui.cat.match)));
+      pop.append(renderActionList(u, listActions(battle, u).filter((a) => ui.cat.match(a, u))));
       pop.hidden = false; document.body.classList.add('sheet-open'); return;
     }
     if (TOUCH && ui.mode === 'target') {
@@ -520,7 +536,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       pop.append(h('button', { class: 'pop-btn', onclick: () => doAction('wait', null) }, '⏳ Ne pas couvrir'));
     } else {
       for (const c of CATS) {
-        const list = actions.filter(c.match);
+        const list = actions.filter((a) => c.match(a, u));
         if (!list.length) continue;
         const okList = list.filter((a) => a.ok);
         const btn = h('button', { class: `pop-btn ${okList.length ? '' : 'off'}`, disabled: !okList.length, onclick: () => openCategory(c, list) },
@@ -564,7 +580,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       return;
     }
     if (ui.mode === 'list' && u) {
-      const actions = listActions(battle, u).filter(ui.cat.match);
+      const actions = listActions(battle, u).filter((a) => ui.cat.match(a, u));
       el.right.append(h('div', { class: 'panel-head' }, h('button', { class: 'btn small ghost', onclick: () => { ui.mode = 'menu'; ui.cat = null; render(); } }, '← Menu'), h('b', {}, `${ui.cat.icon} ${ui.cat.name}`)));
       el.right.append(renderActionList(u, actions));
       el.right.append(unitCard(battle, u, { class: 'selected compact' }));
@@ -607,31 +623,87 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('b', {}, `${r.icon} ${r.name}`), h('span', { class: 'route-how' }, r.how), r.state ? h('span', { class: 'route-state' }, r.state) : null)));
   }
 
+  // CE QUE LA CARTE RÉCLAME
+  //
+  // Les cartes, l'histoire et le déplacement sont la même affaire : une carte
+  // qui exige quatre cases de course EST la raison de traverser le ring, et le
+  // coup qui en sort EST le moment du match qu'on racontera. Encore faut-il
+  // que le joueur voie la préparation, sinon il tient une carte morte au lieu
+  // d'avoir un plan pour les deux prochains tours.
+  const SETUPS = [
+    ['ran', (n) => ['🏃', `${n} case${n > 1 ? 's' : ''} de course avant de frapper`]],
+    ['crossedRope', () => ['🪢', 'traverser les cordes en chemin']],
+    ['turnbuckle', () => ['🪜', 'être monté dans un coin']],
+    ['attackerOnRope', () => ['🪢', 'être sur les cordes ou dans un coin']],
+    ['targetOnRope', () => ['🎯', 'la cible doit être sur les cordes']],
+    ['targetDown', () => ['💫', 'la cible doit être au sol']],
+    ['targetDownOrDazed', () => ['💫', 'la cible doit être au sol ou étourdie']],
+    ['targetDazedOrCorner', () => ['💫', 'la cible doit être étourdie ou dans un coin']],
+    ['targetNearTable', () => ['🪑', 'la cible doit être contre une table']],
+  ];
+  function setupOf(move) {
+    const req = (move && move.requires) || {};
+    for (const [k, f] of SETUPS) if (req[k]) return f(req[k]);
+    return null;
+  }
+
+  // Les cases depuis lesquelles la carte deviendrait jouable. C'est le lien
+  // direct entre la main et le plateau : on montre où aller, pas seulement ce
+  // qui manque.
+  function setupTiles(u, move) {
+    const req = (move && move.requires) || {};
+    const out = new Set();
+    if (!req.ran && !req.crossedRope && !req.turnbuckle && !req.attackerOnRope) return out;
+    const reach = getReachable(battle, u);
+    for (const v of reach.values()) {
+      if (v.blocked) continue;
+      const chemin = pathIn(reach, v.x, v.y);
+      const parcouru = Math.max(0, chemin.length - 1);
+      const tuile = tileAt(g, v.x, v.y);
+      if (req.ran && parcouru < req.ran) continue;
+      if (req.crossedRope && !(chemin.length > 1 && chemin.slice(0, -1).some((c) => tileAt(g, c.x, c.y) === 'rope'))) continue;
+      if (req.turnbuckle && tuile !== 'turnbuckle') continue;
+      if (req.attackerOnRope && tuile !== 'rope' && tuile !== 'turnbuckle') continue;
+      out.add(key(v.x, v.y));
+    }
+    return out;
+  }
+
+  // La liste d'une catégorie est déjà homogène (le menu s'ouvre sur la main),
+  // donc plus de sous-groupes : une ligne d'état du talon, puis les options.
   function renderActionList(u, actions) {
     const box = h('div', { class: 'actions' });
-    for (const tier of TIER_ORDER) {
-      const list = actions.filter((a) => (a.tier || 'base') === tier);
-      if (!list.length) continue;
-      const locked = list.every((a) => !a.ok && a.reason && a.reason.startsWith('🔒'));
-      const group = h('div', { class: `agroup tier-${tier} ${locked ? 'locked' : ''}` }, h('div', { class: 'tier-label' }, TIER_LABELS[tier], locked ? ' 🔒' : ''));
-      for (const a of list) {
-        const m = a.move;
-        const meta = [];
-        if (m && m.power != null) meta.push(`💥 ${m.power}`);
-        if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
-        if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
-        if (a.cost) meta.push(`⚡ -${a.cost}`);
-        if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
-        const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
-        const combos = m && best && best.unit ? activeCombos(battle, u, best.unit, m) : [];
-        const btn = h('button', { class: `act ${a.ok ? '' : 'disabled'}`, disabled: !a.ok || ui.busy, onclick: () => chooseAction(a) },
-          h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
-          meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
-          combos.length ? h('span', { class: 'act-combo' }, combos.map((c) => `${c.icon} ${c.name}`).join(' + ')) : null,
-          h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
-        group.append(btn);
-      }
-      box.append(group);
+    const d = deckState(u);
+    box.append(h('div', { class: 'deck-state', title: 'Cartes en main · talon · défausse' },
+      `🃏 ${d.main} en main · 🂠 ${d.talon} au talon · 🗑 ${d.defausse} défaussées`));
+    for (const a of actions) {
+      const m = a.move;
+      const carte = !!(m && m.id && (u.hand || []).includes(m.id));
+      const meta = [];
+      if (m && m.power != null) meta.push(`💥 ${m.power}`);
+      if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
+      if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
+      if (a.cost) meta.push(`⚡ -${a.cost}`);
+      if (m && m.part && PARTS[m.part]) meta.push(`${PARTS[m.part].icon} vise ${PARTS[m.part].short}`);
+      if (m && m.momentum && ATTACK_TYPES.has(a.type)) meta.push(`⚡ +${m.momentum} si touché`);
+      const best = a.targets.length ? a.targets.reduce((x, y) => ((y.hit ?? y.chance * 100) > (x.hit ?? x.chance * 100) ? y : x)) : null;
+      const combos = m && best && best.unit ? activeCombos(battle, u, best.unit, m) : [];
+      const prep = setupOf(m);
+      const btn = h('button', {
+        class: `act ${a.ok ? '' : 'disabled'}${carte ? ' card' : ''}`,
+        disabled: !a.ok || ui.busy,
+        onclick: () => chooseAction(a),
+        // Survoler une carte allume sur le plateau les cases qui la
+        // débloqueraient : la carte devient un itinéraire.
+        onpointerenter: () => { if (!prep) return; ui.setupFor = m; renderBoard(); },
+        onpointerleave: () => { if (ui.setupFor !== m) return; ui.setupFor = null; renderBoard(); },
+      },
+        h('span', { class: 'act-name' }, a.name, best && best.hit != null ? h('span', { class: 'act-hit' }, `${best.hit} %`) : best && best.chance != null ? h('span', { class: 'act-hit' }, `${Math.round(best.chance * 100)} %`) : null),
+        meta.length ? h('span', { class: 'act-meta' }, meta.join('  ')) : null,
+        prep ? h('span', { class: `act-setup ${a.ok ? 'done' : ''}` }, `${prep[0]} ${prep[1]}`) : null,
+        combos.length ? h('span', { class: 'act-combo' }, combos.map((c) => `${c.icon} ${c.name}`).join(' + ')) : null,
+        h('span', { class: 'act-desc' }, a.ok ? a.desc : `✗ ${a.reason}`));
+      box.append(btn);
     }
     return box;
   }
@@ -677,6 +749,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       rs.blind ? '👀 Arbitre distrait' : `🦓 Arbitre ${rs.name} · ${rs.label}`);
   }
 
+  // Qui est au bord du ring, et combien il lui reste d'interventions. Une
+  // menace qu'on ne voit pas ne change pas la façon de jouer.
+  function mgrBadge(team) {
+    const m = battle.managers && battle.managers[team];
+    if (!m) return null;
+    return h('span', {
+      class: `mgrbadge team-${team}${m.left <= 0 ? ' spent' : ''}`,
+      title: `${m.name} — ${m.nick}. ${m.desc}`,
+    }, `${m.icon} ${m.name} ${'●'.repeat(m.left) || '— épuisé'}`);
+  }
+
   function renderForecast(u, t, compact = false) {
     const a = ui.action;
     const tgt = t.unit;
@@ -699,6 +782,26 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       const rev = reverseChance(battle, u, tgt, a.move);
       if (rev > 0.005) mid.push(['🔄 Risque de renversement', `${Math.round(rev * 100)} %`]);
       if (winded(u)) mid.push(['😮‍💨 À bout de souffle', '−25 % dégâts, −10 précision']);
+      // L'USURE CIBLÉE DOIT SE LIRE AVANT DE FRAPPER. C'est une stratégie
+      // longue : si le joueur ne voit pas où il en est sur la jambe qu'il
+      // travaille depuis dix tours, il n'y a pas de stratégie, il y a un
+      // hasard qui finit par payer.
+      const us = wearFrom(a.move, dmg);
+      if (us) {
+        const P = PARTS[us.part];
+        const avant = wearOf(tgt, us.part), apres = Math.min(WEAR_MAX, avant + us.n);
+        const seuil = apres >= WEAR_BROKEN ? ' — HORS SERVICE' : apres >= WEAR_HURT ? ' — touchée' : '';
+        mid.push([`${P.icon} ${P.name}${us.aimed ? ' (visée)' : ''}`,
+          `${Math.round(avant)} → ${Math.round(apres)}${seuil}`]);
+      }
+      if (a.type === 'submission') {
+        const tap = tapChance(battle, u, tgt, a.move);
+        const p = movePart(a.move);
+        mid.push(['🔗 Abandon', `${Math.round(tap * 100)} %${p ? ` (${PARTS[p].short} à ${Math.round(wearOf(tgt, p))})` : ''}`]);
+      }
+      // Ce que la foule a déjà vu ne rapporte plus autant.
+      const nv = novelty(u, a.move);
+      if (nv < 0.99) mid.push(['👥 Déjà vu', `${moveUses(u, a.move)}× — momentum et chaleur ×${nv.toFixed(2)}`]);
       const el = elanLabel(u.movedTiles, a.move, u);
       if (el) mid.push([`🏃 ${el.name}`, `${el.travel} case${el.travel > 1 ? 's' : ''} · ${el.good ? '+' : ''}${Math.round((el.mult - 1) * 100)} % dégâts`]);
       if (el && el.static >= 2) mid.push(['😴 Immobile depuis', `${el.static} tour${el.static > 1 ? 's' : ''} — la foule décroche`]);
@@ -724,6 +827,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     } else if (a.type === 'pin') mid = [['Tombé', `${Math.round(t.chance * 100)} %`], ['Cœur adverse', '❤️'.repeat(tgt.grit) || '—'], ['Si kick-out', 'cœur -1, +15 momentum']];
     else if (a.type === 'toss') mid = [['Par-dessus la corde', `${Math.round(t.chance * 100)} %`]];
     else if (a.id === 'whip') mid = [['Précision', `${t.hit} %`], ['Projection', whipPreview(u, tgt)]];
+    else if (a.type === 'manager') mid = [[`${a.manager.icon} ${a.manager.name}`, a.manager.nick], ['Effet', a.manager.desc], ['Il reste', `${a.manager.left} intervention(s)`], a.manager.illegal && battle.rules.dq ? ['⚠️ Arbitre', refState(battle).label] : null].filter(Boolean);
+    else if (a.type === 'rollin') mid = [['Rentrer', 'se rouler sous la corde du bas'], ['Décompte', 'remis à zéro'], ['Coût', 'termine le tour']];
     else if (a.type === 'tag') mid = [['Tag', `${tgt.name} devient légal`], ['Bonus', '+15 % PV, +30 momentum']];
     else if (a.type === 'job') mid = [['Script', 'votre lutteur perd volontairement']];
     else if (a.move && a.move.effects && a.move.effects.drainMomentum) mid = [['Momentum adverse', `-${a.move.effects.drainMomentum}`]];
@@ -761,11 +866,29 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           // subit un malus et une fermeture de ses gros mouvements sans
           // comprendre d'où ça vient.
           bar(u.stamina, u.maxStamina, `stambar${winded(u) ? ' low' : ''}`, `${Math.round(u.stamina)}`),
-          h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—')),
+          h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—'),
+          wearStrip(u)),
         h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
     };
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Votre équipe'), battle.units.filter((u) => u.team === 'player').map(mk)));
     el.party.append(h('div', { class: 'pgroup' }, h('div', { class: 'pg-label' }, 'Adversaires'), battle.units.filter((u) => u.team === 'enemy').map(mk)));
+  }
+
+  // Les membres abîmés, en une ligne. Un membre hors service change ce que le
+  // lutteur peut faire (plus de vol, plus d'escalade, moins de souffle) : ça
+  // ne peut pas vivre uniquement dans le journal.
+  // Le seuil d'affichage est VOLONTAIREMENT sous le premier palier : voir un
+  // membre commencer à prendre, c'est ce qui donne envie d'y revenir. Attendre
+  // « touchée » à 45, c'est ne montrer la stratégie qu'une fois qu'elle a déjà
+  // réussi.
+  const WEAR_SHOW = 18;
+  function wearStrip(u) {
+    const parts = wornParts(u).filter((w) => w.n >= WEAR_SHOW);
+    if (!parts.length) return null;
+    return h('span', { class: 'pm-wear' }, parts.map((w) => h('span', {
+      class: `wp lvl${w.level}`,
+      title: `${w.name} : ${Math.round(w.n)}/${WEAR_MAX} — ${w.level >= 2 ? w.broken : w.level === 1 ? w.hurt : 'commence à prendre'}`,
+    }, w.icon)));
   }
 
   function renderLog() {
@@ -953,6 +1076,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       }
       box.append(h('p', { class: 'reward' }, `${summary.money >= 0 ? '+' : ''}${summary.money} $ · ${summary.fans >= 0 ? '+' : ''}${summary.fans} fans`), h('p', {}, summary.message));
     }
+    // L'HISTOIRE DU MATCH. C'est ce qu'on raconte le lendemain, et c'est ce qui
+    // manquait : le match produisait des chiffres, jamais une phrase. Elle est
+    // écrite à partir des temps forts réellement enregistrés — rien n'est
+    // inventé, et deux matchs différents ne donnent jamais le même texte.
+    const story = matchStory(battle, { rivalry: matchDef && matchDef.rivalry });
+    box.append(h('div', { class: 'story' },
+      h('div', { class: 'story-head' },
+        h('div', { class: 'story-stars', title: `Note du match : ${story.stars}/5` }, story.starsText),
+        h('h3', {}, `« ${story.headline} »`)),
+      story.acts.map((a) => h('div', { class: 'story-act' },
+        h('b', {}, `${a.icon} ${a.title}`), h('p', {}, a.text)))));
     box.append(h('button', { class: 'btn primary', onclick: onContinue }, 'Continuer'));
     root.append(h('div', { class: 'overlay' }, box));
   }

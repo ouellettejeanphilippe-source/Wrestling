@@ -291,15 +291,117 @@ Un match long où il ne se passe rien est pire qu'un match de six tours.
 
 | | au départ | aujourd'hui |
 | --- | --- | --- |
-| tours | 5,6 | **37,6** |
-| coups qui touchent | 5,9 | **30,3** |
-| chutes au sol | 1,0 | **5,4** |
-| kick-outs | 1,2 | **3,3** |
+| tours | 5,6 | **33,7** |
+| coups qui touchent | 5,9 | **29,5** |
+| chutes au sol | 1,0 | **3,3** |
+| kick-outs | 1,2 | **1,8** |
 | part d'un coup dans la barre de PV | 27 % | **10 %** |
-| renversements | — | 2,6/match |
+| renversements | — | 2,2/match |
+| mouvements distincts (135 matchs) | 72 | **93** |
+| le coup le plus servi d'un match | 29 % de ses coups | **24 %** |
 
 Sans limite de temps, la médiane est de **39 tours** et le 90ᵉ centile de 59 ; la limite est posée à 60, où elle ne
 coupe plus qu'un match sur onze — et un « Broadway » de temps en temps, c'est du vrai catch.
+
+## La main — on ne choisit pas, on pioche
+
+Le menu à la Final Fantasy Tactics avait un défaut de fond : avec dix-huit mouvements par lutteur, la liste
+s'allonge mais la **décision**, elle, ne devient jamais plus intéressante. Le meilleur coup du tour est presque
+toujours le même que celui du tour précédent, et on déroule une routine au lieu de lutter.
+
+Chaque lutteur a désormais **4 cartes en main** sur la vingtaine qu'il connaît.
+
+| ce qui se pioche | ce qui ne se pioche jamais |
+| --- | --- |
+| classe, spécialité, course, cordes, usure — tout le reste | **les fondamentaux** (coup de poing, prise, Irish Whip, provoquer) sont toujours là ; la **signature** et le **finisher** s'ouvrent au momentum, pas au tirage |
+
+**Ce qu'on ne joue pas, on le garde.** C'est la règle qui compte : tenir son Lariat lancé pendant trois tours en
+cherchant ses quatre cases de course, c'est du catch ; une main rebattue chaque tour, ce serait du hasard.
+
+Les cartes, le déplacement et l'histoire sont **la même affaire**. Une carte qui réclame quatre cases de course EST la
+raison de traverser le ring, et le coup qui en sort EST le moment qu'on racontera. Survoler une carte **allume sur le
+plateau les cases qui la débloquent** : la carte devient un itinéraire.
+
+Rien qui passe ? **Jeter la main et repiocher** coûte le tour mais rend du souffle, comme une provocation. Le talon se
+reconstitue avec la défausse.
+
+| | menu | main |
+| --- | --- | --- |
+| mouvements distincts (135 matchs) | 93 | **107** |
+| le coup le plus servi d'un match | 24 % de ses coups | **21 %** |
+| tours | 33,7 | **34,8** |
+| coups qui touchent | 29,5 | **30,5** |
+
+Deux pièges trouvés en mesurant : mettre les **fondamentaux dans le talon** rendait 41 % des tours entièrement morts et
+l'IA passait 56 % de son temps à jeter sa main ; et **noter la défausse dans la boucle de décision** la faisait
+ramasser les bonus de position et battre de vraies attaques — quarante tours pour vingt coups. La défausse vit
+maintenant dans le repli, là où on ne va que si rien d'autre ne vaut le coup.
+
+## L'usure ciblée — la stratégie longue
+
+Un match de trente tours qui n'**accumule** rien n'a pas d'arc : le trentième tour ressemble au troisième, en plus
+court. Chaque coup marque une partie du corps, avec deux seuils — **touchée** à 45, **hors service** à 85. L'usure ne
+redescend jamais de tout le match.
+
+| membre | touchée | hors service |
+| --- | --- | --- |
+| 🦵 Jambe | −2 AGI | −4 AGI, −1 MOV, **plus un seul mouvement aérien ni escalade**, et il ne se relève plus qu'à 38 % |
+| 💪 Bras | −2 FOR | −4 FOR, les prises accrochent mal, **plus de renversement** |
+| 🫁 Côtes | −1 DEF, souffle ×0,6 | −3 DEF, souffle ×0,3 : il ne reprend plus son air |
+| 🤕 Tête | −1 TEC, −1 DEF | −3 TEC, −2 DEF, et il se fait compter plus facilement |
+
+**Le paiement, c'est la soumission.** La chance d'abandon dépend d'abord de l'usure du membre *visé par la prise*,
+ensuite des PV — et le cœur ❤️ la plafonne, comme pour le tombé. Une clé de jambe sur une jambe fraîche ne fait rien ;
+la même après dix tours de travail finit le match. Les abandons passent de **4 % à 11 %** des fins.
+
+Un coup qui **vise** le membre l'use quatre fois plus qu'un coup qui l'atteint au passage : sans cet écart, l'offensive
+ordinaire mettait un membre hors service dans 90 % des matchs, et « hors service » ne racontait plus rien. Huit
+mouvements existent pour ça, dont deux (*Coup dans le genou*, *Clé de poignet*) dans le **kit de base** — travailler un
+membre doit être une stratégie, pas une classe.
+
+Trois freins empêchent l'optimum de devenir une boucle : **la foule a déjà vu ce coup** (répéter un mouvement rapporte
+de moins en moins de momentum et de chaleur), **il connaît la prise** (une soumission déjà tentée marche de moins en
+moins bien sur la même cible), et **serrer une prise coûte du souffle**. Sans eux, 30 % de tous les coups du jeu
+étaient le même chinlock.
+
+## Les managers — quelqu'un au bord du ring
+
+Un manager n'est pas un lutteur de plus : c'est une **menace permanente qui ne se joue que deux fois**, et son
+intervention **coûte le tour** du lutteur. Personne n'intervient avant le tour 4.
+
+| manager | ce qu'il fait |
+| --- | --- |
+| 🎩 Paul Lourdeur | prend le micro : +40 momentum, +25 souffle |
+| 📣 Jimmy Lacravate | mégaphone dans le dos d'un adversaire acculé aux cordes : 14 dégâts, étourdi — **illégal** |
+| 🧠 Bobby le Cerveau | occupe l'arbitre trois tours : tout devient légal |
+| 💅 Sherri la Sensationnelle | tient la cheville : arrache d'une case, étourdit, +22 d'usure à la jambe — **illégal** |
+| 🩺 Docteur Von Kayfabe | les sels : +18 % PV, souffle à bloc, étourdissement effacé |
+
+Les interventions illégales usent **la même tolérance d'arbitre** que vos propres coups bas : rien n'interdit
+d'envoyer Bobby occuper l'arbitre d'abord.
+
+## Les rivalités — ils se souviennent
+
+En exhibition un contre un, le résultat est **gardé dans le navigateur**. La prochaine fois que ces deux-là se
+croisent, le match ne commence pas pareil : jusqu'à **+28 de chaleur** au coup d'envoi (la salle connaît l'histoire),
+et **+20 momentum plus une rancune** pour celui qui a perdu la dernière fois. L'écran de préparation affiche le score,
+la série en cours et la manchette du dernier match.
+
+## L'histoire du match
+
+À la fin, le jeu **écrit ce qui s'est passé** — le contexte, le membre sur lequel tout s'est joué, le moment où ça a
+failli basculer, la fin — plus une note sur cinq étoiles. Rien n'est inventé : tout est tiré des temps forts réellement
+enregistrés pendant le match.
+
+> ★★★★☆ « **Bryan Danielsonne démonte la tête de Günter et le fait taper** »
+>
+> 🦴 **Le travail** — Bryan Danielsonne a trouvé la tête de Günter et n'a plus lâché : 🤕 hors service au tour 7.
+> Les épaules au tapis pesaient soudain beaucoup plus lourd.
+>
+> 🔥 **Le tournant** — 🎩 Paul Lourdeur s'en est mêlé au tour 4. Bryan Danielsonne a placé LeBell Lock au tour 6.
+
+La note est sévère par construction : sur 135 matchs simulés, la moyenne est de **3,1/5** et seul **1 %** décroche cinq
+étoiles. Aller au bout du chrono, se faire disqualifier ou gagner par décompte coûtent des étoiles.
 - **Soumissions** : peuvent faire abandonner une cible affaiblie. *Rope break* près des cordes (matchs avec arbitre).
 - **Terrain** : coin = plongeons +25 %, cordes = étourdi, coin/marches/table/cage = dégâts sur Irish Whip, table qui casse.
 - **Armes** (chaise, kendo, poubelle, batte) : illégales avec arbitre → il faut compter avec sa tolérance.

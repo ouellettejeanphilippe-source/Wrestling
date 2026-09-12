@@ -106,11 +106,17 @@ export function applyResult(state, battle, matchDef, teamIds) {
   return summary;
 }
 
-export function exhibitionMatch(type, playerIds, enemyIds, seed) {
+// Le quatrième argument accepte un nombre (l'ancienne graine) ou un objet
+// d'options : { seed, managers: { player, enemy }, rivalry }. L'exhibition est
+// devenue le mode où l'on choisit tout — adversaire, manager, et où l'histoire
+// entre les deux lutteurs se poursuit d'un match à l'autre.
+export function exhibitionMatch(type, playerIds, enemyIds, opts = {}) {
+  const o = typeof opts === 'number' ? { seed: opts } : (opts || {});
   const rules = MATCH_TYPES[type];
   return {
     id: 'exhibition', title: `Exhibition — ${rules.name}`, type, teamSize: playerIds.length, enemies: enemyIds, directives: [], reward: { money: 0, fans: 0 },
-    desc: rules.desc, mode: 'kayfabe', seed, turns: 8,
+    desc: rules.desc, mode: 'kayfabe', seed: o.seed, turns: 8,
+    managers: o.managers || null, rivalry: o.rivalry || null,
     reinforcements: type === 'survival' ? [{ turn: 3, enemies: ['invader'], spawns: [[0, 7]] }, { turn: 6, enemies: ['invader'], spawns: [[0, 7]] }] : undefined,
   };
 }

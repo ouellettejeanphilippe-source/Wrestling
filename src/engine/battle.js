@@ -4,13 +4,16 @@ import { MOVES, moveUnlock, moveCost } from '../data/moves.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { MATCH_TYPES, WEAPONS } from '../data/matchTypes.js';
+import { MANAGERS } from '../data/managers.js';
 import { createUnit } from './units.js';
 import { createRng } from './rng.js';
 import { matchPhase, isFlashy } from './phases.js';
 import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
-import { log, emit, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
+import { initHand, refill, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE } from './hand.js';
+import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
+import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
   standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
@@ -21,6 +24,12 @@ const SPAWNS = {
 const WEAPON_SPOTS = [[4, 7], [15, 8], [4, 8], [15, 7], [2, 4], [16, 12], [2, 12], [16, 4]];
 const WEAPON_ORDER = ['chair', 'kendo', 'trash', 'bat', 'chair', 'kendo'];
 const TIMED_STATUSES = ['dazed', 'cursed', 'finished'];
+// Ce que rapporte une revanche : du momentum au coup d'envoi, et une rancune
+// qui pèse un peu sur chaque coup. Petit exprès — la rivalité doit colorer le
+// match, pas le décider.
+export const RIVALRY_REVENGE = 20, GRUDGE_DAMAGE = 1.06;
+// Avant ce tour, le manager reste assis : il n'a rien à sauver.
+export const MANAGER_FIRST_TURN = 4;
 
 const gim = (u) => GIMMICKS[u.gimmick] || {};
 const HAZARD_TILES = ['table', 'steps', 'cage', 'barricade', 'turnbuckle'];
@@ -121,11 +130,22 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   const battle = {
     rng: createRng(seed), seed, grid, rules, match, mode: match.mode || 'kayfabe', script: match.script || null, units: [], items: [], turn: 1, phase: 'player', log: [], events: [],
     heat: 10, refDistracted: 0, result: null, lastElimination: null, reinforcementsDone: [],
+    // Les temps forts, dans l'ordre : de quoi écrire l'histoire du match à la fin.
+    beats: [],
     // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
     // fait partie de ce qu'on lit avant de décider de tricher.
     ref: makeReferee(createRng(seed ^ 0x9e37)),
     stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0 },
   };
+  // LES MANAGERS. Un par camp au maximum, deux interventions chacun pour tout
+  // le match. `match.managers` vient de l'écran de préparation : { player,
+  // enemy } avec des identifiants, ou rien du tout.
+  battle.managers = {};
+  for (const team of ['player', 'enemy']) {
+    const id = (match.managers || {})[team];
+    const m = MANAGERS[id];
+    if (m) battle.managers[team] = { ...m, left: m.uses };
+  }
   battle.api = {
     applyDamage: (t, dmg, src, opts) => applyDamage(battle, t, dmg, src, opts),
     isOutside: (u) => isOutside(grid, u.x, u.y),
@@ -151,6 +171,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     battle.units.push(u);
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
+  for (const u of battle.units) initHand(battle, u);
 
   // Armes cachées sous le ring : il faudra aller les chercher au bord du tablier.
   battle.underRing = rules.underRing ?? 0;
@@ -159,7 +180,27 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     battle.items.push({ x, y, weapon: { ...WEAPONS[WEAPON_ORDER[i % WEAPON_ORDER.length]] } });
   });
 
+  // LA RIVALITÉ. Ce que les deux se doivent déjà. Elle n'ajoute pas de règle :
+  // elle ajoute de la CHALEUR au coup d'envoi (la salle connaît l'histoire) et
+  // du momentum à celui qui est venu chercher sa revanche. Un match entre deux
+  // inconnus commence froid ; la belle commence debout.
+  if (match.rivalry && match.rivalry.meetings > 0) {
+    const riv = match.rivalry;
+    battle.heat = clamp(battle.heat + (riv.heat || 0), 0, 100);
+    log(battle, `📖 ${riv.note}`, 'big');
+    for (const u of battle.units) {
+      if (riv.revenge && u.id === riv.revenge) {
+        addMomentum(battle, u, RIVALRY_REVENGE);
+        u.flags.grudge = true;
+        log(battle, `😤 ${u.name} n’a pas digéré la dernière. Il entre avec une idée fixe.`);
+      }
+    }
+  }
   log(battle, `🔔 DING DING DING ! ${match.title || rules.name} — ${rules.name}.`, 'big');
+  for (const team of ['player', 'enemy']) {
+    const m = battle.managers[team];
+    if (m) log(battle, `${m.icon} ${m.name} accompagne ${team === 'player' ? 'votre camp' : 'l’adversaire'} au bord du ring.`);
+  }
   for (const u of battle.units) if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
   startPhase(battle, 'player');
   return battle;
@@ -185,6 +226,10 @@ function placeUnit(battle, unit, x, y) {
 export function getStats(battle, unit) {
   const s = { ...unit.stats };
   const add = (m) => { if (m) for (const [k, v] of Object.entries(m)) s[k] = (s[k] || 0) + v; };
+  // L'usure ciblée passe par ici, et seulement par ici : un membre abîmé doit
+  // se sentir partout — précision, dégâts, portée de déplacement — sans que
+  // chaque appelant ait à y penser.
+  add(wearStats(unit));
   if (gim(unit).selfStats) add(gim(unit).selfStats(battle, unit));
   for (const o of living(battle)) if (o !== unit && gim(o).auraStats) add(gim(o).auraStats(battle, o, unit));
   s.def -= unit.statuses.welt || 0;
@@ -193,7 +238,7 @@ export function getStats(battle, unit) {
 }
 
 export function moveRange(battle, unit) {
-  let mov = unit.stats.mov;
+  let mov = unit.stats.mov + wearStats(unit).mov;
   if (gim(unit).modMov) mov = gim(unit).modMov(battle, unit, mov);
   if (unit.statuses.dazed) mov -= 2;
   return Math.max(1, mov);
@@ -263,11 +308,17 @@ export const STAMINA_LOW = 25;                  // sous ce seuil, on est cuit
 export const STAMINA_REST = 14;                 // en soufflant (attendre, provoquer)
 export const STAMINA_TICK = 5;                  // récupération passive par tour
 
+export const STAMINA_SUBMISSION = 6;            // serrer une prise, ça vide
 export const staminaCost = (move) => {
   if (!move) return 0;
   const base = STAMINA_COST[move.tier] ?? STAMINA_COST.base;
   // Les mouvements de course coûtent plus : c'est une course, pas un pas.
-  return base + ((move.requires && move.requires.ran) ? 3 : 0);
+  // Une prise de soumission aussi, et c'est le vrai garde-fou contre le
+  // matraquage : serrer un chinlock à chaque tour essouffle en quatre tours,
+  // et à bout de souffle les gros mouvements se referment. C'est un coût
+  // SYSTÉMIQUE, pas un malus posé sur la prise — le lutteur qui vit sur ses
+  // prises de repos n'a plus de quoi finir le match.
+  return base + ((move.requires && move.requires.ran) ? 3 : 0) + (move.type === 'submission' ? STAMINA_SUBMISSION : 0);
 };
 export const winded = (u) => u.stamina < STAMINA_LOW;
 export function spendStamina(battle, unit, n) {
@@ -276,6 +327,25 @@ export function spendStamina(battle, unit, n) {
   if (avant >= STAMINA_LOW && winded(unit)) {
     log(battle, `😮‍💨 ${unit.name} est à bout de souffle — ses coups portent moins et ses gros mouvements se referment.`);
   }
+}
+
+// LA FOULE A DÉJÀ VU CE COUP
+//
+// Un match est un spectacle : le douzième chinlock ne fait plus lever
+// personne. Répéter un mouvement rapporte de moins en moins de momentum et de
+// chaleur — c'est la version « public » de la lassitude des prises de
+// soumission, et elle s'applique à tout le monde, joueur compris.
+//
+// Ce n'est pas un malus de dégâts : le coup fait toujours aussi mal. Ce qui
+// s'épuise, c'est ce qu'il RACONTE.
+export const NOVELTY_DECAY = 0.86, NOVELTY_FLOOR = 0.35;
+export const moveUses = (unit, move) => ((unit.memory.used || {})[move.id] || 0);
+export const novelty = (unit, move) =>
+  Math.max(NOVELTY_FLOOR, Math.pow(NOVELTY_DECAY, moveUses(unit, move)));
+function countUse(unit, move) {
+  if (!move || !move.id) return;
+  unit.memory.used = unit.memory.used || {};
+  unit.memory.used[move.id] = moveUses(unit, move) + 1;
 }
 
 // ---------------------------------------------------------------- liste des actions
@@ -309,7 +379,11 @@ export function listActions(battle, unit, pos = null) {
     return actions;
   }
 
-  for (const mid of unit.moves) {
+  // LE CŒUR DU CHANGEMENT. On n'itère plus les dix-huit mouvements du lutteur,
+  // mais sa MAIN — plus la provocation et les paliers mérités, qui ne se
+  // piochent pas. Le reste du corps de la boucle est inchangé : une carte est
+  // un mouvement comme avant, avec les mêmes conditions.
+  for (const mid of availableMoves(unit)) {
     const m = MOVES[mid];
     if (!m) continue;
     const unlock = moveUnlock(m), cost = moveCost(m);
@@ -330,6 +404,13 @@ export function listActions(battle, unit, pos = null) {
     // reprendre son air — et l'adversaire le voit.
     else if (winded(unit) && ['signature', 'finisher'].includes(m.tier)) {
       a.ok = false; a.reason = `😮‍💨 Trop essoufflé (${Math.round(unit.stamina)}/${STAMINA_LOW} requis)`;
+    }
+    // UNE JAMBE HORS SERVICE NE VOLE PLUS. C'est la porte que referme l'usure
+    // ciblée, et c'est la raison pour laquelle travailler la jambe d'un
+    // voltigeur est un plan de match à part entière : on ne lui retire pas des
+    // points de vie, on lui retire son vocabulaire.
+    else if (m.type === 'aerial' && wearLevel(unit, 'legs') >= 2) {
+      a.ok = false; a.reason = '🦵 Jambe hors service — plus question de voler';
     }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
@@ -362,6 +443,59 @@ export function listActions(battle, unit, pos = null) {
     const targets = enemies.filter((e) => manhattan(p, e) === 1 && ['rope', 'turnbuckle'].includes(tileAt(g, e.x, e.y))).map((e) => ({ unit: e, chance: tossChance(battle, unit, e) }));
     actions.push({ id: 'toss', name: 'Jeter par-dessus la corde', tier: 'base', type: 'toss', desc: 'La cible doit être sur les cordes ou dans un coin. Plus facile si elle est affaiblie ou au sol.', targets, ok: targets.length > 0, reason: 'Cible adjacente sur les cordes requise' });
   }
+  // RENTRER DANS LE RING
+  //
+  // Sans cette action, un lutteur jeté au plancher pouvait être PHYSIQUEMENT
+  // incapable de remonter : le tablier coûte trois points de déplacement et le
+  // tapis un quatrième, si bien qu'un lutteur étourdi (-2) ou à la jambe
+  // abîmée (-1) restait bloqué dehors à se faire compter — pendant que
+  // l'adversaire, penché par-dessus la corde, continuait de le frapper. C'est
+  // ce qui produisait un match sur sept par décompte.
+  //
+  // Se rouler sous la corde du bas n'est pas un exploit athlétique : c'est ce
+  // que fait n'importe qui. Ça coûte le tour, pas la portée.
+  const rentree = rollInTarget(battle, unit, p);
+  if (rentree) {
+    actions.push({
+      id: 'rollin', name: '↩️ Rentrer dans le ring', tier: 'base', type: 'rollin',
+      desc: 'Se rouler sous la corde du bas. Termine le tour, mais remet fin au décompte.',
+      targets: [{ self: true }], ok: true, dest: rentree,
+    });
+  }
+  // L'INTERVENTION DU MANAGER. Elle coûte le tour du lutteur : un manager ne
+  // donne pas d'action gratuite, il transforme celle qu'on a. C'est ce qui en
+  // fait une décision — et ce qui empêche « appuyer sur le bouton dès que
+  // possible » d'être toujours juste.
+  // LE MANAGER N'INTERVIENT PAS AU COUP D'ENVOI. Au son de la cloche, l'arbitre
+  // regarde les deux lutteurs et personne n'est encore fatigué : une
+  // intervention n'y raconte rien, elle se dépense. Sans ce délai, l'IA
+  // grillait ses deux cartouches aux tours 1 et 2 parce que c'est là que son
+  // momentum est le plus bas — et le manager disparaissait du match.
+  const mgr = battle.managers[unit.team];
+  if (mgr && mgr.left > 0 && battle.turn >= MANAGER_FIRST_TURN) {
+    const vise = MANAGER_TARGETS[mgr.ability];
+    let targets = [{ self: true }], ok = true, reason = '';
+    if (vise === 'enemy') {
+      const bord = (e) => !mgr.needsEdge || ['rope', 'turnbuckle'].includes(tileAt(g, e.x, e.y)) || isOutside(g, e.x, e.y);
+      targets = enemies.filter((e) => !e.eliminated && bord(e)).map((e) => ({ unit: e }));
+      ok = targets.length > 0;
+      reason = mgr.needsEdge ? 'Aucun adversaire au bord du ring (cordes, coin ou extérieur)' : 'Aucun adversaire';
+    }
+    actions.push({
+      id: 'manager', name: `${mgr.label} (${mgr.left})`, tier: 'base', type: 'manager',
+      desc: mgr.desc + (mgr.illegal && rules.dq ? ' L’arbitre peut le voir.' : ''),
+      manager: mgr, targets, ok, reason,
+    });
+  }
+  // La soupape : cinq cartes injouables ne doivent jamais être une impasse.
+  if ((unit.hand || []).length) {
+    const d = deckState(unit);
+    actions.push({
+      id: 'redraw', name: `🔄 Jeter la main et repiocher (${d.main})`, tier: 'base', type: 'redraw',
+      desc: `Défausse vos ${d.main} carte(s) et en repioche autant. Termine le tour et fait reprendre son souffle. Talon ${d.talon}, défausse ${d.defausse}.`,
+      targets: [{ self: true }], ok: true,
+    });
+  }
   const item = battle.items.find((i) => i.x === p.x && i.y === p.y);
   if (item && !unit.weapon) actions.push({ id: 'pickup', name: `${item.weapon.icon} Ramasser : ${item.weapon.name}`, tier: 'base', type: 'pickup', desc: `+${item.weapon.power} dégâts, ${item.weapon.uses} utilisations.`, targets: [{ self: true }], ok: true });
   // Sous le ring : accessible depuis l'extérieur, au bord du tablier.
@@ -379,8 +513,11 @@ export function listActions(battle, unit, pos = null) {
     const partners = allies.filter((a) => !a.legal && !a.down && manhattan(p, a) === 1).map((u) => ({ unit: u }));
     actions.push({ id: 'tag', name: '🤝 Tag !', tier: 'base', type: 'tag', desc: 'Passe le relais à un partenaire adjacent : il devient légal, soigne 15 % et gagne 30 momentum.', targets: partners, ok: partners.length > 0, reason: 'Partenaire non adjacent' });
   }
-  if (rules.cage && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: true });
-  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour décrocher la ceinture.', targets: [{ self: true }], ok: true });
+  // Grimper avec une jambe morte, non plus : dans un match d'échelle, travailler
+  // la jambe EST la façon de gagner.
+  const jambeHs = wearLevel(unit, 'legs') >= 2;
+  if (rules.cage && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
+  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour décrocher la ceinture.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
   if (battle.mode === 'scenario' && unit.team === 'player') {
     actions.push({ id: 'sell', name: '🎭 Vendre (prendre un bump)', tier: 'script', type: 'sell', desc: 'Spot coopératif : perd 8 % PV, +12 chaleur, +10 momentum aux ennemis adjacents. Compte pour le script.', targets: [{ self: true }], ok: hpRatio(unit) > 0.12, reason: 'Trop amoché pour vendre' });
     const fin = (battle.script && battle.script.finish) || {};
@@ -398,6 +535,28 @@ export function listActions(battle, unit, pos = null) {
   actions.push(wait);
   return actions;
 }
+
+// La case de ring libre la plus proche, quand on est au plancher contre le
+// tablier. `null` si on n'est pas dehors, pas au bord, ou si tout est occupé.
+function rollInTarget(battle, unit, p) {
+  const g = battle.grid;
+  if (!isOutside(g, p.x, p.y)) return null;
+  const auBord = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .some(([dx, dy]) => ['rope', 'turnbuckle'].includes(tileAt(g, p.x + dx, p.y + dy)));
+  if (!auBord) return null;
+  let best = null, bd = Infinity;
+  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+    if (tileAt(g, x, y) !== 'ring') continue;
+    const d = manhattan(p, { x, y });
+    if (d >= bd) continue;
+    if (!fits(g, battle.units, unit, x, y, { anyUnitBlocks: true })) continue;
+    bd = d; best = { x, y };
+  }
+  return best;
+}
+
+// Quelles interventions visent un adversaire plutôt que son propre lutteur.
+const MANAGER_TARGETS = { cheap_shot: 'enemy', rope_hold: 'enemy' };
 
 function weaponMove(battle, unit) {
   const w = unit.weapon;
@@ -445,9 +604,25 @@ export function executeAction(battle, unit, actionId, target = null) {
       if (idx >= 0) { unit.weapon = battle.items[idx].weapon; battle.items.splice(idx, 1); log(battle, `${unit.name} ramasse ${unit.weapon.name}.`); }
       break;
     }
+    case 'rollin': {
+      const d = a.dest;
+      unit.x = d.x; unit.y = d.y; unit.climb = 0; unit.outsideCount = 0;
+      unit.facing = facingTo(unit, enemiesOf(battle, unit)[0] || d);
+      emit(battle, { type: 'move', uid: unit.uid, x: d.x, y: d.y });
+      log(battle, `↩️ ${unit.name} se roule sous la corde du bas et revient dans le ring.`);
+      break;
+    }
+    case 'manager': result = managerSpot(battle, unit, tgt, a.manager); break;
     case 'tag': result = tagPartner(battle, unit, tgt); break;
     case 'climb': result = doClimb(battle, unit); break;
     case 'wait': heal(battle, unit, 4); unit.rested = true; break;
+    case 'redraw': {
+      const avant = unit.hand.length;
+      redraw(battle, unit);
+      unit.rested = true;
+      log(battle, `🔄 ${unit.name} n’a rien qui passe : il se replace, souffle, et repart sur autre chose. (${avant} carte(s) jetées)`);
+      break;
+    }
     case 'sell': {
       applyDamage(battle, unit, unit.maxHp * 0.08, null, { self: true });
       addHeat(battle, 12); battle.stats.sells++;
@@ -465,6 +640,22 @@ export function executeAction(battle, unit, actionId, target = null) {
       break;
     }
     default: result = resolveAttack(battle, unit, tgt, a.move); break;
+  }
+  // La carte jouée part à la défausse. Ce qu'on n'a pas joué RESTE en main :
+  // c'est ce qui permet de tenir son Lariat lancé pendant trois tours en
+  // cherchant ses quatre cases de course.
+  //
+  // IL NE LÂCHE PAS LA PRISE. Une exception, et c'est celle qui rend un plan
+  // long jouable avec une main : une soumission qui n'a pas fait abandonner
+  // revient en main si le membre qu'elle vise est DÉJÀ entamé. Sans elle, il
+  // fallait que la carte, l'usure, la position et le cœur coïncident au même
+  // tour — les abandons étaient tombés de 15 à 1 sur 135 matchs. Le
+  // matraquage reste impossible : chaque reprise de la même prise vaut moins
+  // (lassitude) et coûte du souffle.
+  if (a.move && a.move.id && isCard(a.move.id)) {
+    const garde = a.type === 'submission' && !result.tapped
+      && wearLevel(tgt || unit, movePart(a.move)) >= 1;
+    if (!garde) playCard(battle, unit, a.move.id);
   }
   if (result && result.freePin) { unit.acted = false; unit.onlyPin = true; }
   else { unit.acted = true; unit.onlyPin = false; }
@@ -512,6 +703,9 @@ export function hitChance(battle, attacker, target, move, opts = {}) {
   if (attacker.statuses.cursed) c -= 25;
   if (attacker.statuses.dazed) c -= 10;
   if (winded(attacker)) c -= 10;
+  // Un bras hors service ne tient pas une prise : c'est la contrepartie
+  // directe du travail au bras, et elle ne touche que ce qui s'attrape.
+  if (grabby) c -= wearLevel(attacker, 'arms') * 7;
   if (gim(attacker).modHitChance) c = gim(attacker).modHitChance(battle, attacker, attacker, target, move, c, 'attacker');
   if (gim(target).modHitChance) c = gim(target).modHitChance(battle, target, attacker, target, move, c, 'target');
   return clamp(Math.round(c), 25, 100);
@@ -546,6 +740,14 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   dmg *= elanMult(opts.travel ?? attacker.movedTiles, move, attacker);
   // À bout de souffle, on frappe sans appui.
   if (winded(attacker)) dmg *= 0.75;
+  // La rancune : celui qui vient chercher sa revanche frappe un peu plus fort.
+  if (attacker.flags.grudge) dmg *= GRUDGE_DAMAGE;
+  // ON TAPE SUR LA ROUE VOILÉE. Frapper un membre déjà entamé fait un peu plus
+  // mal que frapper du neuf : c'est le paiement de l'usure ciblée pour qui n'a
+  // pas de prise de soumission. Volontairement modeste — à 15 %, les matchs
+  // perdaient quatre tours sans gagner une seule chute de plus : ça les
+  // raccourcissait au lieu de les densifier.
+  dmg *= 1 + wearLevel(target, movePart(move)) * 0.07;
   // Les bonus « cible au sol » et « cible étourdie » passent désormais par les combos.
   if (gim(attacker).modOutDamage) dmg = gim(attacker).modOutDamage(battle, attacker, target, move, dmg);
   if (gim(target).modInDamage) dmg = gim(target).modInDamage(battle, target, attacker, move, dmg);
@@ -587,6 +789,7 @@ export function reverseChance(battle, attacker, target, move) {
   if (winded(attacker)) c += 0.05;              // il frappe sans appui
   if (winded(target)) c -= 0.04;                // il n'a plus les jambes
   if (target.statuses.finished) c -= 0.05;      // encore sonné par le dernier gros coup
+  c -= wearReversePenalty(target);              // on ne renverse pas avec un bras mort
   return clamp(c, 0, 0.35);
 }
 
@@ -604,6 +807,7 @@ export function resolveAttack(battle, attacker, target, move) {
     addMomentum(battle, target, 20);
     addHeat(battle, 12);
     battle.stats.reversals = (battle.stats.reversals || 0) + 1;
+    beat(battle, 'reverse', { who: target.name, uid: target.uid, on: attacker.name, move: move.name });
     checkWin(battle);
     return { hit: false, reversed: true, chance: rev };
   }
@@ -614,6 +818,7 @@ export function resolveAttack(battle, attacker, target, move) {
   attacker.facing = facingTo(attacker, target);
   attacker.momentum = Math.max(0, attacker.momentum - moveCost(move));
   if (!target.down && gim(target).onAttacked && gim(target).onAttacked(battle, target, attacker, move)) {
+    beat(battle, 'gimmick', { who: target.name, uid: target.uid, gimmick: gim(target).name, kind: 'counter', on: attacker.name, move: move.name });
     checkWin(battle);
     return { countered: true };
   }
@@ -636,7 +841,9 @@ export function resolveAttack(battle, attacker, target, move) {
   log(battle, `${attacker.name} → ${move.name} sur ${target.name} : ${dmg} dégâts${crit ? ' — CRITIQUE !' : ''}${fromCorner ? ' (depuis le coin !)' : ''}`, move.tier === 'finisher' ? 'finisher' : crit ? 'crit' : '');
   applyDamage(battle, target, dmg, attacker, { move, crit });
   const phase = matchPhase(battle);
-  addMomentum(battle, attacker, Math.round((move.momentum ?? 10) * phase.momentum));
+  const neuf = novelty(attacker, move);
+  countUse(attacker, move);
+  addMomentum(battle, attacker, Math.round((move.momentum ?? 10) * phase.momentum * neuf));
   addMomentum(battle, target, 5);
   for (const c of combos) {
     if (c.momentum) addMomentum(battle, attacker, c.momentum);
@@ -647,7 +854,7 @@ export function resolveAttack(battle, attacker, target, move) {
     emit(battle, { type: 'combo', x: target.x, y: target.y, names: combos.map((c) => c.name) });
   }
   const baseHeat = move.tier === 'finisher' ? 15 : move.tier === 'signature' ? 8 : move.type === 'aerial' ? 6 : 2;
-  addHeat(battle, Math.round((baseHeat + (eff.heat || 0)) * phase.heat));
+  addHeat(battle, Math.round((baseHeat + (eff.heat || 0)) * phase.heat * neuf));
   if (eff.selfMomentum) addMomentum(battle, attacker, eff.selfMomentum);
   if (fromCorner) { battle.stats.highSpots++; }
   if (move.type === 'weapon') { battle.stats.weaponsUsed++; if (attacker.team === 'player') battle.stats.playerWeaponHits++; }
@@ -676,10 +883,22 @@ export function resolveAttack(battle, attacker, target, move) {
   if (move.tier === 'finisher' && !target.eliminated) {
     setStatus(battle, target, 'finished', 2);
     battle.stats.finishers++;
+    beat(battle, 'finisher', { who: attacker.name, uid: attacker.uid, on: target.name, move: move.name });
     if (target.team === 'player') battle.stats.playerTookFinisher++;
     if (target.down && !battle.rules.noPin && manhattan(attacker, target) === 1 && canPin(battle, attacker, target).ok) { freePin = true; log(battle, `${attacker.name} peut couvrir immédiatement !`); }
   }
   if (move.type === 'submission' && !target.eliminated) attemptSubmission(battle, attacker, target, move);
+  // LA PRÉPARATION FAIT PARTIE DU COUP. Une carte qui exige quatre cases de
+  // course EST la raison d'avoir traversé le ring, et c'est ça qu'on raconte —
+  // pas « il a fait 14 dégâts ».
+  const prep = move.requires || {};
+  if ((prep.ran && attacker.movedTiles >= prep.ran) || (prep.crossedRope && ctx.crossedRope) || prep.turnbuckle || prep.attackerOnRope) {
+    beat(battle, 'course', {
+      who: attacker.name, uid: attacker.uid, on: target.name, move: move.name,
+      travel: attacker.movedTiles,
+      depuis: prep.turnbuckle ? 'coin' : prep.attackerOnRope ? 'cordes' : prep.crossedRope ? 'rebond' : 'course',
+    });
+  }
   attacker.memory.lastHit = { uid: target.uid, type: move.type };
   if (gim(attacker).onHit) gim(attacker).onHit(battle, attacker, target, move, dmg);
   if (eff.illegal && !target.eliminated) checkDq(battle, attacker, 0.35, move.name);
@@ -744,6 +963,21 @@ export function applyDamage(battle, target, amount, source, opts = {}) {
   target.hp = Math.max(0, target.hp - amount);
   target.climb = 0;
   emit(battle, { type: 'damage', x: target.x, y: target.y, amount, crit: !!opts.crit });
+  // L'USURE S'ACCUMULE ICI, au seul endroit où passent tous les dégâts : les
+  // coups, les éclaboussures, les collisions, les marches d'acier. Elle est
+  // proportionnelle à ce qui a été encaissé, plus le bonus propre au
+  // mouvement — c'est ce qui distingue un coup dans le genou d'un coup de
+  // poing qui atterrit sur la même jambe par hasard.
+  if (!opts.self && amount > 0) {
+    const u = wearFrom(opts.move, amount);
+    const crossed = u && addWear(target, u.part, u.n);
+    if (crossed) {
+      log(battle, crossed.level >= 2
+        ? `${crossed.icon} ${crossed.name.toUpperCase()} HORS SERVICE ! ${target.name} ${crossed.broken}.`
+        : `${crossed.icon} ${target.name} ${crossed.hurt} — sa ${crossed.short} a pris.`, crossed.level >= 2 ? 'big' : '');
+      beat(battle, crossed.level >= 2 ? 'broken' : 'hurt', { who: target.name, uid: target.uid, part: crossed.part, icon: crossed.icon, short: crossed.short, by: source ? source.name : null });
+    }
+  }
   if (source && gim(target).onDamaged) gim(target).onDamaged(battle, target, source, opts.move, amount);
   if (source && source.team === 'player') battle.stats.damageDealt += amount;
   if (target.hp <= 0 && !target.down) downUnit(battle, target);
@@ -751,7 +985,13 @@ export function applyDamage(battle, target, amount, source, opts = {}) {
 }
 
 function downUnit(battle, unit) {
-  if (gim(unit).beforeDown && gim(unit).beforeDown(battle, unit)) return;
+  // UN GIMMICK QUI CHANGE L'ISSUE EST UN TEMPS FORT. Les passifs agissaient
+  // pendant le match sans jamais rien raconter à la fin : un lutteur qui
+  // refuse de tomber, c'est pourtant LE moment dont on parle en sortant.
+  if (gim(unit).beforeDown && gim(unit).beforeDown(battle, unit)) {
+    beat(battle, 'gimmick', { who: unit.name, uid: unit.uid, gimmick: gim(unit).name, kind: 'save' });
+    return;
+  }
   unit.down = true; unit.downTurns = 0; unit.hp = 0; unit.climb = 0;
   delete unit.statuses.dazed;
   if (unit.grit <= 0 && !battle.rules.noPin && scriptAllowsElimination(battle, unit, 'stoppage')) {
@@ -762,6 +1002,7 @@ function downUnit(battle, unit) {
   }
   if (unit.team === 'player') battle.stats.playerDowned++;
   log(battle, `💫 ${unit.name} est au sol !`, 'down');
+  beat(battle, 'down', { who: unit.name, uid: unit.uid, grit: unit.grit });
   emit(battle, { type: 'down', x: unit.x, y: unit.y });
   addHeat(battle, 5);
 }
@@ -771,11 +1012,16 @@ function standUp(battle, u) {
   // Le second souffle. À 30 % on repartait avec une vie et demie de coup : le
   // lutteur se relevait pour se faire remettre au sol aussitôt. À 55 % il a de
   // quoi raconter une reprise — et il lui reste un cœur de moins pour le faire.
-  u.hp = Math.max(1, Math.round(u.maxHp * 0.55) + u.grit * 3);
+  // Une jambe hors service ne relève pas son homme : le second souffle est
+  // amputé. C'est le paiement du travail de jambe pour qui n'a pas de prise
+  // de soumission — on ne finit pas l'adversaire, on l'empêche de revenir.
+  const jambe = wearLevel(u, 'legs') >= 2 ? 0.38 : 0.55;
+  u.hp = Math.max(1, Math.round(u.maxHp * jambe) + u.grit * 3);
   u.grit = Math.max(0, u.grit - 1);
   addMomentum(battle, u, 25);
   if (u.team === 'player') battle.stats.playerStandUps++;
   log(battle, `🔥 ${u.name} se relève ! (${u.hp} PV, cœur ${u.grit})`, 'standup');
+  beat(battle, 'standup', { who: u.name, uid: u.uid, grit: u.grit });
   addHeat(battle, 8);
   if (gim(u).onStandUp) gim(u).onStandUp(battle, u);
 }
@@ -783,6 +1029,7 @@ function standUp(battle, u) {
 export function eliminate(battle, unit, reason) {
   if (unit.eliminated) return;
   unit.eliminated = true; unit.elimReason = reason; unit.down = false;
+  beat(battle, 'finish', { who: unit.name, uid: unit.uid, reason });
   battle.lastElimination = unit;
   battle.stats.lastElimReason = reason;
   emit(battle, { type: 'eliminated', x: unit.x, y: unit.y, uid: unit.uid });
@@ -843,6 +1090,7 @@ export function pinChance(battle, pinner, target) {
   const used = 1 - gritLeft;
   let c = 0.10 + used * used * 0.60;
   if (target.statuses.finished) c += 0.25;
+  c += wearPinBonus(target);                    // une tête qui ne suit plus se fait compter
   c += (pinner.momentum / 100) * 0.08;
   const saves = alliesOf(battle, target).filter((a) => !a.down && manhattan(a, target) === 1).length;
   c -= saves * 0.2;
@@ -882,7 +1130,44 @@ function attemptPin(battle, pinner, target) {
   addMomentum(battle, target, 15);
   log(battle, near === 3 ? `UN ! DEUX ! TR— KICK OUT À 2,9 !!! ${target.name} refuse de perdre !` : near === 2 ? `UN ! DEUX ! … KICK OUT ! ${target.name} se dégage.` : `UN… ${target.name} se dégage facilement.`, 'big');
   emit(battle, { type: 'pin', x: target.x, y: target.y, count: near === 3 ? 2.9 : near === 2 ? 2 : 1 });
+  if (near >= 2) beat(battle, 'nearfall', { who: target.name, uid: target.uid, by: pinner.name, count: near === 3 ? 2.9 : 2, grit: target.grit });
   return { success: false, chance: c };
+}
+
+// LA CHANCE D'ABANDON, en un seul endroit
+//
+// Elle vit ici plutôt que dans `attemptSubmission` pour que l'IA et la
+// prévision lisent EXACTEMENT le même nombre que celui qui sera tiré. Quand
+// les deux formules vivaient séparément, l'IA surestimait ses prises et
+// matraquait la même de quinze tours de suite.
+export const SUB_FATIGUE = 0.78;          // ce qu'il reste de la prise à chaque reprise
+export const subAttempts = (target, move) => ((target.memory.subs || {})[move.id] || 0);
+
+export function tapChance(battle, attacker, target, move) {
+  const A = getStats(battle, attacker);
+  const worn = Math.max(0, 0.65 - hpRatio(target)) / 0.65;
+  // LE PAIEMENT DE L'USURE CIBLÉE. Une clé de jambe sur une jambe fraîche ne
+  // fait rien ; la même après dix tours de travail finit le match. Avant, seul
+  // le total de PV comptait : la prise de soumission était un coup comme un
+  // autre, et « travailler la jambe » n'existait pas comme plan.
+  const cible = wearTapBonus(target, movePart(move));
+  // LE CŒUR GARDE AUSSI CETTE PORTE. Comme pour le tombé : tant qu'il reste du
+  // cœur, on ne fait abandonner personne. C'est ce qui empêche une prise de
+  // repos à 25 % de conclure un match au douzième tour.
+  let c = worn * 0.25 + cible + A.tec * 0.008 - target.grit * 0.10 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.12 : 0);
+  // IL CONNAÎT LA PRISE. Une soumission ratée ne coûtait rien : l'IA reprenait
+  // la même à chaque tour et le chinlock représentait 30 % de tous les coups du
+  // jeu. Ce n'est pas du catch, c'est une boucle.
+  //
+  if (gim(attacker).modTapChance) c = gim(attacker).modTapChance(battle, attacker, attacker, target, c, 'attacker');
+  if (gim(target).modTapChance) c = gim(target).modTapChance(battle, target, attacker, target, c, 'target');
+  c += matchPhase(battle).wear;
+  if (!scriptAllowsElimination(battle, target, 'submission')) c *= SCRIPT_PENALTY;
+  // La lassitude s'applique EN DERNIER, sur le nombre final. Appliquée au
+  // milieu, le bonus de phase repassait par-dessus et posait un plancher : la
+  // prise redevenait rentable au tour suivant et la boucle repartait.
+  c *= Math.pow(SUB_FATIGUE, subAttempts(target, move));
+  return clamp(c, 0, 0.9);
 }
 
 function attemptSubmission(battle, attacker, target, move) {
@@ -893,14 +1178,9 @@ function attemptSubmission(battle, attacker, target, move) {
     addMomentum(battle, target, 10);
     return { ropeBreak: true };
   }
-  const A = getStats(battle, attacker);
-  const worn = Math.max(0, 0.65 - hpRatio(target)) / 0.65;
-  let c = worn * 0.75 + A.tec * 0.01 - target.grit * 0.07 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.15 : 0);
-  if (gim(attacker).modTapChance) c = gim(attacker).modTapChance(battle, attacker, attacker, target, c, 'attacker');
-  if (gim(target).modTapChance) c = gim(target).modTapChance(battle, target, attacker, target, c, 'target');
-  c += matchPhase(battle).wear;
-  if (!scriptAllowsElimination(battle, target, 'submission')) c *= SCRIPT_PENALTY;
-  c = clamp(c, 0, 0.9);
+  const c = tapChance(battle, attacker, target, move);
+  target.memory.subs = target.memory.subs || {};
+  target.memory.subs[move.id] = subAttempts(target, move) + 1;
   const roll = battle.rng.next();
   if (roll < c) {
     if (!scriptAllowsElimination(battle, target, 'submission')) log(battle, `😱 ${attacker.name} ne respecte pas le script : c’est un SHOOT !`, 'big');
@@ -911,6 +1191,10 @@ function attemptSubmission(battle, attacker, target, move) {
     return { tapped: true };
   }
   if (roll < c + 0.15) target.grit = Math.max(0, target.grit - 1);
+  // Se dégager d'une prise, c'est un moment : la salle y croit et le lutteur
+  // repart avec quelque chose. C'est aussi ce qui fait qu'une prise ratée
+  // n'est pas gratuite pour celui qui l'a tentée.
+  addMomentum(battle, target, 12);
   log(battle, `${target.name} tient bon dans ${move.name} (${Math.round(c * 100)} %).`);
   return { tapped: false };
 }
@@ -994,6 +1278,7 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
         if (t.breakable) {
           setTile(g, nx, ny, 'debris'); battle.stats.tables++; addHeat(battle, 25);
           log(battle, `💥 ${target.name} PASSE À TRAVERS LA TABLE !!!`, 'big');
+          beat(battle, 'table', { who: target.name, by: source ? source.name : null });
           x = nx; y = ny; moved++;
         } else {
           log(battle, `${target.name} s’écrase contre ${t.name} !`);
@@ -1034,6 +1319,57 @@ export function pushUnit(battle, target, dx, dy, dist, source) {
   }
   if (!target.eliminated) { target.x = x; target.y = y; target.climb = 0; emit(battle, { type: 'move', uid: target.uid, x, y }); }
   return moved;
+}
+
+// ---------------------------------------------------------------- managers
+function managerSpot(battle, unit, target, mgr) {
+  const live = battle.managers[unit.team];
+  if (!live || live.left <= 0) return { ok: false };
+  live.left -= 1;
+  addHeat(battle, 10);
+  beat(battle, 'manager', { who: mgr.name, icon: mgr.icon, ability: mgr.ability, pour: unit.name, on: target ? target.name : null });
+  switch (mgr.ability) {
+    case 'promo':
+      addMomentum(battle, unit, 40);
+      unit.stamina = clamp(unit.stamina + 25, 0, unit.maxStamina);
+      addHeat(battle, 8);
+      log(battle, `${mgr.icon} ${mgr.name} prend le micro : « Mesdames et messieurs, MON client… » ${unit.name} reprend le dessus. (+40 momentum, +25 souffle)`, 'big');
+      break;
+    case 'smelling_salts':
+      heal(battle, unit, unit.maxHp * 0.18);
+      unit.stamina = unit.maxStamina;
+      delete unit.statuses.dazed;
+      log(battle, `${mgr.icon} ${mgr.name} colle une fiole sous le nez de ${unit.name} — il repart comme au premier tour.`, 'big');
+      break;
+    case 'distract':
+      battle.refDistracted = 4;
+      log(battle, `${mgr.icon} ${mgr.name} monte sur le tablier et embarque l’arbitre dans une conversation passionnante. Trois tours d’aveuglement.`, 'big');
+      break;
+    case 'cheap_shot': {
+      log(battle, `${mgr.icon} MÉGAPHONE ! ${mgr.name} frappe ${target.name} dans le dos pendant que l’arbitre est de l’autre côté.`, 'big');
+      emit(battle, { type: 'combo', x: target.x, y: target.y, names: [mgr.name] });
+      applyDamage(battle, target, 14, unit, { move: { id: 'manager_shot', type: 'weapon', part: 'head' } });
+      if (!target.eliminated) setStatus(battle, target, 'dazed', 2);
+      break;
+    }
+    case 'rope_hold': {
+      log(battle, `${mgr.icon} ${mgr.name} attrape la cheville de ${target.name} et ne lâche plus !`, 'big');
+      emit(battle, { type: 'combo', x: target.x, y: target.y, names: [mgr.name] });
+      applyDamage(battle, target, 8, unit, { move: { id: 'manager_hold', type: 'grapple', part: 'legs', effects: { wear: 22 } } });
+      if (!target.eliminated) {
+        setStatus(battle, target, 'dazed', 1);
+        pushUnit(battle, target, Math.sign(unit.x - target.x), Math.sign(unit.y - target.y), 1, unit);
+      }
+      break;
+    }
+    default: break;
+  }
+  // Un manager pris la main dans le sac, c'est l'arbitre qui prévient — puis
+  // qui siffle. La même tolérance que pour le lutteur : elle est partagée,
+  // donc tricher par procuration use la même corde.
+  if (mgr.illegal && !unit.eliminated) checkDq(battle, unit, 0.4, `l’intervention de ${mgr.name}`);
+  checkWin(battle);
+  return { manager: mgr.id };
 }
 
 // ---------------------------------------------------------------- tag / climb / DQ
@@ -1119,10 +1455,12 @@ function checkDq(battle, unit, base, what) {
   ref.vus++;
   ref.patience--;
   if (ref.patience > 0) {
+    beat(battle, 'warning', { who: unit.name, what, reste: ref.patience });
     log(battle, `⚠️ AVERTISSEMENT ! L’arbitre a vu ${what} de ${unit.name}. Encore ${ref.patience} et c’est fini.`, 'big');
     addHeat(battle, 6);
     return false;
   }
+  beat(battle, 'dq', { who: unit.name, what });
   log(battle, `🚨 DISQUALIFICATION ! ${what.charAt(0).toUpperCase()}${what.slice(1)} de trop : l’arbitre siffle la fin.`, 'big');
   eliminate(battle, unit, 'dq');
   return true;
@@ -1157,9 +1495,10 @@ export function startPhase(battle, team) {
     // On reprend son air à chaque tour. Celui qui a soufflé (attendre,
     // provoquer) en récupère bien plus : c'est la prise de repos du catch,
     // et c'est ce qui rend un long match jouable au lieu d'épuisant.
-    u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK), 0, u.maxStamina);
+    u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
     u.rested = false;
     u.hadTurn = true;
+    refill(battle, u);
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
       if (u.downTurns === 0) {
@@ -1199,6 +1538,7 @@ function spawnReinforcements(battle) {
       }
       const u = createUnit(def, 'enemy', x, y, { boost: spec.boost || {}, uid: `r${battle.turn}-${i}-${def.id}` });
       u.momentum = 20;
+      initHand(battle, u);
       battle.units.push(u);
       if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
     });
@@ -1260,3 +1600,5 @@ export function autoPlay(battle, maxTurns = 40) {
 }
 
 export { checkWin };
+export { availableMoves, deckState, isCard, redraw, HAND_SIZE } from './hand.js';
+export { movePart, wearLevel, wearRatio, wornParts, wearTapBonus, PARTS } from './wear.js';

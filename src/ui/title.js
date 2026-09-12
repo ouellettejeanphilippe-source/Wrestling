@@ -6,6 +6,8 @@ import { WRESTLERS, WRESTLERS_BY_ID, STARTER_CHOICES } from '../data/wrestlers.j
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
 import { load } from '../game/state.js';
+import { MANAGER_LIST, MANAGERS } from '../data/managers.js';
+import { loadRivalries, rivalryFor } from '../game/rivalry.js';
 import { showTutorial } from './tutorial.js';
 import { EVENT as INSTALLABLE, canInstall, promptInstall, isInstalled, needsIosHint } from '../pwa.js';
 
@@ -107,34 +109,86 @@ function showExhibition(root, app) {
   const typeSel = h('select', {}, EXHIBITION_TYPES.map((t) => h('option', { value: t }, `${MATCH_TYPES[t].icon} ${MATCH_TYPES[t].name}`)));
   const sizeSel = h('select', {}, [1, 2, 3].map((n) => h('option', { value: n, selected: n === 1 }, `${n} contre ${n}`)));
   const desc = h('p', { class: 'muted' }, MATCH_TYPES[typeSel.value].desc);
-  typeSel.addEventListener('change', () => { desc.textContent = MATCH_TYPES[typeSel.value].desc; });
-  const picked = new Set();
-  const counter = h('span', { class: 'muted' }, '0 choisi');
-  const updateCounter = () => {
-    const n = Number(sizeSel.value);
-    counter.textContent = `${picked.size}/${n} choisi${picked.size > 1 ? 's' : ''}`;
-    counter.classList.toggle('ok', picked.size === n);
+  const roster = WRESTLERS.filter((w) => !w.npc);
+  const mine = new Set(), theirs = new Set();
+
+  // LE MANAGER. Deux interventions pour tout le match, et le choix se fait
+  // AVANT : savoir que l'autre a Jimmy Lacravate change la façon de se placer
+  // près des cordes pendant trente tours.
+  const mgrSel = (label) => h('select', {}, [h('option', { value: '' }, '— aucun —'),
+    ...MANAGER_LIST.map((m) => h('option', { value: m.id }, `${m.icon} ${m.name} — ${m.nick}`))]);
+  const myMgr = mgrSel(), foeMgr = mgrSel();
+  const mgrNote = h('p', { class: 'muted small mgr-note' });
+  const paintMgr = () => {
+    const a = MANAGERS[myMgr.value], b = MANAGERS[foeMgr.value];
+    mgrNote.replaceChildren(...[a && h('span', {}, `${a.icon} ${a.desc} `), b && h('span', { class: 'foe' }, `· En face : ${b.icon} ${b.desc}`)].filter(Boolean));
   };
-  const list = rosterPicker(WRESTLERS.filter((w) => !w.npc), {
-    picked,
-    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); updateCounter(); },
-  });
-  sizeSel.addEventListener('change', updateCounter);
-  updateCounter();
+  myMgr.addEventListener('change', paintMgr);
+  foeMgr.addEventListener('change', paintMgr);
+
+  // LA RIVALITÉ. Elle ne se voit qu'en un contre un, parce qu'elle se compte
+  // entre deux noms. Elle s'affiche avant le coup d'envoi : le joueur doit
+  // savoir qu'il entre dans une belle, pas dans un premier match.
+  const rivNote = h('div', { class: 'riv-note' });
+  const paintRiv = () => {
+    clear(rivNote);
+    const a = [...mine][0], b = [...theirs][0];
+    if (Number(sizeSel.value) !== 1 || !a || !b) return;
+    const noms = Object.fromEntries(roster.map((w) => [w.id, w.name]));
+    const r = rivalryFor(loadRivalries(), a, b, noms);
+    rivNote.append(h('div', { class: `riv ${r.meetings ? 'on' : ''}` },
+      h('b', {}, r.meetings ? '📖 Leur histoire' : '📖 Première fois'),
+      h('span', {}, ' ', r.note),
+      r.meetings ? h('span', { class: 'muted' }, ` (+${r.heat} de chaleur au coup d’envoi${r.revenge ? `, revanche pour ${noms[r.revenge]}` : ''})`) : null));
+  };
+
+  const counter = h('span', { class: 'muted' }, '0 choisi');
+  const foeCounter = h('span', { class: 'muted' }, '0 choisi');
+  const updateCounters = () => {
+    const n = Number(sizeSel.value);
+    const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+    counter.textContent = `${mine.size}/${n} choisi${mine.size > 1 ? 's' : ''}`;
+    counter.classList.toggle('ok', mine.size === n);
+    foeCounter.textContent = `${theirs.size}/${foes} choisi${theirs.size > 1 ? 's' : ''}`;
+    foeCounter.classList.toggle('ok', theirs.size === foes);
+    paintRiv();
+  };
+
+  const myList = rosterPicker(roster, { picked: mine, onChange: (ids) => { mine.clear(); ids.forEach((i) => mine.add(i)); updateCounters(); } });
+  const foeList = rosterPicker(roster, { picked: theirs, onChange: (ids) => { theirs.clear(); ids.forEach((i) => theirs.add(i)); updateCounters(); } });
+
+  typeSel.addEventListener('change', () => { desc.textContent = MATCH_TYPES[typeSel.value].desc; updateCounters(); });
+  sizeSel.addEventListener('change', updateCounters);
+  updateCounters();
+  paintMgr();
+
+  // L'adversaire se choisit, mais on ne force personne : le bouton « au
+  // hasard » reste, parce qu'un tirage est parfois exactement ce qu'on veut.
+  const hasard = h('button', { class: 'btn ghost small', onclick: () => {
+    const n = Number(sizeSel.value);
+    const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+    const pool = roster.filter((w) => !mine.has(w.id)).map((w) => w.id).sort(() => Math.random() - 0.5).slice(0, foes);
+    foeList.setPicked(pool);
+  } }, '🎲 Adversaires au hasard');
+
   root.append(h('div', { class: 'setup' },
     h('h2', {}, 'Match d’exhibition'),
     h('div', { class: 'row' }, h('label', {}, 'Type ', typeSel), h('label', {}, 'Format ', sizeSel)), desc,
+    h('div', { class: 'row' }, h('label', {}, 'Votre manager ', myMgr), h('label', {}, 'Manager adverse ', foeMgr)), mgrNote,
     h('h3', {}, 'Votre équipe ', counter),
-    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter. Les adversaires sont tirés au hasard.'),
-    list,
+    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter.'),
+    myList,
+    h('h3', {}, 'Les adversaires ', foeCounter, ' ', hasard),
+    foeList,
+    rivNote,
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
       h('button', { class: 'btn primary', onclick: () => {
         const n = Number(sizeSel.value);
-        if (picked.size !== n) return toast(`Choisissez exactement ${n} lutteur(s)`, 'warn');
-        const pool = WRESTLERS.filter((w) => !w.npc && !picked.has(w.id)).map((w) => w.id).sort(() => Math.random() - 0.5);
-        const enemies = pool.slice(0, typeSel.value === 'battle_royal' ? n + 1 : n);
-        app.startExhibition(typeSel.value, [...picked], enemies);
+        const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+        if (mine.size !== n) return toast(`Choisissez exactement ${n} lutteur(s)`, 'warn');
+        if (theirs.size !== foes) return toast(`Choisissez ${foes} adversaire(s)`, 'warn');
+        app.startExhibition(typeSel.value, [...mine], [...theirs], { managers: { player: myMgr.value || null, enemy: foeMgr.value || null } });
       } }, 'Ding ding ding →'),
     ),
   ));
