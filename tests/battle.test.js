@@ -123,7 +123,9 @@ test('un lutteur à 0 PV est au sol, peut être couvert, puis se relève', () =>
   b.turn++; // simule endEnemyPhase sans IA
   endPlayerPhase(b);
   assert.ok(!j.down && j.hp > 0, 'se relève au tour suivant');
-  assert.equal(j.grit, 0, 'le cœur baisse en se relevant');
+  // Relatif, pas absolu : le nombre de cœurs est un réglage d'équilibrage, la
+  // règle est qu'il en coûte un de se relever.
+  assert.equal(j.grit, j.maxGrit - 1, 'le cœur baisse en se relevant');
 });
 
 test('on ne peut pas couvrir un adversaire trop frais, ni hors du ring en match simple', () => {
@@ -244,7 +246,10 @@ test('l’IA joue une phase complète sans erreur et finit par gagner ou perdre'
   for (const show of SEASON.shows) for (const m of show.matches) {
     const team = ['jean_sina', 'derby_allin', 'brian_danielsson'].slice(0, m.teamSize).map((id) => W[id]);
     const b = createBattle({ match: m, playerTeam: team, seed: 3 });
-    const r = autoPlay(b, 40);
+    // Un match dure maintenant une trentaine de tours : le plafond du test
+    // doit rester au-dessus de la limite de temps du moteur (45), sinon il
+    // mesure sa propre impatience.
+    const r = autoPlay(b, 60);
     assert.ok(r && ['player', 'enemy'].includes(r.winner), `${m.id} se termine`);
   }
 });

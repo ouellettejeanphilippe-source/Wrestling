@@ -75,6 +75,36 @@ const PAGES = [
     ],
   },
   {
+    title: 'Deux jauges opposées',
+    icon: '😮‍💨',
+    body: () => [
+      h('p', {}, 'Le ', h('b', {}, 'momentum ⚡'), ' monte et ouvre des portes. Le ', h('b', {}, 'souffle 😮‍💨'), ' descend et les referme. Un match se joue entre les deux.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['', 'Momentum ⚡', 'Souffle 😮‍💨'].map((x) => h('th', {}, x))),
+        [['Sens', 'monte quand vous frappez', 'descend quand vous frappez'],
+         ['Rôle', 'ouvre les paliers', 'les referme sous 25'],
+         ['Coût d’un coup', 'signature et finisher', 'de 4 à 22 selon le palier'],
+         ['Se refait', 'en frappant, en provoquant', '+5 par tour, +14 si vous avez soufflé']]
+          .map(([a, m, st]) => h('tr', {}, h('td', {}, a), h('td', {}, m), h('td', {}, st)))),
+      h('p', {}, 'À bout de souffle : ', h('b', {}, '−25 % de dégâts, −10 de précision, et plus de signature ni de finisher'), '. C’est la prise de repos du catch — on ne peut pas enchaîner les gros coups, il faut reprendre son air. Et l’adversaire voit votre jauge.'),
+      h('p', { class: 'muted' }, 'Attendre et provoquer font souffler. Courir coûte un point par case.'),
+    ],
+  },
+  {
+    title: 'Le renversement',
+    icon: '🔄',
+    body: () => [
+      h('p', {}, h('b', {}, '« Il l’a renversé ! »'), ' Un gros mouvement lancé sur un adversaire encore frais peut se retourner contre son auteur : l’attaque échoue, et c’est ', h('b', {}, 'vous'), ' qui encaissez.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Palier', 'Risque de base'].map((x) => h('th', {}, x))),
+        [['Base', '2 %'], ['Classe', '5 %'], ['Spécialité', '7 %'], ['Signature', '11 %'], ['Finisher', '15 %']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, 'Trois choses le rendent probable, et ce sont trois décisions : la ', h('b', {}, 'vitesse et la technique'), ' du défenseur ; le ', h('b', {}, 'souffle'), ' — frapper sans appui se paie ; et la ', h('b', {}, 'taille du mouvement'), ', parce qu’un gros coup est lent.'),
+      h('p', {}, 'Une cible ', h('b', {}, 'au sol ou étourdie'), ' ne renverse rien. C’est pour ça qu’on étourdit AVANT de lancer son finisher.'),
+      h('p', { class: 'muted' }, 'Le risque est affiché dans la prévision de combat. Lancer son finisher trop tôt est un pari, pas une formalité.'),
+    ],
+  },
+  {
     title: 'Le cœur décide du tombé',
     icon: '❤️',
     body: () => [

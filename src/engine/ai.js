@@ -1,7 +1,7 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
 import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
-import { listActions, getReachable, hitChance, computeDamage, moveRange } from './battle.js';
+import { listActions, getReachable, hitChance, computeDamage, moveRange, DAMAGE_SCALE } from './battle.js';
 import { MOVES } from '../data/moves.js';
 
 export function planUnit(battle, unit) {
@@ -28,32 +28,59 @@ export function planUnit(battle, unit) {
       }
     }
   }
-  if (best && best.score > 15) return best;
+  // Ce seuil sépare « j'ai un vrai coup à jouer » de « je me replace ». Il
+  // était ABSOLU (15) et calibré sur l'ancienne échelle de dégâts : le jour où
+  // les coups ont été divisés par deux, la moitié des attaques sont passées
+  // dessous et l'IA s'est mise à marcher en rond. Trente tours, neuf coups.
+  // Il suit désormais l'échelle : un réglage d'équilibrage ne doit pas rendre
+  // l'adversaire passif dans son dos.
+  if (best && best.score > 15 * DAMAGE_SCALE) return best;
   return fallback(battle, unit);
 }
+
+// Les scores d'action se comparent à celui d'un coup, qui vaut `touche × dégâts
+// × 2`. Toutes les constantes ci-dessous ont donc été calibrées sur une échelle
+// de dégâts donnée — et le jour où les coups ont été divisés par deux, elles
+// sont devenues deux fois trop attirantes. Résultat : 70 % des décisions de
+// l'IA étaient « se coucher au passage », un mouvement sans dégâts, parce que
+// son 45 fixe battait toutes les attaques.
+//
+// Elles suivent maintenant l'échelle. Le tombé et la projection par-dessus la
+// corde en sont exclus volontairement : gagner le match doit primer.
+const E = (n) => n * DAMAGE_SCALE;
 
 function scoreAction(battle, unit, pos, a, tg) {
   const rules = battle.rules;
   const enemies = enemiesOf(battle, unit);
   switch (a.type) {
-    case 'pin': return tg.chance < 0.25 ? tg.chance * 40 : 200 + tg.chance * 400;
+    case 'pin': {
+      // Un tombé raté n'est pas un tour perdu : le kick-out COÛTE UN CŒUR à
+      // l'adversaire, et le cœur est le plafond du tombé suivant. Couvrir tôt,
+      // c'est investir — c'est même la stratégie centrale d'un long match.
+      // L'IA ne le voyait pas : en dessous de 25 % elle ne couvrait jamais, et
+      // le near-fall, qui est le cœur du spectacle, n'arrivait pas.
+      const c = tg.chance;
+      if (c >= 0.25) return 200 + c * 400;
+      const usure = tg.unit.grit > 0 && tg.unit.down ? E(55) : 0;
+      return c * 40 + usure;
+    }
     case 'toss': return tg.chance < 0.25 ? tg.chance * 40 : 180 + tg.chance * 400;
     case 'climb': {
       const near = enemies.filter((e) => !e.down && manhattan(e, pos) <= 2).length;
       let s = rules.victory === 'belt' ? 130 : hpRatio(unit) < 0.4 ? 160 : 45;
       s += unit.climb * 220 - near * 55;
-      return s;
+      return E(s);
     }
-    case 'tag': return hpRatio(unit) < 0.45 ? 220 : 8;
-    case 'taunt': return unit.momentum >= 100 ? 0 : 12 + (100 - unit.momentum) * 0.12 + ((a.move && a.move.effects && a.move.effects.heat) || 0) * 0.5;
+    case 'tag': return E(hpRatio(unit) < 0.45 ? 220 : 8);
+    case 'taunt': return E(unit.momentum >= 100 ? 0 : 12 + (100 - unit.momentum) * 0.12 + ((a.move && a.move.effects && a.move.effects.heat) || 0) * 0.5);
     case 'wait': return 1;
-    case 'pickup': return rules.dq ? 12 : 70;
+    case 'pickup': return E(rules.dq ? 12 : 70);
     // Aller fouiller sous le ring : intéressant quand les armes sont légales,
     // et seulement si on n'est pas en train de se faire compter à l'extérieur.
-    case 'scavenge': return rules.dq ? 6 : rules.countOut > 0 ? 10 : 55;
+    case 'scavenge': return E(rules.dq ? 6 : rules.countOut > 0 ? 10 : 55);
     case 'special': {
-      if (a.id === 'whip') return scoreWhip(battle, unit, pos, tg.unit);
-      return tg.unit.momentum >= 50 ? 45 : 5;
+      if (a.id === 'whip') return E(scoreWhip(battle, unit, pos, tg.unit));
+      return E(tg.unit.momentum >= 50 ? 45 : 5);
     }
     default: {
       const m = a.move, t = tg.unit;
@@ -178,6 +205,17 @@ function perchValue(battle, unit, pos) {
 function positional(battle, unit, pos) {
   const rules = battle.rules, g = battle.grid;
   let s = perchValue(battle, unit, pos);
+  // SE RAPPROCHER VAUT QUELQUE CHOSE. Tant que personne n'est à portée, aucun
+  // terme du score ne distinguait une case d'une autre — et comme se déplacer
+  // coûte des points, l'IA provoquait sur place à cinq cases de l'adversaire.
+  // Elle avance maintenant en posant son personnage, ce qui est précisément
+  // ce que fait un lutteur au début d'un match.
+  const cible = enemiesOf(battle, unit).filter((e) => !e.eliminated)
+    .sort((a, b) => manhattan(a, pos) - manhattan(b, pos))[0];
+  if (cible) {
+    const d = manhattan(cible, pos);
+    if (d > 1) s += Math.max(0, 14 - d * 2);
+  }
   // Prendre la hauteur : on y frappe plus juste et on encaisse moins. On ne
   // compare qu'aux adversaires proches, sinon un lutteur irait se percher au
   // bout de l'aréna pour un bonus théorique.

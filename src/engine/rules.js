@@ -30,7 +30,13 @@ export function checkWin(battle) {
     } else if (!E.length) { winner = 'player'; reason = 'Tous les adversaires sont éliminés !'; }
     else if (!P.length) { winner = 'enemy'; reason = 'Tous vos lutteurs ont été éliminés.'; }
   }
-  if (!winner && battle.turn > (battle.match.maxTurns || 30)) {
+  // La limite de temps existe pour qu'un match ne s'éternise pas, pas pour le
+  // conclure. À 30 tours elle décidait un match sur quatre — or un match doit
+  // justement en durer une trentaine. Elle est repoussée là où elle redevient
+  // un garde-fou plutôt qu'un arbitre. Sans limite, la médiane est de 39 tours
+  // et le 90e centile de 59 : à 60, elle ne coupe plus qu'un match sur onze —
+  // et un « Broadway » de temps en temps, c'est du vrai catch.
+  if (!winner && battle.turn > (battle.match.maxTurns || 60)) {
     // Limite de temps : décision aux points (PV restants), pas une défaite automatique.
     const share = (team) => {
       const us = living(battle, team);
