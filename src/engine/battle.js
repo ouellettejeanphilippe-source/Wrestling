@@ -172,6 +172,21 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   });
   if (rules.tag) for (const team of ['player', 'enemy']) living(battle, team).forEach((u, i) => { u.legal = i === 0; });
   for (const u of battle.units) initHand(battle, u);
+  // LE CŒUR EST LA RESSOURCE DU TOMBÉ. Là où la stipulation n'en a pas, en
+  // garder autant bloquait tout : la chance d'abandon restait basse, donc
+  // l'IA ne tentait pas de prise (0,2 par match), donc rien ne faisait
+  // descendre le cœur, donc la chance restait basse. 88 % des matchs à
+  // soumission uniquement allaient au bout du chrono. On coupe la boucle à sa
+  // racine plutôt qu'en poussant l'IA à jouer un coup qui ne paie pas.
+  if (heartIsTheClock(battle)) {
+    for (const u of battle.units) {
+      u.maxGrit = Math.max(2, Math.round(u.maxGrit / 2));
+      u.grit = u.maxGrit;
+    }
+    log(battle, rules.tenCount
+      ? '🔟 Pas de tombé ce soir : il faudra qu’il ne réponde plus au compte. Les corps lâcheront plus vite.'
+      : '🔗 Pas de tombé ce soir : il faudra le faire abandonner. Les corps lâcheront plus vite.');
+  }
 
   // Armes cachées sous le ring : il faudra aller les chercher au bord du tablier.
   battle.underRing = rules.underRing ?? 0;
@@ -307,6 +322,7 @@ export const STAMINA_MOVE = 1;                  // par case parcourue
 export const STAMINA_LOW = 25;                  // sous ce seuil, on est cuit
 export const STAMINA_REST = 14;                 // en soufflant (attendre, provoquer)
 export const STAMINA_TICK = 5;                  // récupération passive par tour
+export const TAG_REST_HEAL = 0.006;             // par tour passé au coin, hors du match
 
 export const STAMINA_SUBMISSION = 6;            // serrer une prise, ça vide
 export const staminaCost = (move) => {
@@ -511,13 +527,24 @@ export function listActions(battle, unit, pos = null) {
   }
   if (rules.tag && unit.legal) {
     const partners = allies.filter((a) => !a.legal && !a.down && manhattan(p, a) === 1).map((u) => ({ unit: u }));
-    actions.push({ id: 'tag', name: '🤝 Tag !', tier: 'base', type: 'tag', desc: 'Passe le relais à un partenaire adjacent : il devient légal, soigne 15 % et gagne 30 momentum.', targets: partners, ok: partners.length > 0, reason: 'Partenaire non adjacent' });
+    const c = tagChance(battle, unit);
+    actions.push({
+      id: 'tag', name: c < 1 ? `🤝 Tag ! (${Math.round(c * 100)} %)` : '🤝 Tag !', tier: 'base', type: 'tag',
+      desc: c < 1
+        ? `Passe le relais à un partenaire adjacent (+30 momentum, +25 souffle). À bout de forces, la main ne se touche pas toujours : ${Math.round(c * 100)} % de réussite.`
+        : 'Passe le relais à un partenaire adjacent : il devient légal, gagne 30 momentum et 25 de souffle. Il se remet en attendant à son coin, pas au moment du relais.',
+      targets: partners.map((t) => ({ ...t, chance: c })), ok: partners.length > 0, reason: 'Partenaire non adjacent',
+    });
   }
   // Grimper avec une jambe morte, non plus : dans un match d'échelle, travailler
   // la jambe EST la façon de gagner.
   const jambeHs = wearLevel(unit, 'legs') >= 2;
-  if (rules.cage && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
-  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/2)`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour décrocher la ceinture.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
+  // `cage: true` veut dire « les murs font mal », pas « on peut s'évader ».
+  // Hell in a Cell annonce « Enfermés. Pas d'évasion » dans sa propre
+  // description, et 60 % de ses matchs se terminaient pourtant par une
+  // évasion : seule `fall_or_escape` ouvre cette porte.
+  if (rules.cage && rules.victory === 'fall_or_escape' && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
+  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: `${climbNeeded(battle)} tours consécutifs sans subir de dégâts pour décrocher la ceinture. Chaque échelon coûte du souffle.`, targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
   if (battle.mode === 'scenario' && unit.team === 'player') {
     actions.push({ id: 'sell', name: '🎭 Vendre (prendre un bump)', tier: 'script', type: 'sell', desc: 'Spot coopératif : perd 8 % PV, +12 chaleur, +10 momentum aux ennemis adjacents. Compte pour le script.', targets: [{ self: true }], ok: hpRatio(unit) > 0.12, reason: 'Trop amoché pour vendre' });
     const fin = (battle.script && battle.script.finish) || {};
@@ -653,8 +680,13 @@ export function executeAction(battle, unit, actionId, target = null) {
   // matraquage reste impossible : chaque reprise de la même prise vaut moins
   // (lassitude) et coûte du souffle.
   if (a.move && a.move.id && isCard(a.move.id)) {
+    // Une prise gardée : quand le membre visé est déjà entamé — et TOUJOURS
+    // là où la soumission est la seule façon de gagner. Sans ça, l'IA ne
+    // tentait qu'une demi-prise par match dans un match à soumission
+    // uniquement : la carte n'était simplement jamais en main au bon moment,
+    // et 83 % de ces matchs allaient au bout du chrono.
     const garde = a.type === 'submission' && !result.tapped
-      && wearLevel(tgt || unit, movePart(a.move)) >= 1;
+      && (subIsTheRoute(battle) || wearLevel(tgt || unit, movePart(a.move)) >= 1);
     if (!garde) playCard(battle, unit, a.move.id);
   }
   if (result && result.freePin) { unit.acted = false; unit.onlyPin = true; }
@@ -994,10 +1026,24 @@ function downUnit(battle, unit) {
   }
   unit.down = true; unit.downTurns = 0; unit.hp = 0; unit.climb = 0;
   delete unit.statuses.dazed;
-  if (unit.grit <= 0 && !battle.rules.noPin && scriptAllowsElimination(battle, unit, 'stoppage')) {
-    log(battle, `🛑 ARRÊT DE L’ARBITRE ! ${unit.name} n’a plus rien à donner.`, 'big');
+  // L'ARRÊT DE L'ARBITRE EST LA SOUPAPE DE TOUT LE JEU, et elle était
+  // accrochée au mauvais interrupteur : `noPin`. Or « pas de tombé » ne veut
+  // pas dire « personne ne peut plus perdre ». En match à soumission
+  // uniquement, un lutteur sans cœur pouvait rester debout indéfiniment :
+  // 85 % de ces matchs finissaient à la limite de temps, au bout de 57 tours.
+  //
+  // La vraie question n'est pas « y a-t-il des tombés ? » mais « la
+  // stipulation a-t-elle SA PROPRE façon d'éliminer ? ». Par-dessus la corde
+  // et l'échelle en ont une ; la soumission, non.
+  if (unit.grit <= 0 && stoppageAllowed(battle) && scriptAllowsElimination(battle, unit, 'stoppage')) {
+    // En soumission uniquement, le corps abandonne pour son propriétaire :
+    // c'est un tap, pas un arrêt technique.
+    const parTap = battle.rules.noPin && !battle.rules.tenCount;
+    log(battle, parTap
+      ? `🏳️ ${unit.name} n’a plus rien : il tape avant même la prise.`
+      : `🛑 ARRÊT DE L’ARBITRE ! ${unit.name} n’a plus rien à donner.`, 'big');
     addHeat(battle, 15);
-    eliminate(battle, unit, 'stoppage');
+    eliminate(battle, unit, parTap ? 'submission' : 'stoppage');
     return;
   }
   if (unit.team === 'player') battle.stats.playerDowned++;
@@ -1006,6 +1052,11 @@ function downUnit(battle, unit) {
   emit(battle, { type: 'down', x: unit.x, y: unit.y });
   addHeat(battle, 5);
 }
+
+// La stipulation a-t-elle sa propre façon d'éliminer ? Si oui, l'arbitre ne
+// s'en mêle pas ; sinon, il finit par arrêter les frais.
+const stoppageAllowed = (battle) =>
+  !battle.rules.toss && battle.rules.victory !== 'belt';
 
 function standUp(battle, u) {
   u.down = false; u.downTurns = 0;
@@ -1143,6 +1194,20 @@ function attemptPin(battle, pinner, target) {
 export const SUB_FATIGUE = 0.78;          // ce qu'il reste de la prise à chaque reprise
 export const subAttempts = (target, move) => ((target.memory.subs || {})[move.id] || 0);
 
+// La soumission est-elle la SEULE porte de sortie de cette stipulation ?
+// Quand c'est le cas, tout ce qui la verrouille doit se desserrer — et
+// l'adversaire ne doit jamais se retrouver sans prise en main.
+export const subIsTheRoute = (battle) =>
+  heartIsTheClock(battle) && !battle.rules.tenCount;
+
+// LE CŒUR EST L'HORLOGE quand la stipulation n'a pas sa propre façon
+// d'éliminer. Sans tombé, il ne descend plus que d'un cran par relevé : il
+// faut sept chutes pour finir un match, et Last Man Standing durait 68 tours
+// dont 35 % au chrono. Là où il fait ce travail tout seul, on lui en donne
+// moitié moins à faire.
+export const heartIsTheClock = (battle) =>
+  !!battle.rules.noPin && !battle.rules.toss && battle.rules.victory !== 'belt';
+
 export function tapChance(battle, attacker, target, move) {
   const A = getStats(battle, attacker);
   const worn = Math.max(0, 0.65 - hpRatio(target)) / 0.65;
@@ -1154,7 +1219,13 @@ export function tapChance(battle, attacker, target, move) {
   // LE CŒUR GARDE AUSSI CETTE PORTE. Comme pour le tombé : tant qu'il reste du
   // cœur, on ne fait abandonner personne. C'est ce qui empêche une prise de
   // repos à 25 % de conclure un match au douzième tour.
-  let c = worn * 0.25 + cible + A.tec * 0.008 - target.grit * 0.10 + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.12 : 0);
+  // Le cœur est le verrou DU TOMBÉ. Là où la stipulation supprime le tombé, il
+  // ne peut pas non plus verrouiller la soumission à pleine force : plus
+  // aucune route ne s'ouvrait et 83 % des matchs à soumission uniquement
+  // allaient au bout du chrono, au bout de 57 tours.
+  const seuleRoute = subIsTheRoute(battle);
+  const poidsCoeur = seuleRoute ? 0.05 : 0.10;
+  let c = worn * 0.25 + cible + A.tec * 0.008 - target.grit * poidsCoeur + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.12 : 0);
   // IL CONNAÎT LA PRISE. Une soumission ratée ne coûtait rien : l'IA reprenait
   // la même à chaque tour et le chinlock représentait 30 % de tous les coups du
   // jeu. Ce n'est pas du catch, c'est une boucle.
@@ -1183,6 +1254,17 @@ function attemptSubmission(battle, attacker, target, move) {
   target.memory.subs[move.id] = subAttempts(target, move) + 1;
   const roll = battle.rng.next();
   if (roll < c) {
+    // ON NE TAPE PAS DANS UN LAST MAN STANDING. La stipulation dit : au sol, et
+    // incapable de répondre au compte. Une prise qui « passe » ne fait donc pas
+    // abandonner, elle fait PERDRE CONNAISSANCE — et c'est l'arbitre qui compte
+    // ensuite. Sans ça, 53 % des Last Man Standing se terminaient par un
+    // abandon, dans un match où abandonner n'existe pas.
+    if (battle.rules.tenCount) {
+      log(battle, `😵 ${target.name} ne répond plus dans ${move.name} — il s’écroule !`, 'big');
+      addHeat(battle, 15);
+      if (!target.down) downUnit(battle, target);
+      return { tapped: false, passedOut: true };
+    }
     if (!scriptAllowsElimination(battle, target, 'submission')) log(battle, `😱 ${attacker.name} ne respecte pas le script : c’est un SHOOT !`, 'big');
     eliminate(battle, target, 'submission');
     battle.stats.finisherFinish = move.tier === 'finisher';
@@ -1190,7 +1272,11 @@ function attemptSubmission(battle, attacker, target, move) {
     log(battle, `🏳️ TAP OUT !!! ${target.name} abandonne sur ${move.name} !`, 'big');
     return { tapped: true };
   }
-  if (roll < c + 0.15) target.grit = Math.max(0, target.grit - 1);
+  // SE DÉGAGER D'UNE PRISE COÛTE UN CŒUR QUAND IL S'EN EST FALLU DE PEU. Là où
+  // il n'y a pas de tombé, c'est la SEULE chose qui fasse descendre le cœur —
+  // sans kick-outs, il ne bougeait quasiment plus, l'arbitre n'arrêtait jamais
+  // rien et 85 % des matchs à soumission uniquement allaient au bout du chrono.
+  if (roll < c + (battle.rules.noPin ? 0.3 : 0.15)) target.grit = Math.max(0, target.grit - 1);
   // Se dégager d'une prise, c'est un moment : la salle y croit et le lutteur
   // repart avec quelque chose. C'est aussi ce qui fait qu'une prise ratée
   // n'est pas gratuite pour celui qui l'a tentée.
@@ -1199,11 +1285,29 @@ function attemptSubmission(battle, attacker, target, move) {
   return { tapped: false };
 }
 
+// PAR-DESSUS LA TROISIÈME CORDE
+//
+// À 28 % de base, un adversaire encore frais passait par-dessus la corde au
+// premier Irish Whip : une bataille royale durait onze tours pour six coups et
+// personne n'avait le temps de lutter. La règle du genre est pourtant claire —
+// on USE d'abord, on jette ensuite. L'état de la cible pèse donc désormais
+// beaucoup plus que le hasard, et un homme intact s'accroche.
 export function tossChance(battle, unit, target) {
   const A = getStats(battle, unit), D = getStats(battle, target);
-  let c = 0.28 + (1 - hpRatio(target)) * 0.5 + (A.str - D.str) * 0.03 + (target.down ? 0.25 : 0) + (target.statuses.dazed ? 0.15 : 0);
+  let c = 0.08 + (1 - hpRatio(target)) * 0.75 + (A.str - D.str) * 0.03
+    + (target.down ? 0.3 : 0) + (target.statuses.dazed ? 0.2 : 0)
+    + (1 - (target.maxGrit ? target.grit / target.maxGrit : 1)) * 0.2;
   if (target.weight === 'light') c += 0.15;
   if (target.weight === 'super') c -= 0.2;
+  // ON USE D'ABORD, ON JETTE ENSUITE. Sans ce plafond, une bataille royale
+  // durait douze tours : les lutteurs sortaient à 80 % de leurs PV, sur une
+  // simple projection, et il n'y avait jamais de match. Tant que l'adversaire
+  // est frais, debout et lucide, il s'accroche aux cordes.
+  // Étourdi ne suffit PAS à ouvrir la porte. Projeter dans les cordes étourdit
+  // à tous les coups : à deux adversaires, l'un projetait, l'autre jetait, et
+  // un homme intact sortait en deux tours. Seul un homme AU SOL ou réellement
+  // usé peut passer par-dessus.
+  if (!target.down && hpRatio(target) > 0.6) c = Math.min(c, 0.08);
   if (gim(unit).modTossChance) c = gim(unit).modTossChance(battle, unit, c, 'attacker');
   if (gim(target).modTossChance) c = gim(target).modTossChance(battle, target, c, 'target');
   if (!scriptAllowsElimination(battle, target, 'toss')) c *= SCRIPT_PENALTY;
@@ -1373,25 +1477,78 @@ function managerSpot(battle, unit, target, mgr) {
 }
 
 // ---------------------------------------------------------------- tag / climb / DQ
+// LE RING COUPÉ — ce qui manquait au match par équipes
+//
+// Il manquait le mécanisme central du genre : le lutteur isolé qui rampe vers
+// son coin, tend la main… et se fait tirer en arrière. Sans lui, relayer était
+// une formalité — 23 relais par match, et 60 % des matchs par équipes
+// finissaient à la limite de temps parce que le lutteur amoché sortait
+// toujours à temps.
+//
+// Un lutteur frais passe toujours le relais. Un lutteur à bout, non.
+export function tagChance(battle, unit) {
+  let c = 0.42 + hpRatio(unit) * 0.58;
+  if (unit.statuses.dazed) c -= 0.18;
+  if (winded(unit)) c -= 0.1;
+  if (gim(unit).modTagChance) c = gim(unit).modTagChance(battle, unit, c);
+  return clamp(c, 0.3, 1);
+}
+
 function tagPartner(battle, unit, partner) {
+  const c = tagChance(battle, unit);
+  if (c < 1 && !battle.rng.chance(c)) {
+    // LE FAUX HOT TAG. C'est un moment, pas un échec : la salle se lève, elle
+    // y a cru, et le lutteur repart pour un tour dans le mauvais coin.
+    addHeat(battle, 12);
+    addMomentum(battle, unit, 10);
+    log(battle, `🙌 SI PRÈS ! ${unit.name} tend la main vers ${partner.name}… et se fait tirer en arrière ! (${Math.round(c * 100)} %)`, 'big');
+    beat(battle, 'faketag', { who: unit.name, uid: unit.uid, partenaire: partner.name });
+    return { tagged: false, chance: c };
+  }
+  // LE REPOS SE PREND SUR LE TABLIER, PAS AU MOMENT DU TAG.
+  //
+  // Soigner 15 % des PV à chaque relais faisait un tapis roulant : 18 tags par
+  // match, soit près de trois barres de vie rendues par équipe. Les matchs par
+  // équipes duraient 59 tours, encaissaient 71 coups et finissaient à la
+  // limite de temps 88 fois sur 100 — personne ne pouvait perdre.
+  //
+  // La récupération est maintenant fonction du TEMPS passé au coin (voir
+  // `startPhase`), pas du nombre de relais. Relayer en rafale ne rend plus
+  // rien ; isoler un adversaire loin de son coin redevient une stratégie.
   unit.legal = false; partner.legal = true;
-  heal(battle, partner, partner.maxHp * 0.15);
   addMomentum(battle, partner, 30);
+  partner.stamina = clamp(partner.stamina + 25, 0, partner.maxStamina);
   battle.stats.tags++;
   addHeat(battle, 10);
   log(battle, `🤝 ${hpRatio(unit) < 0.4 ? 'HOT TAG !!!' : 'TAG !'} ${partner.name} entre dans le match, tout frais !`, 'big');
-  return {};
+  if (hpRatio(unit) < 0.4) beat(battle, 'hottag', { who: partner.name, uid: partner.uid, depuis: unit.name });
+  return { tagged: true, chance: c };
 }
+
+// COMBIEN D'ÉCHELONS. Une évasion de cage se joue à deux tours : la cage est
+// haute mais personne ne la dispute vraiment. L'échelle, elle, EST le match —
+// à deux tours, le premier arrivé gagnait sans être inquiété et un match
+// d'échelle durait sept tours pour cinq coups. Trois tours, c'est le temps
+// qu'il faut à l'autre pour traverser le ring et vous faire tomber.
+// COMBIEN D'ÉCHELONS — trois, partout. À deux, le premier arrivé gagnait sans
+// être inquiété : le match d'échelle durait sept tours, et deux évasions de
+// cage sur trois se jouaient avant que l'adversaire ait traversé le ring.
+// Trois tours, c'est le temps qu'il faut à l'autre pour venir vous faire
+// tomber — donc le temps qu'il faut pour que ce soit une décision.
+export const climbNeeded = () => 3;
 
 function doClimb(battle, unit) {
   unit.climb += 1;
   const belt = battle.rules.victory === 'belt';
-  if (unit.climb >= 2) {
+  // Monter à l'échelle, c'est un effort : sans coût, c'était une action
+  // gratuite qu'on répétait jusqu'à la victoire.
+  spendStamina(battle, unit, 8);
+  if (unit.climb >= climbNeeded(battle)) {
     if (belt) { unit.flags.belt = true; log(battle, `🏆 ${unit.name} DÉCROCHE LA CEINTURE !!!`, 'big'); }
     else { unit.flags.escaped = true; log(battle, `🧗 ${unit.name} S’ÉVADE DE LA CAGE !!!`, 'big'); }
     addHeat(battle, 25);
   } else {
-    log(battle, `${unit.name} ${belt ? 'grimpe l’échelle' : 'escalade la cage'}… (1/2) Frappez-le !`);
+    log(battle, `${unit.name} ${belt ? 'grimpe l’échelle' : 'escalade la cage'}… (${unit.climb}/${climbNeeded(battle)}) Frappez-le !`);
     addHeat(battle, 8);
   }
   checkWin(battle);
@@ -1496,6 +1653,12 @@ export function startPhase(battle, team) {
     // provoquer) en récupère bien plus : c'est la prise de repos du catch,
     // et c'est ce qui rend un long match jouable au lieu d'épuisant.
     u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
+    // Le partenaire qui attend son tour souffle et se remet — lentement, et
+    // seulement s'il reste à son coin. C'est ce qui remplace le soin du relais.
+    if (battle.rules.tag && !u.legal && !u.down) {
+      heal(battle, u, u.maxHp * TAG_REST_HEAL);
+      u.stamina = clamp(u.stamina + STAMINA_REST, 0, u.maxStamina);
+    }
     u.rested = false;
     u.hadTurn = true;
     refill(battle, u);
@@ -1504,11 +1667,19 @@ export function startPhase(battle, team) {
       if (u.downTurns === 0) {
         u.downTurns = 1; u.acted = true;
         log(battle, battle.rules.tenCount ? `🔟 L’arbitre compte sur ${u.name}… un, deux, trois…` : `${u.name} est toujours au sol…`);
-      } else if (battle.rules.tenCount) {
-        // Last Man Standing : deux tours au sol = le compte de dix va au bout.
+      } else if (battle.rules.tenCount && u.grit <= 0) {
         log(battle, `🔟 …HUIT ! NEUF ! DIX ! ${u.name} n’a pas répondu au compte.`, 'big');
         eliminate(battle, u, 'stoppage');
         continue;
+      } else if (battle.rules.tenCount) {
+        // LE COMPTE DE DIX SE JOUE AVEC LE CŒUR. Deux tours au sol et c'était
+        // fini, quel qu'en soit le porteur : la première chute décidait le
+        // match et un Last Man Standing durait seize tours. Or c'est
+        // exactement la stipulation où « se relever » EST le match — chaque
+        // relevé coûte un cœur, et c'est le dernier qui compte.
+        log(battle, `🔟 …SEPT ! HUIT ! …et ${u.name} est debout à NEUF !`, 'big');
+        addHeat(battle, 12);
+        standUp(battle, u);
       } else standUp(battle, u);
     }
     if (battle.rules.countOut > 0) {

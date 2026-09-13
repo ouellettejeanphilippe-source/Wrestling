@@ -829,7 +829,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     else if (a.id === 'whip') mid = [['Précision', `${t.hit} %`], ['Projection', whipPreview(u, tgt)]];
     else if (a.type === 'manager') mid = [[`${a.manager.icon} ${a.manager.name}`, a.manager.nick], ['Effet', a.manager.desc], ['Il reste', `${a.manager.left} intervention(s)`], a.manager.illegal && battle.rules.dq ? ['⚠️ Arbitre', refState(battle).label] : null].filter(Boolean);
     else if (a.type === 'rollin') mid = [['Rentrer', 'se rouler sous la corde du bas'], ['Décompte', 'remis à zéro'], ['Coût', 'termine le tour']];
-    else if (a.type === 'tag') mid = [['Tag', `${tgt.name} devient légal`], ['Bonus', '+15 % PV, +30 momentum']];
+    else if (a.type === 'tag') mid = [['Tag', `${tgt.name} devient légal`], ['Réussite', `${Math.round((t.chance ?? 1) * 100)} %`], ['Bonus', '+30 momentum, +25 souffle'], (t.chance ?? 1) < 1 ? ['⚠️ À bout de forces', 'la main ne se touche pas toujours'] : null].filter(Boolean);
     else if (a.type === 'job') mid = [['Script', 'votre lutteur perd volontairement']];
     else if (a.move && a.move.effects && a.move.effects.drainMomentum) mid = [['Momentum adverse', `-${a.move.effects.drainMomentum}`]];
     box.append(side(u, afterU), h('div', { class: 'fc-mid' }, h('div', { class: 'fc-name' }, a.name), mid.map(([k, v]) => h('div', { class: 'fc-row' }, h('span', {}, k), h('b', {}, v)))), side(tgt, afterT));
