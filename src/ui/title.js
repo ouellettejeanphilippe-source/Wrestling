@@ -142,11 +142,26 @@ function showExhibition(root, app) {
       r.meetings ? h('span', { class: 'muted' }, ` (+${r.heat} de chaleur au coup d’envoi${r.revenge ? `, revanche pour ${noms[r.revenge]}` : ''})`) : null));
   };
 
+  // UNE BATAILLE ROYALE, ÇA SE JOUE À PLUSIEURS. À un contre deux, elle durait
+  // treize tours : le joueur se faisait encercler et sortir avant que le match
+  // ait commencé. Le ring a six places par camp ; on en remplit cinq.
+  // Une bataille royale à un contre deux durait quatorze tours pour douze
+  // coups, et le joueur ne gagnait jamais : encerclé, sorti, terminé. À trois
+  // contre quatre, elle dure vingt tours, encaisse quarante coups et se joue
+  // vraiment. Le format est donc IMPOSÉ — ce n'est pas une préférence, c'est
+  // ce qui fait que la stipulation existe.
+  const BATTLE_ROYAL_SIZE = 3;
+  const battleRoyalFoes = (type, n) => (type === 'battle_royal' ? n + 1 : n);
+  const tailleVoulue = () => (typeSel.value === 'battle_royal' ? BATTLE_ROYAL_SIZE : Number(sizeSel.value));
   const counter = h('span', { class: 'muted' }, '0 choisi');
   const foeCounter = h('span', { class: 'muted' }, '0 choisi');
   const updateCounters = () => {
-    const n = Number(sizeSel.value);
-    const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+    const n = tailleVoulue();
+    const foes = battleRoyalFoes(typeSel.value, n);
+    // Le sélecteur de format n'a pas son mot à dire en bataille royale : le
+    // format EST la stipulation.
+    sizeSel.disabled = typeSel.value === 'battle_royal';
+    sizeSel.title = sizeSel.disabled ? `Une bataille royale se joue à ${BATTLE_ROYAL_SIZE} contre ${BATTLE_ROYAL_SIZE + 1}` : '';
     counter.textContent = `${mine.size}/${n} choisi${mine.size > 1 ? 's' : ''}`;
     counter.classList.toggle('ok', mine.size === n);
     foeCounter.textContent = `${theirs.size}/${foes} choisi${theirs.size > 1 ? 's' : ''}`;
@@ -165,8 +180,8 @@ function showExhibition(root, app) {
   // L'adversaire se choisit, mais on ne force personne : le bouton « au
   // hasard » reste, parce qu'un tirage est parfois exactement ce qu'on veut.
   const hasard = h('button', { class: 'btn ghost small', onclick: () => {
-    const n = Number(sizeSel.value);
-    const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+    const n = tailleVoulue();
+    const foes = battleRoyalFoes(typeSel.value, n);
     const pool = roster.filter((w) => !mine.has(w.id)).map((w) => w.id).sort(() => Math.random() - 0.5).slice(0, foes);
     foeList.setPicked(pool);
   } }, '🎲 Adversaires au hasard');
@@ -185,7 +200,7 @@ function showExhibition(root, app) {
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
       h('button', { class: 'btn primary', onclick: () => {
         const n = Number(sizeSel.value);
-        const foes = typeSel.value === 'battle_royal' ? n + 1 : n;
+        const foes = battleRoyalFoes(typeSel.value, n);
         if (mine.size !== n) return toast(`Choisissez exactement ${n} lutteur(s)`, 'warn');
         if (theirs.size !== foes) return toast(`Choisissez ${foes} adversaire(s)`, 'warn');
         app.startExhibition(typeSel.value, [...mine], [...theirs], { managers: { player: myMgr.value || null, enemy: foeMgr.value || null } });

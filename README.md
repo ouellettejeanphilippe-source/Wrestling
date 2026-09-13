@@ -428,11 +428,36 @@ La note est sévère par construction : sur 135 matchs simulés, la moyenne est 
 | --- | --- |
 | 🥇 Match simple / 🤝 Par équipes | premier tombé, soumission, count-out ou DQ décide |
 | 🪑 Hardcore | idem, sans DQ ni compte, armes et tables partout, tombé n'importe où |
-| 👑 Bataille royale | jeter les adversaires par-dessus la corde (ils doivent être sur les cordes/coin) |
-| 🪜 Échelle | grimper au centre 2 tours de suite sans subir de dégâts |
-| 🔒 Cage | tombé, soumission ou évasion (2 tours depuis un coin) |
+| 👑 Bataille royale | jeter les adversaires par-dessus la corde — **il faut les user d'abord** |
+| 🪜 Échelle | grimper au centre **3 tours de suite** sans subir de dégâts |
+| 🔒 Cage | tombé, soumission ou évasion (3 tours depuis un coin) |
+| 😈 Hell in a Cell | **pas d'évasion** : tombé ou soumission, et les murs font mal |
+| 🔟 Last Man Standing | au sol et incapable de répondre au compte — il se relève tant qu'il a du cœur ❤️ |
+| 🔗 Soumission uniquement | le faire abandonner, et rien d'autre |
 | ⏱️ Survie | tenir N tours face aux renforts |
 | ⚔️ Confrontation | éliminer tous les adversaires |
+
+### Les douze stipulations, mesurées
+
+Personne ne les avait jamais mesurées. Aucune ne **plantait** — elles produisaient de mauvais matchs, ce qui est pire
+parce que ça ne se voit pas. Cinq étaient cassées :
+
+| stipulation | avant | après | ce qui n'allait pas |
+| --- | --- | --- | --- |
+| 🪜 Échelle / TLC | 7,3 tours · ★1,5 | **23 tours · ★2,3** | deux échelons : le premier arrivé gagnait sans être inquiété |
+| 👑 Bataille royale | 11,4 tours · 6,6 coups · ★1,6 | **19,6 tours · 41,6 coups · ★2,9** | on sortait à 80 % de ses PV, et un « 1 contre 2 » n'est pas une bataille royale |
+| 🤝 Par équipes | **73 % de DQ** | **20 % au chrono · ★3,5** | le partenaire illégal entrait dans le ring ; puis le soin du relais a fait un tapis roulant |
+| 🔗 Soumission uniquement | **85 % au chrono** (57 tours) | **67 % par abandon · ★3,1** | sans tombé, rien ne faisait descendre le cœur : la seule route restait fermée |
+| 🔟 Last Man Standing | 15,9 tours · ★2,2 | **47,4 tours · 97 % au compte · ★3,5** | deux tours au sol et c'était fini, alors que « se relever » EST la stipulation |
+| 😈 Hell in a Cell | 60 % par évasion | **80 % par tombé · ★3,1** | il annonçait « pas d'évasion » et se terminait par une évasion six fois sur dix |
+
+Trois principes en sont sortis, et ils valent pour toute nouvelle stipulation :
+
+- **Le cœur ❤️ est l'horloge là où il n'y a pas de tombé.** Sans kick-outs il ne descend plus que d'un cran par relevé ;
+  on en donne donc moitié moins à user.
+- **L'arbitre arrête le match sauf si la stipulation a sa PROPRE façon d'éliminer** (par-dessus la corde, la ceinture).
+  Le garde-fou était accroché à « pas de tombé », ce qui n'est pas la même question.
+- **On use d'abord, on élimine ensuite.** Un homme frais s'accroche aux cordes, répond au compte et passe son relais.
 
 ## Interface de match (façon Fire Emblem)
 

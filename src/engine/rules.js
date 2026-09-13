@@ -36,7 +36,7 @@ export function checkWin(battle) {
   // un garde-fou plutôt qu'un arbitre. Sans limite, la médiane est de 39 tours
   // et le 90e centile de 59 : à 60, elle ne coupe plus qu'un match sur onze —
   // et un « Broadway » de temps en temps, c'est du vrai catch.
-  if (!winner && battle.turn > (battle.match.maxTurns || 60)) {
+  if (!winner && battle.turn > (battle.match.maxTurns || battle.rules.maxTurns || 60)) {
     // Limite de temps : décision aux points (PV restants), pas une défaite automatique.
     const share = (team) => {
       const us = living(battle, team);
