@@ -17,6 +17,20 @@ export const LOSS_FANS = 0.14;
 export const MAX_TRAIN = 5;
 export const TRAINABLE = [['str', 'FOR', 1], ['agi', 'AGI', 1], ['tec', 'TEC', 1], ['def', 'DEF', 1], ['cha', 'CHA', 1], ['hp', 'PV', 10]];
 
+// CE QU'UNE CARRIÈRE RETIENT. Les conditions de déblocage se lisent là-dessus
+// (`src/game/unlocks.js`) : elles doivent pouvoir récompenser une MANIÈRE de
+// jouer — finir par soumission, casser des tables, battre un colosse — et pas
+// seulement le fait d'avoir gagné.
+export const emptyFeats = () => ({
+  wins: 0, losses: 0, eliteWins: 0,
+  tables: 0, submissionWins: 0, tossWins: 0, cheapWins: 0, stoppageWins: 0,
+  beatGiant: false, smallestDeckWin: 0, maxStars: 0,
+  winsByType: {}, restWeeks: 0,
+});
+
+// Les colosses : ceux qu'on n'attrape pas et qu'on ne projette pas.
+const estColosse = (def) => !!def && (def.spec === 'giant' || def.weight === 'super');
+
 export function newGame({ promoName, mode, starters }) {
   const seed = Date.now() % 1000000;
   const state = {
@@ -30,6 +44,12 @@ export function newGame({ promoName, mode, starters }) {
     // deux carrières ne passent jamais par les mêmes semaines. `path` est la
     // liste des nœuds déjà joués — c'est elle qui dit où l'on peut aller.
     route: buildRoute(seed), path: [],
+    // LA TÊTE D'AFFICHE : le lutteur dont c'est la carrière. Les deux autres
+    // sont ses partenaires. C'est lui qui compte pour la progression entre les
+    // carrières (`unlocks.js`) — « gagner la ceinture avec X » veut dire
+    // quelque chose de précis.
+    headliner: starters[0],
+    feats: emptyFeats(),
   };
   refreshFreeAgents(state);
   return state;
@@ -147,6 +167,45 @@ export function isTitleMatch(state, matchDef) {
   return !!matchDef && matchDef.id === TITLE_MATCH_ID;
 }
 
+// Les exploits d'un match, versés dans le compteur de la carrière. Tout se lit
+// sur ce que le moteur a réellement enregistré : `lastElimReason` dit COMMENT
+// le dernier lutteur est sorti, et c'est la seule source fiable — le texte de
+// `result.reason` est écrit pour être lu, pas pour être analysé.
+export function recordFeats(state, battle, matchDef, node, won, teamIds = []) {
+  const f = state.feats = state.feats || emptyFeats();
+  const type = (node && node.type) || matchDef.nodeType || 'match';
+  if (!won) { f.losses = (f.losses || 0) + 1; f.tables += battle.stats.tables || 0; return; }
+  f.wins = (f.wins || 0) + 1;
+  if (type === 'elite') f.eliteWins = (f.eliteWins || 0) + 1;
+  f.tables += battle.stats.tables || 0;
+  f.winsByType[matchDef.type] = (f.winsByType[matchDef.type] || 0) + 1;
+
+  switch (battle.stats.lastElimReason) {
+    case 'submission': f.submissionWins++; break;
+    case 'toss': f.tossWins++; break;
+    case 'stoppage': f.stoppageWins++; break;
+    case 'dq': case 'countout': f.cheapWins++; break;
+    default: break;
+  }
+  // Un colosse battu, c'est un colosse qu'on a mis au tapis — pas un colosse
+  // qui se trouvait dans la salle.
+  for (const e of matchDef.enemies || []) {
+    const def = WRESTLERS_BY_ID[typeof e === 'string' ? e : e.id];
+    if (!estColosse(def)) continue;
+    const u = battle.units.find((x) => x.team === 'enemy' && x.id === def.id);
+    if (u && u.eliminated) f.beatGiant = true;
+  }
+  // Le plus petit deck avec lequel on a gagné : c'est une manière de jouer, et
+  // elle mérite d'ouvrir une porte.
+  // On ne récompense pas un deck resserré si son propriétaire est resté au
+  // vestiaire : la tête d'affiche doit avoir lutté ce soir-là.
+  const tete = state.roster.find((r) => r.id === state.headliner);
+  if (tete && teamIds.includes(tete.id)) {
+    const taille = deckSize(tete);
+    if (!f.smallestDeckWin || taille < f.smallestDeckWin) f.smallestDeckWin = taille;
+  }
+}
+
 // Applique le résultat d'un match de campagne. Renvoie un résumé pour l'écran de résultat.
 export function applyResult(state, battle, matchDef, teamIds, node = null) {
   const won = battle.result.winner === 'player';
@@ -202,6 +261,9 @@ export function applyResult(state, battle, matchDef, teamIds, node = null) {
       ? 'Victoire ! Le show continue.'
       : 'Défaite. Le show continue — mais une partie de la salle ne reviendra pas.';
   }
+  // CE QUE LA CARRIÈRE RETIENT DE CE MATCH. On le note ici, au seul endroit
+  // qui voit à la fois le match, son type et son résultat.
+  recordFeats(state, battle, matchDef, node, won, teamIds);
   state.money += summary.money;
   state.fans = Math.max(0, state.fans + summary.fans);
   for (const r of state.roster) if (teamIds.includes(r.id)) { if (won) r.wins++; else r.losses++; }
@@ -254,9 +316,27 @@ export function applyResult(state, battle, matchDef, teamIds, node = null) {
       state.champion = won;
       state.ending = won ? 'champion' : 'contender';
       state.sellout = state.fans >= SEASON.finalFansGoal;
+      state.terms = matchDef.terms || 'net';
     }
   }
   return summary;
+}
+
+// LE BILAN D'UNE CARRIÈRE, tel que la progression entre les parties le lit
+// (`src/game/unlocks.js`). Il ne contient QUE des faits : qui, quoi, combien —
+// aucune condition, aucun jugement. Les conditions vivent dans `unlocks.js`,
+// et c'est ce qui permet d'en ajouter sans toucher au reste.
+export function careerRun(state) {
+  return {
+    headliner: state.headliner,
+    champion: state.champion === true,
+    terms: state.terms || 'net',
+    rank: rankOf(state),
+    mode: state.mode,
+    fans: state.fans,
+    money: state.money,
+    feats: state.feats || emptyFeats(),
+  };
 }
 
 // Le quatrième argument accepte un nombre (l'ancienne graine) ou un objet

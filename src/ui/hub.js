@@ -6,10 +6,12 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { DIRECTIVES } from '../data/directives.js';
 import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
-import { currentShow, weekNodes, ensureRoute, takeNode, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
+import { currentShow, weekNodes, ensureRoute, takeNode, careerRun, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
 import { NODE_TYPES, SEMAINE_TITRE, isFight, rankStep } from '../game/route.js';
 import { restOptions, restTrain, restTrim, restGate, trimmable, eventFor, applyEvent, shopStock, buyCard, buyTrain, buyAds, buyAgent, SHOP_PRICES, SHOP_FANS } from '../game/week.js';
 import { rankLabel, titleTerms, championName, rankOf } from '../game/rank.js';
+import { loadProgress, saveProgress, finishCareer, unlockHint, isUnlocked, UNLOCKS } from '../game/unlocks.js';
+import { avatar } from './avatar.js';
 import { describeFinish } from '../game/script.js';
 import { knownMoves, deckSize, forgetCard, DECK_MAX, DECK_MIN } from '../game/deck.js';
 import { isCard } from '../engine/hand.js';
@@ -246,6 +248,29 @@ function matchCard(m, st, app, root, node = null) {
   return card;
 }
 
+// Ce que cette carrière a ouvert. Quand elle n'ouvre rien, on ne fait pas
+// semblant : on dit ce qui reste à portée, parce qu'une carrière qui ne
+// débloque rien ET ne dit rien donne l'impression de n'avoir servi à rien.
+function renderUnlocks(ouverts) {
+  const p = loadProgress();
+  if (ouverts.length) {
+    return h('div', { class: 'unlocks won' },
+      h('h3', {}, ouverts.length > 1 ? `🔓 ${ouverts.length} lutteurs rejoignent le vestiaire` : '🔓 Un lutteur rejoint le vestiaire'),
+      h('div', { class: 'locker-grid' }, ouverts.map((u) => {
+        const d = WRESTLERS_BY_ID[u.id];
+        return h('div', { class: 'locker-card on' }, avatar(d, 52, { view: 'bust', bg: 'none' }),
+          h('b', {}, d ? d.name : u.id), h('span', { class: 'muted' }, u.by));
+      })),
+      h('p', { class: 'muted' }, `Vestiaire : ${p.wrestlers.length}/29.`));
+  }
+  const restants = UNLOCKS.filter((u) => !isUnlocked(p, u.id)).slice(0, 3);
+  if (!restants.length) return h('p', { class: 'muted' }, `🔓 Vestiaire complet : les 29 lutteurs sont à vous.`);
+  return h('div', { class: 'unlocks' },
+    h('h3', {}, '🔒 Rien de neuf au vestiaire cette fois'),
+    h('ul', {}, restants.map((u) => h('li', { class: 'muted' }, u.by))),
+    h('p', { class: 'muted' }, `Vestiaire : ${p.wrestlers.length}/29.`));
+}
+
 function renderRoster(st, app, root) {
   const box = h('div', {}, h('p', { class: 'muted' }, `Entraînement : +1 stat (ou +10 PV) pour ${150} $ (+25 $ par entraînement déjà suivi par ce lutteur), maximum ${MAX_TRAIN} par stat. Les lutteurs guérissent entièrement entre les shows.`));
   const cards = h('div', { class: 'cards' });
@@ -307,6 +332,20 @@ export function showSeasonEnd(root, app) {
   // fans ; il doit répondre à la seule question qu'on se posait depuis le
   // premier épisode.
   const champion = st.champion === true || st.ending === 'champion';
+  // LE VESTIAIRE S'OUVRE ICI, une fois par carrière. On évalue toutes les
+  // conditions non encore remplies et on montre ce qui vient de s'ouvrir :
+  // c'est la seule récompense qui survit à la carrière.
+  let ouverts = [];
+  if (!st.unlocksDone) {
+    const bilan = finishCareer(loadProgress(), careerRun(st));
+    saveProgress(bilan.progress);
+    ouverts = bilan.unlocked;
+    st.unlocksDone = true;
+    st.unlocked = ouverts.map((u) => u.id);
+    app.saveNow();
+  } else {
+    ouverts = (st.unlocked || []).map((id) => ({ id, by: unlockHint(id) }));
+  }
   const route = st.history.filter((x) => !x.title);
   const victoires = route.filter((x) => x.won).length;
   const terme = titleTerms(rankOf(st));
@@ -319,6 +358,7 @@ export function showSeasonEnd(root, app) {
       ? 'Une carrière, huit soirs, une ceinture. La prochaine repart de la salle de bingo : nouveau roster, nouveau deck, nouveau champion à aller chercher.'
       : `La route décide des conditions du soir : ${victoires} victoire${victoires > 1 ? 's' : ''} sur ${route.length} vous ont amené ${rankLabel(rankOf(st)).toLowerCase()}. Six victoires ou plus, et le champion vous doit un match propre.`),
     h('p', { class: 'muted' }, `${st.fans} fans${st.sellout ? ` — la salle est pleine (objectif ${SEASON.finalFansGoal} atteint)` : ''} · ${st.money} $ · ${st.history.filter((x) => x.won).length} victoires / ${st.history.length} matchs`),
+    renderUnlocks(ouverts),
     renderHistory(st),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => app.abandonCampaign() }, 'Nouvelle carrière'), h('button', { class: 'btn ghost', onclick: () => app.toTitle() }, 'Menu')),
   ));
