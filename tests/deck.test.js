@@ -39,9 +39,10 @@ test('apprendre une carte l’ajoute au répertoire de match, et à lui seul', (
   const id = cardOffer(st, 'jean_sina')[0];
   assert.ok(learnCard(st, 'jean_sina', id).ok);
   assert.ok(knownMoves(st.roster[0]).has(id));
-  // Elle est à LUI : un autre lutteur peut très bien connaître ce mouvement
-  // de naissance, mais personne d'autre ne vient de l'apprendre.
-  assert.deepEqual(st.roster[1].cards, [], 'la carte va à un seul lutteur, pas au roster');
+  // Une carrière n'a qu'un lutteur : la carte va dans SON deck, et le deck
+  // n'existe nulle part ailleurs.
+  assert.equal(st.roster.length, 1);
+  assert.deepEqual(st.roster[0].cards, [id]);
   // On ne l'apprend pas deux fois, et on n'apprend pas n'importe quoi.
   assert.ok(!learnCard(st, 'jean_sina', id).ok, 'déjà au répertoire');
   assert.ok(!learnCard(st, 'jean_sina', 'punch').ok, 'un fondamental ne s’apprend pas');

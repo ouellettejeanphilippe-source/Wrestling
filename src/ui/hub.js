@@ -6,9 +6,9 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { DIRECTIVES } from '../data/directives.js';
 import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
-import { currentShow, weekNodes, ensureRoute, takeNode, careerRun, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
-import { NODE_TYPES, SEMAINE_TITRE, isFight, rankStep } from '../game/route.js';
-import { restOptions, restTrain, restTrim, restGate, trimmable, eventFor, applyEvent, shopStock, buyCard, buyTrain, buyAds, buyAgent, SHOP_PRICES, SHOP_FANS } from '../game/week.js';
+import { currentShow, weekNodes, ensureRoute, takeNode, careerRun, partnerOffer, train, trainCost, TRAINABLE, MAX_TRAIN, TRAIN_COST, TRAIN_STEP } from '../game/state.js';
+import { NODE_TYPES, SEMAINE_TITRE, isFight, isSolo, rankStep } from '../game/route.js';
+import { restOptions, restTrain, restTrim, restGate, trimmable, eventFor, applyEvent, shopStock, buyCard, buyTrain, buyAds, SHOP_PRICES, SHOP_FANS } from '../game/week.js';
 import { rankLabel, titleTerms, championName, rankOf } from '../game/rank.js';
 import { loadProgress, saveProgress, finishCareer, unlockHint, isUnlocked, UNLOCKS } from '../game/unlocks.js';
 import { avatar } from './avatar.js';
@@ -38,12 +38,11 @@ export function showHub(root, app, tab = 'show') {
     h('span', { class: 'terms' }, `${t.icon} ${t.name} — ${t.odds}`),
     h('span', { class: 'muted' }, 'Chaque victoire vous fait monter d’une place, chaque défaite en fait perdre une. Vous aurez votre match de titre quoi qu’il arrive : c’est votre classement qui en fixe les conditions.'),
   ));
-  const tabs = h('nav', { class: 'tabs' }, [['show', '📺 Le show'], ['roster', '🧑‍🤝‍🧑 Roster & entraînement'], ['agents', '📝 Agents libres'], ['history', '📜 Historique']].map(([id, label]) =>
+  const tabs = h('nav', { class: 'tabs' }, [['show', '📺 Le show'], ['roster', '🧑‍🤝‍🧑 Votre lutteur'], ['history', '📜 Historique']].map(([id, label]) =>
     h('button', { class: `tab ${tab === id ? 'on' : ''}`, onclick: () => showHub(root, app, id) }, label)));
   const body = h('div', { class: 'hub-body' });
   if (tab === 'show') body.append(renderShow(show, st, app, root));
   if (tab === 'roster') body.append(renderRoster(st, app, root));
-  if (tab === 'agents') body.append(renderAgents(st, app, root));
   if (tab === 'history') body.append(renderHistory(st));
   root.append(h('div', { class: 'hub' }, header, tabs, body,
     h('div', { class: 'row hub-foot' }, h('button', { class: 'btn ghost', onclick: () => app.toTitle() }, '← Menu (la partie est sauvegardée)'), h('button', { class: 'btn ghost danger', onclick: () => { if (confirm('Supprimer la sauvegarde et recommencer ?')) app.abandonCampaign(); } }, '🗑 Abandonner la saison'))));
@@ -180,13 +179,6 @@ function renderShop(node, st, app, root) {
     if (!res.ok) return toast(res.reason, 'warn');
     passer(st, app, root, node, res.message);
   } }, `📣 Campagne d’affichage — ${SHOP_PRICES.fans} $`, h('span', { class: 'muted' }, ` +${SHOP_FANS} fans.`)));
-  if (stock.agent && WRESTLERS_BY_ID[stock.agent]) {
-    box.append(h('button', { class: 'btn', disabled: st.money < stock.agentPrix, onclick: () => {
-      const res = buyAgent(st, stock.agent, stock.agentPrix);
-      if (!res.ok) return toast(res.reason, 'warn');
-      passer(st, app, root, node, res.message);
-    } }, `✍️ Signer ${WRESTLERS_BY_ID[stock.agent].name} — ${stock.agentPrix} $`, h('span', { class: 'muted' }, ' Tarif de faveur, cette semaine seulement.')));
-  }
   box.append(h('button', { class: 'btn ghost', onclick: () => passer(st, app, root, node, 'Vous ressortez les mains vides.') }, 'Repartir sans rien acheter'));
   return box;
 }
@@ -228,6 +220,7 @@ function matchCard(m, st, app, root, node = null) {
     h('h3', {}, `${rules.icon} ${m.title}`, h('span', { class: 'muted' }, ` — ${rules.name}, ${m.teamSize} de vos lutteurs`)),
     m.termsLabel ? h('p', { class: `terms-line terms-${m.terms}` }, m.termsLabel) : null,
     node && node.type === 'elite' ? h('p', { class: 'terms-line terms-net' }, `⭐ Main event — une victoire vaut ${rankStep('elite')} places au classement.`) : null,
+    node && node.type === 'tag' ? h('p', { class: 'terms-line terms-avantage' }, '🤝 Match par équipes — il vous faut un partenaire pour ce soir. Jamais obligatoire : une autre porte de la semaine se joue seul.') : null,
     h('p', {}, m.desc), h('p', { class: 'muted small' }, rules.desc),
     h('div', { class: 'opps' }, 'Adversaires : ', opp.map((d) => h('span', { class: 'opp', title: d.bio }, chip(d), ` ${d.name} (${CLASSES[d.cls].icon} ${CLASSES[d.cls].name} / ${SPECIALTIES[d.spec].icon} ${SPECIALTIES[d.spec].name})`))),
     m.reinforcements ? h('p', { class: 'small' }, `🚨 Renforts : ${m.reinforcements.map((r) => `tour ${r.turn} (${r.enemies.map((e) => WRESTLERS_BY_ID[e].name).join(', ')})`).join(' · ')}`) : null,
@@ -236,14 +229,38 @@ function matchCard(m, st, app, root, node = null) {
       : h('div', { class: 'script-box' }, h('b', {}, '📺 Directives du Network : '), m.directives.map((d) => h('div', { class: 'obj-item' }, `⬜ ${DIRECTIVES[d].name} — ${DIRECTIVES[d].desc} (+${DIRECTIVES[d].reward.fans} fans, +${DIRECTIVES[d].reward.money} $)`))),
     h('p', { class: 'reward' }, `Récompense de base : ${m.reward.money} $ · ${m.reward.fans} fans`),
   );
-  const picked = new Set();
-  const teamBox = h('div', { class: 'team-pick' }, h('div', { class: 'muted' }, `Choisissez ${m.teamSize} lutteur(s) :`),
-    h('div', { class: 'team-list' }, st.roster.map((r) => {
-      const d = WRESTLERS_BY_ID[r.id];
-      const b = h('button', { class: 'tp', onclick: () => { if (picked.has(r.id)) picked.delete(r.id); else if (picked.size < m.teamSize) picked.add(r.id); else return toast(`Maximum ${m.teamSize}`, 'warn'); b.classList.toggle('on', picked.has(r.id)); } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${r.wins}V-${r.losses}D`));
+  // LE PARTENAIRE D'UN SOIR. Votre lutteur est toujours de la partie — c'est sa
+  // carrière. Ce qui se choisit, ce sont les places EN PLUS, et elles se
+  // remplissent avec les lutteurs qu'on a débloqués au vestiaire : chaque nom
+  // gagné sert donc deux fois, une carrière et un renfort.
+  const moi = st.roster[0];
+  const places = Math.max(0, m.teamSize - 1);
+  const partenaires = new Set();
+  const teamBox = h('div', { class: 'team-pick' });
+  if (places > 0) {
+    const offre = partnerOffer(st, node || { row: st.path.length, col: 0 }, loadProgress().wrestlers, 4);
+    teamBox.append(h('div', { class: 'muted' }, `🤝 ${WRESTLERS_BY_ID[moi.id].name} + ${places} partenaire${places > 1 ? 's' : ''} pour ce soir :`));
+    if (!offre.length) {
+      teamBox.append(h('p', { class: 'muted small' }, 'Personne de disponible : débloquez d’autres lutteurs au vestiaire pour pouvoir faire équipe.'));
+    }
+    teamBox.append(h('div', { class: 'team-list' }, offre.map((id) => {
+      const d = WRESTLERS_BY_ID[id];
+      const b = h('button', { class: 'tp', onclick: () => {
+        if (partenaires.has(id)) partenaires.delete(id);
+        else if (partenaires.size < places) partenaires.add(id);
+        else return toast(`Il n’y a que ${places} place${places > 1 ? 's' : ''}`, 'warn');
+        b.classList.toggle('on', partenaires.has(id));
+      } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${SPECIALTIES[d.spec].icon}`));
       return b;
-    })),
-    h('button', { class: 'btn primary', onclick: () => { if (picked.size !== m.teamSize) return toast(`Choisissez exactement ${m.teamSize} lutteur(s)`, 'warn'); app.bookMatch(m, [...picked], node); } }, '🔔 Booker ce match'));
+    })));
+    teamBox.append(h('p', { class: 'muted small' }, 'Un partenaire vient pour la soirée : il ne rejoint pas votre carrière, il ne s’entraîne pas, et il ne gagne pas de carte.'));
+  } else {
+    teamBox.append(h('div', { class: 'muted' }, `Un contre un : ${WRESTLERS_BY_ID[moi.id].name} y va seul.`));
+  }
+  teamBox.append(h('button', { class: 'btn primary', onclick: () => {
+    if (partenaires.size !== places) return toast(`Choisissez ${places} partenaire${places > 1 ? 's' : ''}`, 'warn');
+    app.bookMatch(m, [moi.id, ...partenaires], node);
+  } }, '🔔 Booker ce match'));
   card.append(teamBox);
   return card;
 }
@@ -272,7 +289,7 @@ function renderUnlocks(ouverts) {
 }
 
 function renderRoster(st, app, root) {
-  const box = h('div', {}, h('p', { class: 'muted' }, `Entraînement : +1 stat (ou +10 PV) pour ${150} $ (+25 $ par entraînement déjà suivi par ce lutteur), maximum ${MAX_TRAIN} par stat. Les lutteurs guérissent entièrement entre les shows.`));
+  const box = h('div', {}, h('p', { class: 'muted' }, `Entraînement : +1 stat (ou +10 PV) pour ${TRAIN_COST} $, puis ${TRAIN_STEP} $ de plus à chaque fois — maximum ${MAX_TRAIN} par stat. Tout maximiser est hors de portée d’une carrière : choisissez ce que votre lutteur devient. Il guérit entièrement entre les shows.`));
   const cards = h('div', { class: 'cards' });
   for (const r of st.roster) {
     const d = WRESTLERS_BY_ID[r.id];
@@ -302,19 +319,6 @@ function renderRoster(st, app, root) {
     ));
     cards.append(wrestlerCard(d, { bonus: r.bonus, extra }));
   }
-  box.append(cards);
-  return box;
-}
-
-function renderAgents(st, app, root) {
-  const box = h('div', {}, h('p', { class: 'muted' }, 'Trois agents libres par épisode. Le salaire est payé une fois à la signature.'));
-  const cards = h('div', { class: 'cards' });
-  for (const id of st.freeAgents) {
-    const d = WRESTLERS_BY_ID[id];
-    const extra = h('button', { class: 'btn primary', disabled: st.money < d.salary, onclick: () => { const res = recruit(st, id); if (!res.ok) return toast(res.reason, 'warn'); app.saveNow(); toast(`${d.name} rejoint ${st.promoName} !`); showHub(root, app, 'agents'); } }, `Recruter — ${d.salary} $`);
-    cards.append(wrestlerCard(d, { extra }));
-  }
-  if (!st.freeAgents.length) box.append(h('p', {}, 'Plus personne à recruter pour l’instant.'));
   box.append(cards);
   return box;
 }

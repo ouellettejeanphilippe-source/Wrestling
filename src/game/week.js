@@ -9,7 +9,7 @@
 // match, c'est une place qu'on n'a pas prise, et ça se paie le soir du titre.
 import { createRng } from '../engine/rng.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
-import { TRAINABLE, MAX_TRAIN, rosterEntry } from './state.js';
+import { TRAINABLE, MAX_TRAIN } from './state.js';
 import { cardOffer, learnCard, forgetCard, knownMoves, deckSize, DECK_MIN } from './deck.js';
 import { isCard } from '../engine/hand.js';
 import { MOVES } from '../data/moves.js';
@@ -125,18 +125,16 @@ export function applyEvent(state, node, index) {
 // On y achète ce que l'argent peut acheter. Les prix sont fixes et affichés :
 // une boutique dont on ne peut pas prévoir le contenu ne se planifie pas, et
 // planifier est justement ce qu'une carte doit permettre.
-export const SHOP_PRICES = { card: 400, train: 200, fans: 300, agent: 0 };
+export const SHOP_PRICES = { card: 400, train: 200, fans: 300 };
 
+// La boutique ne vend plus de contrat : il n'y a pas de roster où faire entrer
+// quelqu'un. Elle vend ce qui sert à UN lutteur — un mouvement, une séance, de
+// l'affichage.
 export function shopStock(state, node) {
-  const rng = grain(state, node, 1);
-  const lutteur = state.roster[Math.floor(rng.next() * state.roster.length)] || state.roster[0];
-  const cartes = lutteur ? cardOffer(state, lutteur.id, node.row + 1).slice(0, 2) : [];
-  const libre = state.freeAgents[Math.floor(rng.next() * Math.max(1, state.freeAgents.length))];
+  const lutteur = state.roster[0];
   return {
     lutteur: lutteur ? lutteur.id : null,
-    cartes,
-    agent: libre || null,
-    agentPrix: libre ? Math.round((WRESTLERS_BY_ID[libre] || { salary: 600 }).salary * 0.8) : 0,
+    cartes: lutteur ? cardOffer(state, lutteur.id, node.row + 1).slice(0, 2) : [],
   };
 }
 
@@ -164,13 +162,3 @@ export function buyAds(state) {
   return { ok: true, message: `Affiches, radio locale, et un panneau sur la nationale : +${SHOP_FANS} fans.` };
 }
 
-export function buyAgent(state, id, prix) {
-  const def = WRESTLERS_BY_ID[id];
-  if (!def) return { ok: false, reason: 'Lutteur inconnu' };
-  if (state.roster.some((r) => r.id === id)) return { ok: false, reason: 'Déjà dans le roster' };
-  if (state.money < prix) return { ok: false, reason: 'Pas assez d’argent' };
-  state.money -= prix;
-  state.roster.push(rosterEntry(id));
-  state.freeAgents = state.freeAgents.filter((f) => f !== id);
-  return { ok: true, message: `${def.name} signe (−${prix} $).` };
-}

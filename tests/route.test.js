@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRoute, openNodes, nodeAt, isFight, rankStep, rankLoss, eliteMatch, ELITE_BOOST, SEMAINES, SEMAINE_TITRE, NODE_TYPES } from '../src/game/route.js';
+import { buildRoute, openNodes, nodeAt, isFight, isSolo, rankStep, rankLoss, eliteMatch, ELITE_BOOST, SEMAINES, SEMAINE_TITRE, NODE_TYPES } from '../src/game/route.js';
 import { newGame, weekNodes, takeNode, ensureRoute, applyResult, buildMatch, playerBonuses, TITLE_MATCH_ID } from '../src/game/state.js';
 import { rankOf, RANK_START } from '../src/game/rank.js';
-import { restOptions, restGate, restTrain, restTrim, trimmable, eventFor, applyEvent, shopStock, buyCard, buyAds, buyAgent, EVENTS, SHOP_PRICES, SHOP_FANS, GATE_MONEY } from '../src/game/week.js';
+import { restOptions, restGate, restTrain, restTrim, trimmable, eventFor, applyEvent, shopStock, buyCard, buyAds, EVENTS, SHOP_PRICES, SHOP_FANS, GATE_MONEY } from '../src/game/week.js';
 import { deckSize, knownMoves } from '../src/game/deck.js';
 import { createBattle } from '../src/engine/battle.js';
-import { SEASON } from '../src/data/campaign.js';
+import { SEASON, SOLO_MATCHES } from '../src/data/campaign.js';
 import { WRESTLERS_BY_ID as W, STARTER_CHOICES } from '../src/data/wrestlers.js';
 
 const partie = (mode = 'kayfabe') => newGame({ promoName: 'T', mode, starters: STARTER_CHOICES.slice(0, 3) });
@@ -55,17 +55,34 @@ test('aucun nœud n’est orphelin : tout chemin mène à la ceinture', () => {
 });
 
 test('chaque nœud de combat porte un vrai match, et la difficulté suit la semaine', () => {
-  const normal = [], elite = [];
-  for (const show of SEASON.shows) { if (show.title_match) continue; show.matches.forEach((m, i) => (i === 0 ? normal : elite).push(m.id)); }
+  // Les trois viviers, reconstruits comme `route.js` les construit : les matchs
+  // solo des shows écrits (un seul des vôtres) plus les soirs en solo ajoutés,
+  // triés par récompense ; les matchs à plusieurs partent au vivier « tag ».
+  const parFans = (a, b) => a.reward.fans - b.reward.fans;
+  const n0 = [], e0 = [], tg = [];
+  for (const show of SEASON.shows) {
+    if (show.title_match) continue;
+    show.matches.forEach((m, i) => { if (m.teamSize > 1) tg.push(m); else (i === 0 ? n0 : e0).push(m); });
+  }
+  for (const m of SOLO_MATCHES) (m.tier === 'elite' ? e0 : n0).push(m);
+  const normal = n0.sort(parFans).map((m) => m.id);
+  const elite = e0.sort(parFans).map((m) => m.id);
+  const tag = tg.sort(parFans).map((m) => m.id);
   let pire = 0;
   for (let seed = 1; seed <= 120; seed++) {
     for (const row of buildRoute(seed).rows) for (const n of row) {
       if (!isFight(n.type)) { assert.equal(n.match, undefined); continue; }
       assert.ok(n.match && n.match.id && n.match.type, `nœud ${n.id} sans match`);
       if (n.type === 'boss') continue;
-      const vivier = n.type === 'match' ? normal : elite;
+      const vivier = n.type === 'match' ? normal : n.type === 'tag' ? tag : elite;
       assert.ok(vivier.includes(n.match.id), `${n.type} doit piocher dans son vivier`);
-      pire = Math.max(pire, Math.abs(vivier.indexOf(n.match.id) - n.row));
+      // La cible n'est pas la semaine mais la semaine RAMENÉE DANS LE VIVIER :
+      // les viviers sont plus courts que la carrière (quatre main events solo
+      // pour sept semaines), donc la difficulté monte puis sature au sommet.
+      // C'est le comportement voulu — mesurer autre chose reviendrait à exiger
+      // un vivier infini.
+      const cible = Math.min(vivier.length - 1, n.row);
+      pire = Math.max(pire, Math.abs(vivier.indexOf(n.match.id) - cible));
     }
   }
   // La fenêtre vaut 1 les trois premières semaines, 2 ensuite : jamais plus.
@@ -182,12 +199,9 @@ test('le bureau du booker vend, et refuse quand on n’a pas l’argent', () => 
   assert.ok(buyCard(st, stock.lutteur, stock.cartes[0]).ok);
   assert.equal(deckSize(st.roster.find((r) => r.id === stock.lutteur)), avant + 1);
 
-  if (stock.agent) {
-    const n = st.roster.length;
-    assert.ok(buyAgent(st, stock.agent, stock.agentPrix).ok);
-    assert.equal(st.roster.length, n + 1);
-    assert.equal(buyAgent(st, stock.agent, stock.agentPrix).ok, false, 'pas deux fois le même');
-  }
+  // La boutique ne vend plus de contrat : il n'y a pas de roster où faire
+  // entrer quelqu'un.
+  assert.equal(stock.agent, undefined);
 });
 
 test('une sauvegarde d’avant la carte s’en voit fabriquer une', () => {
@@ -250,4 +264,58 @@ test('la carte offre un vrai choix la plupart des semaines', () => {
   }
   assert.ok(choix / total > 0.6, `il faut un vrai choix la plupart des semaines (obtenu : ${Math.round((choix / total) * 100)} %)`);
   assert.ok(sansCombat / total > 0.35, `et souvent une option sans match (obtenu : ${Math.round((sansCombat / total) * 100)} %)`);
+});
+
+test('le match par équipes est toujours possible, jamais obligatoire', () => {
+  // UNE CARRIÈRE EST CELLE D'UN SEUL LUTTEUR. Un nœud « tag » demande un
+  // partenaire ; personne ne doit être contraint d'en prendre un.
+  //
+  // L'invariant ne suffit PAS par ligne : le joueur ne voit que les nœuds vers
+  // lesquels son nœud pointe. Mesuré avant correction, 7,1 % des ensembles
+  // accessibles ne proposaient que du tag. On explore donc tous les chemins.
+  let force = 0, examines = 0, tags = 0;
+  for (let seed = 1; seed <= 150; seed++) {
+    const r = buildRoute(seed);
+    const voir = (s, cols) => {
+      if (s >= SEMAINE_TITRE) return;
+      examines++;
+      const noeuds = cols.map((c) => r.rows[s][c]);
+      if (!noeuds.some((n) => isSolo(n.type))) force++;
+      for (const n of noeuds) { if (n.type === 'tag') tags++; voir(s + 1, n.next); }
+    };
+    voir(0, [0]);
+  }
+  assert.ok(examines > 1000, 'il faut vraiment explorer les chemins');
+  assert.equal(force, 0, 'aucun chemin ne doit imposer un match par équipes');
+  assert.ok(tags > 0, 'mais le tag doit bien exister sur la carte');
+});
+
+test('les nœuds solo sont jouables seul, les nœuds tag demandent du monde', () => {
+  for (let seed = 1; seed <= 150; seed++) {
+    for (const row of buildRoute(seed).rows) for (const n of row) {
+      if (n.type === 'tag') {
+        assert.ok(n.match.teamSize >= 2, `${n.id} : un tag doit demander au moins deux lutteurs`);
+      } else if (isSolo(n.type)) {
+        assert.equal(n.match.teamSize, 1, `${n.id} : un nœud solo se joue seul`);
+        assert.equal(n.match.enemies.length, 1, `${n.id} : jamais en infériorité numérique (0 victoire sur 40, mesuré)`);
+      }
+    }
+  }
+});
+
+test('les six soirs en solo font servir les stipulations oubliées', () => {
+  // La campagne n'utilisait que 8 des 13 stipulations écrites. Les matchs solo
+  // existent d'abord pour combler le vivier — mais tant qu'à les écrire, ils
+  // font jouer ce qui dormait.
+  const vues = new Set(SOLO_MATCHES.map((m) => m.type));
+  for (const t of ['street_fight', 'submission_only', 'last_man_standing', 'tlc', 'hell_in_cell']) {
+    assert.ok(vues.has(t), `« ${t} » était écrite, mesurée, et jamais jouée en carrière`);
+  }
+  for (const m of SOLO_MATCHES) {
+    assert.equal(m.teamSize, 1, `${m.id} doit être jouable seul`);
+    assert.equal(m.enemies.length, 1, `${m.id} doit être un contre un`);
+    assert.ok(['normal', 'elite'].includes(m.tier), `${m.id} doit dire dans quel vivier il va`);
+    assert.ok(m.script && m.script.finish && m.script.beats.length, `${m.id} a besoin d’un script`);
+    assert.ok(m.directives.length && m.desc && m.title, `${m.id} doit se décrire`);
+  }
 });

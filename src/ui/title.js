@@ -104,35 +104,37 @@ function showSetup(root, app) {
   // les obtenir : on ne peut pas viser ce qu'on ne voit pas.
   const progres = loadProgress();
   const dispo = locker(progres).filter((x) => x.unlocked).map((x) => x.def);
-  const counter = h('span', { class: 'muted' }, '0/3 choisis');
-  // LA TÊTE D'AFFICHE est le premier choisi : c'est SA carrière, et c'est avec
-  // lui que comptent les déblocages (« gagnez la ceinture avec X »).
-  const tete = h('p', { class: 'headliner muted' }, 'Le premier lutteur choisi sera votre tête d’affiche.');
+  const counter = h('span', { class: 'muted' }, 'aucun choisi');
+  // UNE CARRIÈRE EST CELLE D'UN SEUL LUTTEUR. Pas d'écurie : on choisit son
+  // homme, et c'est lui qu'on entraîne, dont le deck grossit, et avec qui
+  // comptent les déblocages. Les matchs par équipes restent possibles — un
+  // partenaire d'un soir se trouve sur la carte, jamais par obligation.
+  const tete = h('p', { class: 'headliner muted' }, 'Choisissez le lutteur dont vous allez faire la carrière.');
   const majTete = () => {
     const premier = [...picked][0];
     tete.textContent = premier
-      ? `⭐ Tête d’affiche : ${WRESTLERS_BY_ID[premier].name} — c’est sa carrière, et c’est avec lui que comptent les déblocages.`
-      : 'Le premier lutteur choisi sera votre tête d’affiche.';
+      ? `⭐ ${WRESTLERS_BY_ID[premier].name} — c’est sa carrière : son entraînement, son deck, et c’est avec lui que comptent les déblocages.`
+      : 'Choisissez le lutteur dont vous allez faire la carrière.';
     tete.classList.toggle('on', !!premier);
+    counter.textContent = premier ? WRESTLERS_BY_ID[premier].name : 'aucun choisi';
   };
   const cards = rosterPicker(dispo, {
-    max: 3, picked,
-    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); counter.textContent = `${picked.size}/3 choisis`; majTete(); },
-    onFull: () => toast('Maximum 3 lutteurs de départ', 'warn'),
+    max: 1, picked, labelOn: '✓ C’est lui', labelOff: '✗ Finalement non',
+    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); majTete(); },
   });
   root.append(h('div', { class: 'setup' },
     h('h2', {}, 'Nouvelle carrière'),
     h('label', {}, 'Nom de votre promotion ', nameInput),
     h('h3', {}, 'Mode de jeu'), modeBtns,
-    h('h3', {}, `Choisissez 3 lutteurs `, counter,
+    h('h3', {}, `Votre lutteur : `, counter,
       h('span', { class: 'muted small' }, ` · vestiaire : ${dispo.length}/${dispo.length + UNLOCKS.filter((u) => !isUnlocked(progres, u.id)).length}`)),
-    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter.'),
+    h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour le choisir. Les matchs par équipes restent jouables : un partenaire d’un soir se propose sur la carte, parmi les lutteurs que vous avez débloqués.'),
     tete,
     cards,
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
       h('button', { class: 'btn ghost', onclick: () => showLocker(root, app) }, '🔒 Vestiaire'),
-      h('button', { class: 'btn primary', onclick: () => { if (picked.size !== 3) return toast('Choisissez exactement 3 lutteurs', 'warn'); app.startCampaign({ promoName: nameInput.value.trim() || 'PPW', mode, starters: [...picked] }); } }, 'Lancer la carrière →'),
+      h('button', { class: 'btn primary', onclick: () => { if (picked.size !== 1) return toast('Choisissez un lutteur', 'warn'); app.startCampaign({ promoName: nameInput.value.trim() || 'PPW', mode, starters: [...picked] }); } }, 'Lancer la carrière →'),
     ),
   ));
 }
