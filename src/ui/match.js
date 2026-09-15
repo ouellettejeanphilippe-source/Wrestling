@@ -11,6 +11,7 @@ import { deckState, isCard } from '../engine/hand.js';
 import { unitAt, living, avgHeat } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { SEASON } from '../data/campaign.js';
+import { play, startCrowd, setCrowd, crowdPop, stopCrowd, soundOn, setSound } from './sound.js';
 import { rankLabel, titleTerms } from '../game/rank.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 import { matchPhase } from '../engine/phases.js';
@@ -220,11 +221,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   requestAnimationFrame(fitBoard);
   showBanner('🔔 DING DING DING !', 'start');
   render();
+  // La cloche et la salle : le contexte audio ne peut naître que d'un geste de
+  // l'utilisateur, et booker un match en est un.
+  startCrowd(); setCrowd(battle.heat); play('bell');
   if (!tutorialSeen()) showTutorial(root, {});
 
   // ------------------------------------------------------------ rendu global
   function render() {
     renderTop(); renderBoard(); renderPopover(); renderRight(); renderEndTurn(); renderParty(); renderLog(); flushEvents(); fitBoard();
+    // LA FOULE EST UNE JAUGE QU'ON ENTEND. Depuis que la chaleur retombe pour
+    // de bon, on sent la salle se refroidir sans quitter le plateau des yeux.
+    setCrowd(battle.heat);
     if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
   }
 
@@ -251,6 +258,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('span', { class: 'moy' }, `moy. ${Math.round(avgHeat(battle))}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
 
+      soundBtn(),
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
@@ -906,8 +914,30 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const e of battle.log.slice(-10).reverse()) el.log.append(h('div', { class: `le ${e.cls || ''}` }, h('span', { class: 'lt' }, `T${e.turn}`), ' ', e.text));
   }
 
+  // LE SON SE BRANCHE ICI, SUR LES ÉVÉNEMENTS DU MOTEUR — pas sur les clics.
+  // Un coup qui touche sonne parce que le moteur a dit « dégâts », pas parce
+  // qu'on a appuyé quelque part : les coups de l'IA sonnent donc aussi, et
+  // rien ne sonne quand une action est annulée.
+  function sonner(ev) {
+    switch (ev.type) {
+      case 'damage': play(ev.crit ? 'bigHit' : 'hit'); if (ev.crit) crowdPop(0.8); break;
+      case 'miss': play('miss'); break;
+      case 'down': play('slam'); crowdPop(0.5); break;
+      case 'pin':
+        play('count', ev.count);
+        if (ev.count === 2.9 || ev.count === 2) { play('kickout'); crowdPop(1); }
+        if (ev.count === 3) crowdPop(1);
+        break;
+      case 'eliminated': crowdPop(1); break;
+      case 'taunt': crowdPop(0.35); break;
+      case 'combo': crowdPop(0.5); break;
+      default: break;
+    }
+  }
+
   function flushEvents() {
     const evs = battle.events.splice(0, battle.events.length);
+    for (const ev of evs) sonner(ev);
     for (const ev of evs) {
       const cell = el.board.querySelector(`.cell[data-x="${ev.x}"][data-y="${ev.y}"]`);
       if (!cell) continue;
@@ -935,6 +965,16 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     cell.append(f);
     setTimeout(() => f.remove(), 1400);
   }
+  // Le son se coupe d'un geste, et le choix survit au rechargement.
+  function soundBtn() {
+    const b = h('button', { class: 'btn small ghost', title: 'Couper ou remettre le son', onclick: () => {
+      setSound(!soundOn());
+      b.textContent = soundOn() ? '🔊 Son' : '🔇 Son';
+      if (soundOn()) { startCrowd(); setCrowd(battle.heat); play('ui'); }
+    } }, soundOn() ? '🔊 Son' : '🔇 Son');
+    return b;
+  }
+
   function showBanner(text, cls = '') {
     el.banner.textContent = text; el.banner.className = `turn-banner ${cls}`; el.banner.hidden = false;
     setTimeout(() => { el.banner.hidden = true; }, 1100);
@@ -1001,6 +1041,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = ui.sel;
     const r = executeAction(battle, u, id, target);
     if (!r.ok) { toast(r.reason, 'warn'); return; }
+    // La carte qui quitte la main a son petit bruit de papier ; le finisher a
+    // le sien, annoncé, comme pour l'IA.
+    if (isCard(id)) play('card');
+    if (MOVES[id] && MOVES[id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
     if (r.countered) toast('CONTRÉ !', 'warn');
     if (u.onlyPin && !battle.result) { ui.mode = 'menu'; ui.action = null; ui.cat = null; render(); return; }
     deselect();
@@ -1021,6 +1065,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp, true);
     document.body.classList.remove('sheet-open', 'in-match');
+    stopCrowd();
   }
 
   // Le plateau doit tenir dans la place qui lui reste : on calcule la taille de
@@ -1058,7 +1103,11 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const step of enemySteps(battle)) {
       ui.acting = step.unit;
       render();
-      if (step.type === 'action') { const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id; floatAt(step.unit, name); }
+      if (step.type === 'action') {
+        const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id;
+        if (MOVES[a.id] && MOVES[a.id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
+        floatAt(step.unit, name);
+      }
       await sleep(step.type === 'move' ? 420 : 800);
       if (battle.result) break;
     }
@@ -1071,6 +1120,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function showResult() {
     cleanup();
     const res = battle.result;
+    play('bell');
+    setTimeout(() => play(res.winner === 'player' ? 'win' : 'lose'), 550);
+    stopCrowd();
     const summary = onFinish ? onFinish(battle) : null;
     const won = res.winner === 'player';
     const box = h('div', { class: 'result' });

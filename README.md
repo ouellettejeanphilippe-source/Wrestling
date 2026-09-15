@@ -68,6 +68,65 @@ Avant, elle se terminait sur un total de fans (« 2 000 à l'arrivée, sinon la 
 d'histoire : on pouvait jouer huit épisodes sans jamais savoir vers quoi on allait. Le public est maintenant le
 **moyen** — il achète les entraînements et les recrues — et plus le but.
 
+### La route — une carte à embranchements
+
+Le modèle est celui de *Slay the Spire*, parce que la correspondance avec le catch tombe juste. La carrière n'est
+plus une ligne droite de huit épisodes identiques à chaque partie : c'est une **carte tirée à la graine de la
+partie**, dont on choisit le chemin.
+
+| Slay the Spire | La route vers la ceinture |
+| --- | --- |
+| combat normal | 🤼 **Match** — une victoire, une place au classement |
+| élite | ⭐ **Main event** — un adversaire classé : **deux places**, et il cogne |
+| feu de camp | 🛋️ **Semaine off** — une séance offerte, un deck resserré, ou un house show |
+| événement `?` | ❓ **En coulisses** — un angle, deux portes, jamais gratuit |
+| boutique | 💼 **Bureau du booker** — un mouvement, une séance, de l'affichage, un contrat |
+| boss d'acte | 🏆 **Le Championnat du Monde** |
+
+**Ce qu'on n'a pas jeté : les quatorze matchs écrits à la main**, avec leurs scripts, leurs adversaires et leurs
+textes. Une carte qui tirerait des adversaires au hasard dans des stipulations au hasard produirait des matchs
+incohérents — « un chien enragé, quatre armes, deux tables » contre un voltigeur. On tire donc des **matchs
+entiers**, et ce qui change d'une carrière à l'autre, c'est lesquels, dans quel ordre, et ce qu'on choisit de faire
+entre eux. Dans chaque épisode écrit, le second match était déjà le plus dur des deux : il alimente les nœuds
+*main event*, le premier les nœuds *match*. On n'invente pas une difficulté, on lit celle qui était écrite.
+
+Trois invariants, tenus par des tests sur 120 cartes :
+
+- **Chaque semaine propose au moins un match.** Sans ça, une carte peut offrir une semaine où l'on ne peut pas se
+  battre, et le classement devient hors de portée.
+- **Aucun nœud n'est orphelin ni en cul-de-sac.** Tout chemin mène à la ceinture.
+- **La difficulté suit la semaine** à ±1 les trois premières semaines, ±2 ensuite — jamais plus. Sur 200 graines,
+  200 cartes différentes.
+
+### Ce que la mesure a corrigé
+
+La première version de la carte était **décorative** : les trois façons de la jouer donnaient le même résultat
+(30 % / 33 % / 25 % de ceintures), et le rang médian au PPV était le même dans les trois cas. Deux raisons, toutes
+les deux mesurées :
+
+- **Le main event n'était pas plus dur** — 65 % de victoires sur les nœuds *élite* contre 67 % sur les nœuds
+  *match*. Deux places au classement offertes sans risque : ce n'était pas une décision, c'était la bonne réponse.
+  Son adversaire arrive maintenant comme le champion arrive à son match de titre (+10 PV, +1 partout), ce qui met
+  le nœud à **44 %** de victoires.
+- **Une semaine sur trois seulement offrait un choix** : un nœud ne menait souvent qu'à un seul autre. Un nœud mène
+  maintenant à deux quand la ligne suivante le permet — **75 %** des semaines offrent un vrai choix, dont **52 %**
+  avec une option sans match.
+
+Et un troisième défaut, arithmétique celui-là : à coût symétrique, l'espérance du main event (−0,2 place) était
+*pire* que celle d'un match de carte (−0,3). Le nœud « risqué et payant » était donc toujours le mauvais choix. Une
+victoire en main event vaut **deux places, une défaite n'en coûte qu'une** : perdre un main event serré contre un
+lutteur classé ne doit pas enterrer une carrière, c'est le gagner qui doit la faire.
+
+Après correction, la façon de jouer la carte décide enfin — sur 40 carrières par profil :
+
+| Manière de jouer | Ceinture | Rang médian au PPV |
+| --- | --- | --- |
+| tout combattre, main events compris | **33 %** | 4ᵉ |
+| équilibré (une semaine off sur trois) | **30 %** | 4ᵉ |
+| éviter les matchs dès que possible | **18 %** | 6ᵉ — jamais premier prétendant |
+
+L'arbitrage est celui du genre : une semaine off ne fait pas monter au classement, et ça se paie le soir du titre.
+
 ### Le classement
 
 Vous commencez **sixième prétendant**. Chaque victoire vous fait monter d'une place, chaque défaite en fait perdre
@@ -103,8 +162,8 @@ En **mode Scénarios** on ne monte pas au classement en gagnant le combat mais e
 plusieurs scripts exigent que votre lutteur perde, et faire monter le classement sur la victoire revenait à
 demander au joueur de saboter son propre show pour avoir son match de titre.
 
-La carrière compte 8 épisodes (salle de bingo → PPV), 2 matchs bookables par épisode — sauf le dernier, qui n'en
-propose qu'un — avec renforts, tables, échelle, cage et un champion du monde au bout.
+La carrière compte 8 semaines (salle de bingo → PPV) sur une carte à embranchements générée, avec renforts,
+tables, échelle, cage et un champion du monde au bout.
 
 ## Structure d'un lutteur
 
@@ -302,6 +361,26 @@ main event : les trois actes existaient dans le code et nulle part ailleurs.
 | 🔔 **Ouverture** | Build-up | Dégâts -15 %, momentum +35 %, chaleur -30 %, gros mouvements -15 % (personne n'y croit encore), tombés plus durs |
 | 🔥 **Corps du match** | Prendre l'avantage | Valeurs normales, soumissions +8 % d'abandon : c'est le moment d'user, de marquer et de contrôler le terrain |
 | 🏆 **Main event** | Tout donner | Dégâts +15 %, mouvements spectaculaires +15 %, chaleur +40 %, tombés +12 % |
+
+## Le son — synthétisé, pas téléchargé
+
+Le jeu n'avait **pas un seul son**. Pour du catch — la cloche, le claquement d'un corps sur le tapis, la salle —
+c'est le manque qui s'entend le plus.
+
+Tout est fabriqué au vol en **Web Audio** (`src/ui/sound.js`) : pas un octet de plus à télécharger, rien de neuf
+dans le service worker, et ça marche hors ligne comme le reste. Un vrai fichier de foule ferait mieux — il pèserait
+aussi plus lourd que tout le jeu réuni.
+
+Les sons se branchent sur les **événements du moteur**, pas sur les clics : un coup sonne parce que le moteur a dit
+« dégâts », donc les coups de l'IA sonnent aussi, et rien ne sonne quand une action est annulée.
+
+**La foule est une jauge qu'on entend.** Une nappe de bruit rose dont le volume suit la chaleur de la salle, avec un
+pic à chaque near-fall, chaque chute et chaque finisher. Depuis que la chaleur retombe pour de bon, on sent la salle
+se refroidir sans quitter le plateau des yeux.
+
+Le son se coupe depuis le menu ou depuis la barre du match, et le choix est retenu. Règle tenue dans tout le
+fichier : **aucune fonction audio ne peut faire planter un match** — pas de Web Audio, contexte refusé, onglet en
+arrière-plan, tout est avalé.
 
 ## Combos
 
@@ -686,14 +765,17 @@ src/data/    wrestlers.js     roster parodique
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              deck.js          le deck qui se construit en carrière (offre de cartes, plafond, oubli)
              rank.js          le classement et les trois termes du match de championnat
+             route.js         la carte à embranchements (nœuds, arêtes, vivier de matchs)
+             week.js          les semaines sans match : repos, coulisses, boutique
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
+             sound.js         cloche, coups, foule — tout synthétisé en Web Audio, aucun fichier
              spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
              spritepixel.js   palette, postures, vêtements peints sur le corps, rendu SVG
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, PWA
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, route, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique

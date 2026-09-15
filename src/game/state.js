@@ -7,6 +7,7 @@ import { avgHeat } from '../engine/util.js';
 import { evaluateDirectives, evaluateScript } from './script.js';
 import { deckBonus, cardOffer, deckSize, DECK_MAX, OFFRE } from './deck.js';
 import { moveRank, titleMatch, RANK_START, rankOf } from './rank.js';
+import { buildRoute, openNodes, nodeAt, isFight, rankStep, rankLoss, SEMAINE_TITRE } from './route.js';
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
@@ -25,9 +26,46 @@ export function newGame({ promoName, mode, starters }) {
     // remonter, et le huitième soir décide de tout. Une sauvegarde d'avant le
     // classement n'a pas ce champ : tous les lecteurs retombent sur RANK_START.
     rank: RANK_START,
+    // LA ROUTE. Une carte à embranchements tirée à la graine de la partie :
+    // deux carrières ne passent jamais par les mêmes semaines. `path` est la
+    // liste des nœuds déjà joués — c'est elle qui dit où l'on peut aller.
+    route: buildRoute(seed), path: [],
   };
   refreshFreeAgents(state);
   return state;
+}
+
+// Une sauvegarde d'avant la carte n'a pas de route : on lui en fabrique une à
+// sa propre graine, et on la place à la semaine où elle en était.
+export function ensureRoute(state) {
+  if (!state.route) { state.route = buildRoute(state.seed || 1); state.path = state.path || []; }
+  if (!state.path) state.path = [];
+  return state.route;
+}
+
+// Les nœuds ouverts cette semaine, prêts à afficher : type, match résolu,
+// et de quoi les distinguer d'un coup d'œil.
+export function weekNodes(state) {
+  ensureRoute(state);
+  const row = state.path.length;
+  if (row >= state.route.rows.length) return [];
+  return openNodes(state.route, state.path)
+    .map((col) => nodeAt(state.route, row, col))
+    .filter(Boolean)
+    .map((node) => (node.type === 'boss'
+      ? { ...node, match: titleMatch(node.match, state, SEASON.champion) }
+      : node));
+}
+
+// Avancer d'une semaine : on note par où l'on est passé, et la semaine
+// courante suit la longueur du chemin. C'est le seul endroit qui fait avancer
+// la carrière — match joué, semaine off ou passage au bureau du booker.
+export function takeNode(state, node) {
+  ensureRoute(state);
+  state.path.push({ row: node.row, col: node.col, type: node.type });
+  state.showIndex = state.path.length;
+  if (state.showIndex > SEMAINE_TITRE) state.showIndex = SEMAINE_TITRE;
+  else refreshFreeAgents(state);
 }
 
 // `cards` : les mouvements appris en carrière (voir `deck.js`). `forgotten` :
@@ -101,15 +139,16 @@ export function buildMatch(state, matchDef) {
   return { ...def, mode: state.mode, script: state.mode === 'scenario' ? def.script : null };
 }
 
-// Le match de championnat, c'est celui du dernier épisode — celui que la
-// saison marque `title_match`.
+// Le match de championnat se reconnaît à son identifiant, pas à la semaine où
+// on se trouve : avec une carte à embranchements, la position ne suffit plus
+// (et deux carrières n'arrivent pas au titre par le même chemin).
+export const TITLE_MATCH_ID = SEASON.shows[SEASON.shows.length - 1].matches[0].id;
 export function isTitleMatch(state, matchDef) {
-  const show = SEASON.shows[state.showIndex];
-  return !!(show && show.title_match && show.matches.some((m) => m.id === matchDef.id));
+  return !!matchDef && matchDef.id === TITLE_MATCH_ID;
 }
 
 // Applique le résultat d'un match de campagne. Renvoie un résumé pour l'écran de résultat.
-export function applyResult(state, battle, matchDef, teamIds) {
+export function applyResult(state, battle, matchDef, teamIds, node = null) {
   const won = battle.result.winner === 'player';
   const summary = { won, matchTitle: matchDef.title, money: 0, fans: 0, directives: [], script: null, advance: false, message: '' };
   if (state.mode === 'scenario') {
@@ -192,8 +231,13 @@ export function applyResult(state, battle, matchDef, teamIds) {
   const monte = state.mode === 'scenario' ? !!(summary.script && summary.script.finishOk) : won;
   if (!titre) {
     const avant = rankOf(state);
-    summary.rank = moveRank(state, monte);
+    // UN MAIN EVENT VAUT DEUX PLACES. C'est la raison de le prendre sur la
+    // carte, et l'adversaire plus dur en est la contrepartie.
+    const type = (node && node.type) || matchDef.nodeType || 'match';
+    const pas = monte ? rankStep(type) : rankLoss(type);
+    for (let i = 0; i < pas; i++) summary.rank = moveRank(state, monte);
     summary.rankBefore = avant;
+    summary.rankStep = pas;
     summary.rankReason = state.mode === 'scenario' ? 'finish' : 'victoire';
   } else {
     summary.rank = rankOf(state);
@@ -202,15 +246,15 @@ export function applyResult(state, battle, matchDef, teamIds) {
   }
   state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn, title: titre });
   if (summary.advance) {
-    state.showIndex += 1;
-    if (state.showIndex >= SEASON.shows.length) {
+    takeNode(state, node || { row: state.path ? state.path.length : 0, col: 0, type: titre ? 'boss' : (matchDef.nodeType || 'match') });
+    if (titre) {
       state.finished = true;
       // UNE SEULE QUESTION À LA FIN : la ceinture, ou pas. Le total de fans
       // n'est plus le verdict, seulement une mention sur l'écran de fin.
       state.champion = won;
       state.ending = won ? 'champion' : 'contender';
       state.sellout = state.fans >= SEASON.finalFansGoal;
-    } else refreshFreeAgents(state);
+    }
   }
   return summary;
 }

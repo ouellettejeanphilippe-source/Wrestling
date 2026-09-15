@@ -19,21 +19,21 @@ const app = {
   continueCampaign() { app.state = load(); if (!app.state) return app.toTitle(); app.toHub(); },
   abandonCampaign() { clearSave(); app.state = null; app.toTitle(); },
   saveNow() { if (app.state) save(app.state); },
-  bookMatch(matchDef, teamIds) {
+  bookMatch(matchDef, teamIds, node = null) {
     const match = buildMatch(app.state, matchDef);
     const playerTeam = teamIds.map((id) => WRESTLERS_BY_ID[id]);
     const battle = createBattle({ match, playerTeam, playerBonuses: playerBonuses(app.state), seed: Date.now() % 1000000 });
     window.__battle = battle;
     mountMatch(root, {
       battle, matchDef,
-      onFinish: (b) => { const s = applyResult(app.state, b, matchDef, teamIds); save(app.state); return s; },
+      onFinish: (b) => { const s = applyResult(app.state, b, matchDef, teamIds, node); save(app.state); return s; },
       // Le deck qui se construit : l'écran de résultat propose des cartes,
       // c'est ici qu'on les inscrit dans la sauvegarde. Rien de tout ça n'est
       // branché sur l'exhibition, plus bas — c'est voulu.
       onLearn: (id, moveId, oublie) => { const r = learnCard(app.state, id, moveId, oublie); if (r.ok) save(app.state); return r; },
       deckOf: (id) => { const e = app.state.roster.find((r) => r.id === id); return e ? [...knownMoves(e)] : []; },
       onContinue: () => app.toHub(),
-      onQuit: () => { battle.result = { winner: 'enemy', reason: 'Match abandonné.', turns: battle.turn }; const s = applyResult(app.state, battle, matchDef, teamIds); save(app.state); app.toHub(); void s; },
+      onQuit: () => { battle.result = { winner: 'enemy', reason: 'Match abandonné.', turns: battle.turn }; const s = applyResult(app.state, battle, matchDef, teamIds, node); save(app.state); app.toHub(); void s; },
     });
   },
   startExhibition(type, playerIds, enemyIds, opts = {}) {

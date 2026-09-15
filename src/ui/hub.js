@@ -6,7 +6,9 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { DIRECTIVES } from '../data/directives.js';
 import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
-import { currentShow, showMatches, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
+import { currentShow, weekNodes, ensureRoute, takeNode, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
+import { NODE_TYPES, SEMAINE_TITRE, isFight, rankStep } from '../game/route.js';
+import { restOptions, restTrain, restTrim, restGate, trimmable, eventFor, applyEvent, shopStock, buyCard, buyTrain, buyAds, buyAgent, SHOP_PRICES, SHOP_FANS } from '../game/week.js';
 import { rankLabel, titleTerms, championName, rankOf } from '../game/rank.js';
 import { describeFinish } from '../game/script.js';
 import { knownMoves, deckSize, forgetCard, DECK_MAX, DECK_MIN } from '../game/deck.js';
@@ -46,21 +48,184 @@ export function showHub(root, app, tab = 'show') {
 }
 
 function renderShow(show, st, app, root) {
+  ensureRoute(st);
   const box = h('div', {});
   box.append(h('h2', {}, show.title), h('p', { class: 'intro' }, show.intro));
-  box.append(h('p', { class: 'muted' }, st.mode === 'scenario' ? 'Choisissez un match à booker. Le script indique le finish imposé et les spots à réaliser ; la note en étoiles décide du cachet et du public. Le show continue quoi qu’il arrive — mais un finish non respecté est un « shoot », et ça se paie.' : 'Choisissez un match à booker. Les directives du Network sont des bonus si vous gagnez. Une défaite ne bloque pas la saison : elle vous coûte une partie de la salle.'));
+  box.append(renderRoute(st));
+  const ouverts = weekNodes(st);
+  box.append(h('p', { class: 'muted' }, st.path.length >= SEMAINE_TITRE
+    ? 'Le dernier soir. Il n’y a plus qu’une question.'
+    : st.mode === 'scenario'
+      ? 'Choisissez par où passer cette semaine. Un match rapporte au classement, le reste rapporte autre chose — et une semaine sans match est une place que vous n’aurez pas le soir du titre.'
+      : 'Choisissez par où passer cette semaine. Un match rapporte au classement, le reste rapporte autre chose — et une semaine sans match est une place que vous n’aurez pas le soir du titre.'));
   const list = h('div', { class: 'matches' });
-  for (const m of showMatches(st)) list.append(matchCard(m, st, app, root));
+  for (const node of ouverts) {
+    list.append(isFight(node.type) ? matchCard(node.match, st, app, root, node) : nodeCard(node, st, app, root));
+  }
   box.append(list);
   return box;
 }
 
-function matchCard(m, st, app, root) {
+// LA CARTE. Les semaines de bas en haut — on monte vers la ceinture. Les
+// arêtes sont tracées pour de vrai : sans elles on ne voit pas une route, on
+// voit une liste de colonnes.
+function renderRoute(st) {
+  const rows = st.route.rows;
+  const ouverts = new Set(weekNodes(st).map((n) => `${n.row}:${n.col}`));
+  const passes = new Set((st.path || []).map((p) => `${p.row}:${p.col}`));
+  const H = rows.length, pos = (row, col, len) => ({
+    x: ((col + 0.5) / len) * 100,
+    y: 100 - ((row + 0.5) / H) * 100,
+  });
+
+  const traits = [];
+  rows.forEach((row, r) => row.forEach((node) => {
+    for (const c of (node.next || [])) {
+      const a = pos(r, node.col, row.length), b = pos(r + 1, c, rows[r + 1].length);
+      const vif = passes.has(`${r}:${node.col}`) || ouverts.has(`${r + 1}:${c}`);
+      traits.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="${vif ? 'vif' : ''}" />`);
+    }
+  }));
+  const svg = h('div', { class: 'route-lines' });
+  svg.innerHTML = `<svg viewBox="0 0 100 100" preserveAspectRatio="none">${traits.join('')}</svg>`;
+
+  const grille = h('div', { class: 'route-rows' }, [...rows].reverse().map((row) => {
+    const r = row[0].row;
+    return h('div', { class: 'route-row' },
+      h('span', { class: 'route-week' }, r === SEMAINE_TITRE ? 'PPV' : `S${r + 1}`),
+      h('div', { class: 'route-nodes' }, row.map((node) => {
+        const t = NODE_TYPES[node.type];
+        const etat = passes.has(`${r}:${node.col}`) ? 'done' : ouverts.has(`${r}:${node.col}`) ? 'open' : 'far';
+        return h('span', { class: `route-node n-${node.type} ${etat}`, title: `${t.name} — ${t.desc}` }, t.icon);
+      })));
+  }));
+  return h('div', { class: 'route-map' }, svg, grille,
+    h('p', { class: 'route-key muted' }, Object.values(NODE_TYPES).map((t) => `${t.icon} ${t.name}`).join(' · ')));
+}
+
+// Les nœuds sans match : semaine off, coulisses, bureau du booker.
+function nodeCard(node, st, app, root) {
+  const t = NODE_TYPES[node.type];
+  const card = h('div', { class: `mcard node-card n-${node.type}` },
+    h('h3', {}, `${t.icon} ${t.name}`),
+    h('p', {}, t.desc),
+    h('p', { class: 'muted small' }, 'Pas de match cette semaine : le classement ne bouge pas.'));
+  if (node.type === 'rest') card.append(renderRest(node, st, app, root));
+  if (node.type === 'event') card.append(renderEvent(node, st, app, root));
+  if (node.type === 'shop') card.append(renderShop(node, st, app, root));
+  return card;
+}
+
+const passer = (st, app, root, node, message) => {
+  takeNode(st, node);
+  app.saveNow();
+  if (message) toast(message);
+  showHub(root, app, 'show');
+};
+
+function renderRest(node, st, app, root) {
+  const box = h('div', { class: 'node-actions' });
+  for (const o of restOptions(st)) {
+    box.append(h('button', { class: 'btn', disabled: !o.ok, onclick: () => {
+      if (o.key === 'gate') return passer(st, app, root, node, restGate(st).message);
+      if (o.key === 'train') return choisirLutteur(root, app, st, 'Qui s’entraîne ?', (r) => choisirStat(root, app, st, r, (stat) => {
+        const res = restTrain(st, r.id, stat);
+        if (!res.ok) return toast(res.reason, 'warn');
+        passer(st, app, root, node, res.message);
+      }));
+      return choisirLutteur(root, app, st, 'Quel deck resserrer ?', (r) => choisirCarte(root, app, st, r, (mv) => {
+        const res = restTrim(st, r.id, mv);
+        if (!res.ok) return toast(res.reason, 'warn');
+        passer(st, app, root, node, res.message);
+      }));
+    } }, `${o.icon} ${o.name}`, h('span', { class: 'muted' }, ` — ${o.desc}`)));
+  }
+  return box;
+}
+
+function renderEvent(node, st, app, root) {
+  const ev = eventFor(st, node);
+  const box = h('div', { class: 'node-actions' },
+    h('p', { class: 'event-text' }, `${ev.icon} ${ev.text}`));
+  ev.choices.forEach((c, i) => box.append(h('button', { class: 'btn', onclick: () => {
+    const res = applyEvent(st, node, i);
+    passer(st, app, root, node, res.message);
+  } }, c.label, h('span', { class: 'muted' }, ` — ${c.hint}`))));
+  return box;
+}
+
+function renderShop(node, st, app, root) {
+  const stock = shopStock(st, node);
+  const box = h('div', { class: 'node-actions' });
+  const lutteur = WRESTLERS_BY_ID[stock.lutteur];
+  for (const mv of stock.cartes) {
+    box.append(h('button', { class: 'btn', disabled: st.money < SHOP_PRICES.card, onclick: () => {
+      const res = buyCard(st, stock.lutteur, mv);
+      if (!res.ok) return toast(res.reason, 'warn');
+      passer(st, app, root, node, res.message);
+    } }, `🃏 ${MOVES[mv].name} pour ${lutteur ? lutteur.name : '—'} — ${SHOP_PRICES.card} $`,
+      h('span', { class: 'muted' }, ` ${MOVES[mv].desc}`)));
+  }
+  box.append(h('button', { class: 'btn', disabled: st.money < SHOP_PRICES.train, onclick: () => {
+    choisirLutteur(root, app, st, 'Qui s’entraîne ?', (r) => choisirStat(root, app, st, r, (stat) => {
+      const res = buyTrain(st, r.id, stat);
+      if (!res.ok) return toast(res.reason, 'warn');
+      passer(st, app, root, node, res.message);
+    }));
+  } }, `🏋️ Une séance — ${SHOP_PRICES.train} $`, h('span', { class: 'muted' }, ' Moins cher qu’au hub, et sans surcoût cumulé.')));
+  box.append(h('button', { class: 'btn', disabled: st.money < SHOP_PRICES.fans, onclick: () => {
+    const res = buyAds(st);
+    if (!res.ok) return toast(res.reason, 'warn');
+    passer(st, app, root, node, res.message);
+  } }, `📣 Campagne d’affichage — ${SHOP_PRICES.fans} $`, h('span', { class: 'muted' }, ` +${SHOP_FANS} fans.`)));
+  if (stock.agent && WRESTLERS_BY_ID[stock.agent]) {
+    box.append(h('button', { class: 'btn', disabled: st.money < stock.agentPrix, onclick: () => {
+      const res = buyAgent(st, stock.agent, stock.agentPrix);
+      if (!res.ok) return toast(res.reason, 'warn');
+      passer(st, app, root, node, res.message);
+    } }, `✍️ Signer ${WRESTLERS_BY_ID[stock.agent].name} — ${stock.agentPrix} $`, h('span', { class: 'muted' }, ' Tarif de faveur, cette semaine seulement.')));
+  }
+  box.append(h('button', { class: 'btn ghost', onclick: () => passer(st, app, root, node, 'Vous ressortez les mains vides.') }, 'Repartir sans rien acheter'));
+  return box;
+}
+
+// Deux petits sélecteurs partagés par la semaine off et la boutique.
+function choisirLutteur(root, app, st, titre, suite) {
+  overlayChoix(root, titre, st.roster.map((r) => ({
+    label: `${(WRESTLERS_BY_ID[r.id] || {}).name || r.id}`,
+    hint: `${r.wins}V-${r.losses}D · deck ${deckSize(r)}`,
+    onPick: () => suite(r),
+  })));
+}
+function choisirStat(root, app, st, r, suite) {
+  overlayChoix(root, `Quelle progression pour ${(WRESTLERS_BY_ID[r.id] || {}).name || r.id} ?`,
+    TRAINABLE.filter(([k, , step]) => r.bonus[k] / step < MAX_TRAIN).map(([k, label, step]) => ({
+      label: `+${step} ${label}`, hint: `actuel : ${r.bonus[k] / step}/${MAX_TRAIN}`, onPick: () => suite(k),
+    })));
+}
+function choisirCarte(root, app, st, r, suite) {
+  overlayChoix(root, `Quel mouvement ${(WRESTLERS_BY_ID[r.id] || {}).name || r.id} laisse-t-il tomber ?`,
+    trimmable(r).map((mv) => ({ label: MOVES[mv].name, hint: MOVES[mv].desc, onPick: () => suite(mv) })));
+}
+function overlayChoix(root, titre, options) {
+  const box = h('div', { class: 'result choix' }, h('h2', {}, titre));
+  if (!options.length) box.append(h('p', { class: 'muted' }, 'Rien de disponible.'));
+  const overlay = h('div', { class: 'overlay' }, box);
+  for (const o of options) {
+    box.append(h('button', { class: 'btn offer-card', onclick: () => { overlay.remove(); o.onPick(); } },
+      h('b', {}, o.label), h('span', { class: 'muted' }, o.hint || '')));
+  }
+  box.append(h('button', { class: 'btn ghost', onclick: () => overlay.remove() }, 'Annuler'));
+  root.append(overlay);
+}
+
+function matchCard(m, st, app, root, node = null) {
   const rules = MATCH_TYPES[m.type];
   const opp = m.enemies.map((e) => WRESTLERS_BY_ID[typeof e === 'string' ? e : e.id]);
   const card = h('div', { class: 'mcard' },
     h('h3', {}, `${rules.icon} ${m.title}`, h('span', { class: 'muted' }, ` — ${rules.name}, ${m.teamSize} de vos lutteurs`)),
     m.termsLabel ? h('p', { class: `terms-line terms-${m.terms}` }, m.termsLabel) : null,
+    node && node.type === 'elite' ? h('p', { class: 'terms-line terms-net' }, `⭐ Main event — une victoire vaut ${rankStep('elite')} places au classement.`) : null,
     h('p', {}, m.desc), h('p', { class: 'muted small' }, rules.desc),
     h('div', { class: 'opps' }, 'Adversaires : ', opp.map((d) => h('span', { class: 'opp', title: d.bio }, chip(d), ` ${d.name} (${CLASSES[d.cls].icon} ${CLASSES[d.cls].name} / ${SPECIALTIES[d.spec].icon} ${SPECIALTIES[d.spec].name})`))),
     m.reinforcements ? h('p', { class: 'small' }, `🚨 Renforts : ${m.reinforcements.map((r) => `tour ${r.turn} (${r.enemies.map((e) => WRESTLERS_BY_ID[e].name).join(', ')})`).join(' · ')}`) : null,
@@ -76,7 +241,7 @@ function matchCard(m, st, app, root) {
       const b = h('button', { class: 'tp', onclick: () => { if (picked.has(r.id)) picked.delete(r.id); else if (picked.size < m.teamSize) picked.add(r.id); else return toast(`Maximum ${m.teamSize}`, 'warn'); b.classList.toggle('on', picked.has(r.id)); } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${r.wins}V-${r.losses}D`));
       return b;
     })),
-    h('button', { class: 'btn primary', onclick: () => { if (picked.size !== m.teamSize) return toast(`Choisissez exactement ${m.teamSize} lutteur(s)`, 'warn'); app.bookMatch(m, [...picked]); } }, '🔔 Booker ce match'));
+    h('button', { class: 'btn primary', onclick: () => { if (picked.size !== m.teamSize) return toast(`Choisissez exactement ${m.teamSize} lutteur(s)`, 'warn'); app.bookMatch(m, [...picked], node); } }, '🔔 Booker ce match'));
   card.append(teamBox);
   return card;
 }

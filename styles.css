@@ -1089,3 +1089,47 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 .terms-line.terms-net { color: #ffd34a; }
 .terms-line.terms-avantage { color: #ffb03a; }
 .terms-line.terms-handicap { color: #e8433f; }
+
+/* ---- La route vers la ceinture : la carte à embranchements */
+.route-map { position: relative; margin: 10px 0 14px; }
+.route-lines { position: absolute; inset: 0 0 26px 34px; pointer-events: none; }
+.route-lines svg { width: 100%; height: 100%; }
+.route-lines line { stroke: rgba(255, 255, 255, 0.13); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.route-lines line.vif { stroke: rgba(255, 176, 58, 0.55); stroke-width: 1.4; }
+.route-rows { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.route-row { display: flex; align-items: center; gap: 8px; }
+.route-week {
+  width: 30px; flex: 0 0 30px; text-align: right;
+  font-size: 0.64rem; letter-spacing: 0.04em; color: var(--muted, #8a8f98);
+}
+.route-nodes { flex: 1; display: flex; justify-content: space-around; }
+.route-node {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; font-size: 0.95rem;
+  background: #171a20; border: 2px solid rgba(255, 255, 255, 0.14);
+  transition: transform 0.12s ease;
+}
+.route-node.far { opacity: 0.32; }
+.route-node.done { border-color: rgba(255, 255, 255, 0.4); opacity: 0.6; }
+.route-node.open { border-color: #ffb03a; box-shadow: 0 0 0 3px rgba(255, 176, 58, 0.18); transform: scale(1.12); }
+.route-node.n-boss { border-color: #ffd34a; }
+.route-node.n-boss.open { box-shadow: 0 0 0 4px rgba(255, 211, 74, 0.28); }
+.route-node.n-elite.open { border-color: #ff7a3a; box-shadow: 0 0 0 3px rgba(255, 122, 58, 0.2); }
+.route-key { margin: 8px 0 0 34px; font-size: 0.68rem; }
+
+/* Les nœuds sans match */
+.node-card .node-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.node-card .node-actions .btn { text-align: left; }
+.node-card .node-actions .btn .muted { font-weight: 400; font-size: 0.78rem; }
+.node-card .event-text { font-style: italic; line-height: 1.45; margin: 0 0 4px; }
+.mcard.n-rest { border-left: 3px solid #6fd3a0; }
+.mcard.n-event { border-left: 3px solid #8ab4ff; }
+.mcard.n-shop { border-left: 3px solid #ffb03a; }
+
+.result.choix { max-width: 560px; }
+.result.choix .offer-card { width: 100%; max-width: none; margin-bottom: 6px; }
+
+@media (max-width: 720px) {
+  .route-node { width: 26px; height: 26px; font-size: 0.82rem; }
+  .route-lines { inset: 0 0 24px 30px; }
+}
