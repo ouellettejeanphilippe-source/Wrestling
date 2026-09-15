@@ -51,15 +51,60 @@ joueur. La nouvelle version prend la main au lancement suivant.
 | Mode | Vous êtes… | Objectif d'un match | Récompenses |
 | --- | --- | --- | --- |
 | **🎭 Kayfabe** | le promoteur d'une promotion qui monte | gagner le match | argent + fans, bonus pour les **directives du Network** |
-| **🎬 Scénarios (IRL)** | le booker en coulisses | réaliser le **script** : un finish imposé (parfois *votre* lutteur doit perdre) + des spots | note en étoiles (★1 à ★5) → argent + fans ; sous 2,5★ le Network exige une reprise |
+| **🎬 Scénarios (IRL)** | le booker en coulisses | réaliser le **script** : un finish imposé (parfois *votre* lutteur doit perdre) + des spots | note en étoiles (★1 à ★5) → argent + fans ; le classement monte sur le finish livré |
 
 En mode Scénarios, vos lutteurs ont deux actions supplémentaires : **Vendre** (prendre un bump : chaleur, momentum
 pour l'adversaire) et **Faire le job** (prendre le tombé / abandonner / passer par-dessus la corde, quand le script le
 prévoit). L'adversaire IA « travaille » le match : ses tombés contraires au script réussissent rarement… mais un
 **shoot** reste possible.
 
-La saison compte 8 épisodes (salle de bingo → PPV), 2 matchs bookables par épisode, avec renforts, tables,
-échelle, cage et un Boss Final.
+## La carrière — courte, et une seule question au bout
+
+Une carrière, c'est **huit soirs** : sept matchs de route, puis le **Championnat du Monde**. Elle se termine
+toujours par ce match-là, et elle se raconte en une phrase — il est reparti avec la ceinture, ou il est reparti
+sans.
+
+Avant, elle se terminait sur un total de fans (« 2 000 à l'arrivée, sinon la fin *ok* »). Un nombre en guise
+d'histoire : on pouvait jouer huit épisodes sans jamais savoir vers quoi on allait. Le public est maintenant le
+**moyen** — il achète les entraînements et les recrues — et plus le but.
+
+### Le classement
+
+Vous commencez **sixième prétendant**. Chaque victoire vous fait monter d'une place, chaque défaite en fait perdre
+une, et votre place le soir du PPV fixe les **conditions** du match de titre. Elle ne décide jamais si vous l'avez :
+vous l'avez toujours.
+
+| Classement | Le soir du titre | À roster égal |
+| --- | --- | --- |
+| **1ᵉʳ prétendant** (6-7 victoires) | ⚖️ Un contre un. Le champion vous doit un match propre. | ceinture **55 %** |
+| **2ᵉ à 5ᵉ** (4-5 victoires) | 🪙 Un contre un, mais il a choisi la date, la salle et l'arbitre : +25 PV, +1 partout. | **37 %** |
+| **6ᵉ et en dessous** (≤3 victoires) | 🐺 Il prend le match pour l'insulte et **amène son homme de main** — amenez le vôtre. | **15 %** |
+
+Ces trois taux sont mesurés **à roster égal** : soixante finales par palier, avec le même roster de fin de carrière.
+C'est ce que valent les conditions elles-mêmes.
+
+Sur **cent carrières complètes** jouées de bout en bout (avec entraînement entre les épisodes, comme un vrai
+joueur), **28 % finissent avec la ceinture**, et le classement du soir se répartit **17 / 59 / 24** entre les trois
+paliers : celui du milieu est le cas courant, les deux autres se méritent ou se paient. L'écart entre paliers y est
+plus serré (35 / 29 / 21) qu'à roster égal — sur des échantillons de cette taille, seul le palier de la ceinture
+gagnée un tiers du temps est solide.
+
+Trois choses trouvées en mesurant, et gardées dans `src/game/rank.js` pour ne pas les refaire :
+
+- **Le un contre deux est un mur, pas une punition** : 0 victoire sur 40, dans toutes ses variantes, même contre un
+  champion sans bonus. L'infériorité numérique ne se négocie pas dans ce moteur. Le champion amène donc son homme,
+  et vous avez le droit d'amener le vôtre.
+- **Partir huitième envoyait 37 carrières sur 40 dans le pire palier.** Un palier que presque tout le monde touche
+  n'est pas un palier.
+- **Au-delà de +25 PV / +1 stat, le bonus du champion ne fait plus rien** (+35/+2 donne le même 38 %). Il ne devient
+  pas plus dur, juste plus lent à tomber.
+
+En **mode Scénarios** on ne monte pas au classement en gagnant le combat mais en **livrant le finish demandé** :
+plusieurs scripts exigent que votre lutteur perde, et faire monter le classement sur la victoire revenait à
+demander au joueur de saboter son propre show pour avoir son match de titre.
+
+La carrière compte 8 épisodes (salle de bingo → PPV), 2 matchs bookables par épisode — sauf le dernier, qui n'en
+propose qu'un — avec renforts, tables, échelle, cage et un champion du monde au bout.
 
 ## Structure d'un lutteur
 
@@ -640,6 +685,7 @@ src/data/    wrestlers.js     roster parodique
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
              deck.js          le deck qui se construit en carrière (offre de cartes, plafond, oubli)
+             rank.js          le classement et les trois termes du match de championnat
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
@@ -647,7 +693,7 @@ src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, campagne, PWA
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique

@@ -6,7 +6,8 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { DIRECTIVES } from '../data/directives.js';
 import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
-import { currentShow, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
+import { currentShow, showMatches, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
+import { rankLabel, titleTerms, championName, rankOf } from '../game/rank.js';
 import { describeFinish } from '../game/script.js';
 import { knownMoves, deckSize, forgetCard, DECK_MAX, DECK_MIN } from '../game/deck.js';
 import { isCard } from '../engine/hand.js';
@@ -18,8 +19,21 @@ export function showHub(root, app, tab = 'show') {
   const show = currentShow(st);
   const header = h('header', { class: 'hub-head' },
     h('div', {}, h('h1', {}, st.promoName), h('div', { class: 'muted' }, `${st.mode === 'scenario' ? '🎬 Mode Scénarios (IRL)' : '🎭 Mode Kayfabe'} · ${SEASON.name} · Épisode ${st.showIndex + 1}/${SEASON.shows.length}`)),
-    h('div', { class: 'hub-stats' }, h('span', {}, `💰 ${st.money} $`), h('span', {}, `👥 ${st.fans} fans`), h('span', { class: 'muted' }, `Objectif PPV : ${SEASON.finalFansGoal} fans`)),
+    h('div', { class: 'hub-stats' }, h('span', {}, `💰 ${st.money} $`), h('span', {}, `👥 ${st.fans} fans`)),
   );
+  // LA ROUTE VERS LA CEINTURE, TOUJOURS À L'ÉCRAN. C'est la seule question de
+  // la carrière : on doit pouvoir lire à tout moment où on en est et ce que ça
+  // vaudra le soir du titre.
+  const t = titleTerms(rankOf(st));
+  const reste = SEASON.shows.length - 1 - st.showIndex;
+  header.append(h('div', { class: `rank-band terms-${t.key}` },
+    h('b', {}, `🥇 ${rankLabel(rankOf(st))}`),
+    h('span', {}, reste > 0
+      ? `${reste} match${reste > 1 ? 's' : ''} avant le ${SEASON.beltName} contre ${championName(SEASON.champion)}.`
+      : `Ce soir : ${SEASON.beltName} contre ${championName(SEASON.champion)}.`),
+    h('span', { class: 'terms' }, `${t.icon} ${t.name} — ${t.odds}`),
+    h('span', { class: 'muted' }, 'Chaque victoire vous fait monter d’une place, chaque défaite en fait perdre une. Vous aurez votre match de titre quoi qu’il arrive : c’est votre classement qui en fixe les conditions.'),
+  ));
   const tabs = h('nav', { class: 'tabs' }, [['show', '📺 Le show'], ['roster', '🧑‍🤝‍🧑 Roster & entraînement'], ['agents', '📝 Agents libres'], ['history', '📜 Historique']].map(([id, label]) =>
     h('button', { class: `tab ${tab === id ? 'on' : ''}`, onclick: () => showHub(root, app, id) }, label)));
   const body = h('div', { class: 'hub-body' });
@@ -36,7 +50,7 @@ function renderShow(show, st, app, root) {
   box.append(h('h2', {}, show.title), h('p', { class: 'intro' }, show.intro));
   box.append(h('p', { class: 'muted' }, st.mode === 'scenario' ? 'Choisissez un match à booker. Le script indique le finish imposé et les spots à réaliser ; la note en étoiles décide du cachet et du public. Le show continue quoi qu’il arrive — mais un finish non respecté est un « shoot », et ça se paie.' : 'Choisissez un match à booker. Les directives du Network sont des bonus si vous gagnez. Une défaite ne bloque pas la saison : elle vous coûte une partie de la salle.'));
   const list = h('div', { class: 'matches' });
-  for (const m of show.matches) list.append(matchCard(m, st, app, root));
+  for (const m of showMatches(st)) list.append(matchCard(m, st, app, root));
   box.append(list);
   return box;
 }
@@ -46,6 +60,7 @@ function matchCard(m, st, app, root) {
   const opp = m.enemies.map((e) => WRESTLERS_BY_ID[typeof e === 'string' ? e : e.id]);
   const card = h('div', { class: 'mcard' },
     h('h3', {}, `${rules.icon} ${m.title}`, h('span', { class: 'muted' }, ` — ${rules.name}, ${m.teamSize} de vos lutteurs`)),
+    m.termsLabel ? h('p', { class: `terms-line terms-${m.terms}` }, m.termsLabel) : null,
     h('p', {}, m.desc), h('p', { class: 'muted small' }, rules.desc),
     h('div', { class: 'opps' }, 'Adversaires : ', opp.map((d) => h('span', { class: 'opp', title: d.bio }, chip(d), ` ${d.name} (${CLASSES[d.cls].icon} ${CLASSES[d.cls].name} / ${SPECIALTIES[d.spec].icon} ${SPECIALTIES[d.spec].name})`))),
     m.reinforcements ? h('p', { class: 'small' }, `🚨 Renforts : ${m.reinforcements.map((r) => `tour ${r.turn} (${r.enemies.map((e) => WRESTLERS_BY_ID[e].name).join(', ')})`).join(' · ')}`) : null,
@@ -123,15 +138,23 @@ function renderHistory(st) {
 export function showSeasonEnd(root, app) {
   const st = app.state;
   clear(root);
-  const good = st.ending === 'good';
-  root.append(h('div', { class: 'setup season-end' },
-    h('h1', {}, good ? '🏆 Fin de saison : succès total' : '📺 Fin de saison'),
-    h('p', {}, good
-      ? `${st.promoName} termine la saison avec ${st.fans} fans. Le Network signe un contrat de cinq ans, le buffet est enfin chaud, et quelqu’un a même acheté un vrai ring.`
-      : `${st.promoName} termine la saison avec ${st.fans} fans (objectif : ${SEASON.finalFansGoal}). Le Network renouvelle pour six épisodes, à condition de trouver une meilleure salle que le bingo.`),
-    h('p', { class: 'muted' }, 'Les huit épisodes se jouent quoi qu’il arrive : une défaite fait avancer le show, elle coûte une partie de la salle. C’est le total de fans à l’arrivée qui décide.'),
-    h('p', { class: 'muted' }, `Argent final : ${st.money} $ · Matchs : ${st.history.filter((x) => x.won).length} victoires / ${st.history.length}`),
+  // UNE CARRIÈRE SE RACONTE EN UNE PHRASE. Cet écran affichait un total de
+  // fans ; il doit répondre à la seule question qu'on se posait depuis le
+  // premier épisode.
+  const champion = st.champion === true || st.ending === 'champion';
+  const route = st.history.filter((x) => !x.title);
+  const victoires = route.filter((x) => x.won).length;
+  const terme = titleTerms(rankOf(st));
+  root.append(h('div', { class: `setup season-end ${champion ? 'won' : 'lost'}` },
+    h('h1', {}, champion ? `🏆 CHAMPION DU MONDE` : '🥈 La ceinture attendra'),
+    h('p', {}, champion
+      ? `${st.promoName} repart avec le ${SEASON.beltName}. ${championName(SEASON.champion)} a lâché la ceinture au bout de sept matchs de route et d’un main event que la salle n’oubliera pas.`
+      : `${championName(SEASON.champion)} garde le ${SEASON.beltName}. Vous êtes arrivé jusqu’au main event — ${rankLabel(rankOf(st)).toLowerCase()}, ${terme.name.toLowerCase()} — et il s’en est fallu de peu, ou de beaucoup.`),
+    h('p', { class: 'muted' }, champion
+      ? 'Une carrière, huit soirs, une ceinture. La prochaine repart de la salle de bingo : nouveau roster, nouveau deck, nouveau champion à aller chercher.'
+      : `La route décide des conditions du soir : ${victoires} victoire${victoires > 1 ? 's' : ''} sur ${route.length} vous ont amené ${rankLabel(rankOf(st)).toLowerCase()}. Six victoires ou plus, et le champion vous doit un match propre.`),
+    h('p', { class: 'muted' }, `${st.fans} fans${st.sellout ? ` — la salle est pleine (objectif ${SEASON.finalFansGoal} atteint)` : ''} · ${st.money} $ · ${st.history.filter((x) => x.won).length} victoires / ${st.history.length} matchs`),
     renderHistory(st),
-    h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => app.abandonCampaign() }, 'Nouvelle saison'), h('button', { class: 'btn ghost', onclick: () => app.toTitle() }, 'Menu')),
+    h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => app.abandonCampaign() }, 'Nouvelle carrière'), h('button', { class: 'btn ghost', onclick: () => app.toTitle() }, 'Menu')),
   ));
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { newGame, train, recruit, applyResult, buildMatch, currentShow, exhibitionMatch } from '../src/game/state.js';
 import { evaluateScript, finishMatches } from '../src/game/script.js';
 import { createBattle, autoPlay } from '../src/engine/battle.js';
+import { rankOf } from '../src/game/rank.js';
 import { WRESTLERS_BY_ID } from '../src/data/wrestlers.js';
 import { SEASON } from '../src/data/campaign.js';
 
@@ -61,7 +62,9 @@ test('la saison va toujours au bout : c’est le total de fans qui décide', () 
     }
     assert.equal(st.finished, true, `${mode} : la saison se termine même en perdant tout`);
     assert.equal(joues, SEASON.shows.length, `${mode} : un match par épisode, pas de reprise`);
-    assert.equal(st.ending, 'ok', `${mode} : mais sans l’objectif du PPV`);
+    assert.equal(st.ending, 'contender', `${mode} : mais reparti sans la ceinture`);
+    // Et on est descendu au fond du classement en chemin.
+    assert.equal(rankOf(st), 10, `${mode} : sept défaites, c’est le fond du classement`);
   }
 });
 

@@ -1060,3 +1060,32 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   cursor: pointer; font-size: 0.72rem; line-height: 1; padding: 2px 3px;
 }
 .deck-drop:hover { opacity: 1; color: #e8433f; }
+
+/* ---- La route vers la ceinture : classement et conditions du match de titre */
+.rank-band {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+  margin-top: 8px; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.04); border-left: 3px solid var(--muted, #888);
+}
+.rank-band b { font-size: 0.92rem; }
+.rank-band .terms { font-weight: 600; }
+.rank-band .muted { flex-basis: 100%; font-size: 0.72rem; line-height: 1.35; }
+.rank-band.terms-net { border-left-color: #ffd34a; }
+.rank-band.terms-net .terms { color: #ffd34a; }
+.rank-band.terms-avantage { border-left-color: #ffb03a; }
+.rank-band.terms-avantage .terms { color: #ffb03a; }
+.rank-band.terms-handicap { border-left-color: #e8433f; }
+.rank-band.terms-handicap .terms { color: #e8433f; }
+
+.season-end.won h1 { color: #ffd34a; text-shadow: 0 0 22px rgba(255, 211, 74, 0.35); }
+.season-end.lost h1 { color: var(--muted, #9aa); }
+
+.rank-move { font-weight: 600; margin: 6px 0; }
+.rank-move.up { color: #ffd34a; }
+.rank-move.down { color: #e8433f; }
+.rank-move .muted { font-weight: 400; font-size: 0.8rem; }
+
+.terms-line { font-weight: 700; margin: 2px 0 6px; font-size: 0.86rem; }
+.terms-line.terms-net { color: #ffd34a; }
+.terms-line.terms-avantage { color: #ffb03a; }
+.terms-line.terms-handicap { color: #e8433f; }

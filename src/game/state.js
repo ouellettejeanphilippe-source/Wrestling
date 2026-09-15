@@ -6,6 +6,7 @@ import { createRng } from '../engine/rng.js';
 import { avgHeat } from '../engine/util.js';
 import { evaluateDirectives, evaluateScript } from './script.js';
 import { deckBonus, cardOffer, deckSize, DECK_MAX, OFFRE } from './deck.js';
+import { moveRank, titleMatch, RANK_START, rankOf } from './rank.js';
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
@@ -20,6 +21,10 @@ export function newGame({ promoName, mode, starters }) {
   const state = {
     version: 1, promoName: promoName || 'PPW — Parodie Pro Wrestling', mode: mode || 'kayfabe', showIndex: 0,
     money: 800, fans: 100, seed, roster: starters.map((id) => rosterEntry(id)), freeAgents: [], history: [], finished: false, ending: null,
+    // La carrière commence huitième prétendant. Sept matchs de route pour
+    // remonter, et le huitième soir décide de tout. Une sauvegarde d'avant le
+    // classement n'a pas ce champ : tous les lecteurs retombent sur RANK_START.
+    rank: RANK_START,
   };
   refreshFreeAgents(state);
   return state;
@@ -40,6 +45,16 @@ export function load() {
 export function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ } }
 
 export const currentShow = (state) => SEASON.shows[state.showIndex] || null;
+
+// LES MATCHS DE L'ÉPISODE, TELS QU'ILS SERONT JOUÉS. Le hub doit annoncer le
+// match de titre avec ses vraies conditions — ses vrais adversaires et le
+// nombre de lutteurs qu'il faut amener — sinon l'écran promet un contre un et
+// le moteur en sert un autre.
+export function showMatches(state) {
+  const show = currentShow(state);
+  if (!show) return [];
+  return show.title_match ? show.matches.map((m) => titleMatch(m, state, SEASON.champion)) : show.matches;
+}
 export const rosterDefs = (state) => state.roster.map((r) => WRESTLERS_BY_ID[r.id]);
 // Ce que la campagne transmet au moteur pour chaque lutteur : les bonus
 // d'entraînement ET son deck. L'exhibition n'appelle jamais cette fonction :
@@ -79,7 +94,18 @@ export function train(state, id, stat) {
 export const trainCost = (r) => TRAIN_COST + r.trainings * 25;
 
 export function buildMatch(state, matchDef) {
-  return { ...matchDef, mode: state.mode, script: state.mode === 'scenario' ? matchDef.script : null };
+  // LE MATCH DE TITRE SE CONSTRUIT AU DERNIER MOMENT, à partir du classement :
+  // c'est le seul endroit du jeu où la route parcourue change ce qui vous
+  // attend dans le ring.
+  const def = isTitleMatch(state, matchDef) ? titleMatch(matchDef, state, SEASON.champion) : matchDef;
+  return { ...def, mode: state.mode, script: state.mode === 'scenario' ? def.script : null };
+}
+
+// Le match de championnat, c'est celui du dernier épisode — celui que la
+// saison marque `title_match`.
+export function isTitleMatch(state, matchDef) {
+  const show = SEASON.shows[state.showIndex];
+  return !!(show && show.title_match && show.matches.some((m) => m.id === matchDef.id));
 }
 
 // Applique le résultat d'un match de campagne. Renvoie un résumé pour l'écran de résultat.
@@ -152,12 +178,38 @@ export function applyResult(state, battle, matchDef, teamIds) {
     if (!offer.length) return null;
     return { id, name: (WRESTLERS_BY_ID[id] || {}).name || id, offer, deck: deckSize(entry), max: DECK_MAX, mustForget: deckSize(entry) >= DECK_MAX };
   }).filter(Boolean);
-  state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn });
+  // LE CLASSEMENT BOUGE À CHAQUE MATCH DE ROUTE, jamais au match de titre : le
+  // soir du PPV, on ne monte plus au classement, on prend la ceinture ou on
+  // ne la prend pas.
+  const titre = isTitleMatch(state, matchDef);
+  summary.title = titre;
+  // CE QUI FAIT MONTER AU CLASSEMENT N'EST PAS LE MÊME MÉTIER DANS LES DEUX
+  // MODES. En Kayfabe on est le lutteur : on monte en gagnant. En Scénarios on
+  // est le bookeur, et plusieurs scripts EXIGENT qu'on perde — y faire monter
+  // le classement sur la victoire demandait au joueur de saboter son propre
+  // show pour avoir son match de titre. On y monte donc en livrant le finish
+  // demandé, qui est la monnaie de ce mode.
+  const monte = state.mode === 'scenario' ? !!(summary.script && summary.script.finishOk) : won;
+  if (!titre) {
+    const avant = rankOf(state);
+    summary.rank = moveRank(state, monte);
+    summary.rankBefore = avant;
+    summary.rankReason = state.mode === 'scenario' ? 'finish' : 'victoire';
+  } else {
+    summary.rank = rankOf(state);
+    summary.rankBefore = summary.rank;
+    summary.champion = won;
+  }
+  state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn, title: titre });
   if (summary.advance) {
     state.showIndex += 1;
     if (state.showIndex >= SEASON.shows.length) {
       state.finished = true;
-      state.ending = state.fans >= SEASON.finalFansGoal ? 'good' : 'ok';
+      // UNE SEULE QUESTION À LA FIN : la ceinture, ou pas. Le total de fans
+      // n'est plus le verdict, seulement une mention sur l'écran de fin.
+      state.champion = won;
+      state.ending = won ? 'champion' : 'contender';
+      state.sellout = state.fans >= SEASON.finalFansGoal;
     } else refreshFreeAgents(state);
   }
   return summary;

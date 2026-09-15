@@ -47,7 +47,8 @@ test('une saison entière se joue jusqu’au bout, dans les deux modes', () => {
     const { st, joues } = saison(mode);
     assert.equal(st.finished, true, `${mode} : la saison se termine`);
     assert.equal(joues.length, SEASON.shows.length, `${mode} : un match par épisode, aucune reprise imposée`);
-    assert.ok(['good', 'ok'].includes(st.ending));
+    assert.ok(['champion', 'contender'].includes(st.ending), `${mode} : la carrière finit sur la ceinture, ou pas`);
+    assert.equal(typeof st.champion, 'boolean', `${mode} : une seule question à la fin`);
     assert.ok(st.fans > 0, `${mode} : la promotion a un public`);
   }
 });

@@ -10,6 +10,8 @@ import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt, pathIn } from '../en
 import { deckState, isCard } from '../engine/hand.js';
 import { unitAt, living, avgHeat } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
+import { SEASON } from '../data/campaign.js';
+import { rankLabel, titleTerms } from '../game/rank.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 import { matchPhase } from '../engine/phases.js';
 import { activeCombos } from '../engine/battle.js';
@@ -1082,6 +1084,20 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         for (const d of summary.directives) box.append(h('div', { class: `obj-item ${d.done ? 'done' : ''}` }, `${d.done ? '✅' : '⬜'} ${d.name} ${d.done ? `(+${d.reward.fans} fans, +${d.reward.money} $)` : ''}`));
       }
       box.append(h('p', { class: 'reward' }, `${summary.money >= 0 ? '+' : ''}${summary.money} $ · ${summary.fans >= 0 ? '+' : ''}${summary.fans} fans`), h('p', {}, summary.message));
+      // LA ROUTE VERS LA CEINTURE. Un match de carrière ne rapporte pas que de
+      // l'argent : il déplace la place au classement, et c'est elle qui fixera
+      // les conditions du match de titre.
+      if (summary.title) {
+        box.append(h('p', { class: `rank-move ${summary.champion ? 'up' : 'down'}` }, summary.champion
+          ? `🏆 LA CEINTURE EST À VOUS. ${SEASON.beltName}.`
+          : `🥈 Le champion garde le ${SEASON.beltName}.`));
+      } else if (summary.rank !== undefined) {
+        const monte = summary.rank < summary.rankBefore;
+        const t = titleTerms(summary.rank);
+        box.append(h('p', { class: `rank-move ${monte ? 'up' : 'down'}` },
+          `${monte ? '▲' : '▼'} ${rankLabel(summary.rankBefore)} → ${rankLabel(summary.rank)}`,
+          h('span', { class: 'muted' }, ` · au titre ce serait : ${t.icon} ${t.name}`)));
+      }
     }
     // L'HISTOIRE DU MATCH. C'est ce qu'on raconte le lendemain, et c'est ce qui
     // manquait : le match produisait des chiffres, jamais une phrase. Elle est
