@@ -67,8 +67,9 @@ méta-jeu n'a qu'une seule bonne partie.
 **Six lutteurs au départ, vingt-neuf en tout.** Chaque carrière en ouvre d'autres. Le modèle est celui de *Slay the
 Spire* (on débloque la Silencieuse en terminant avec l'Ironclad) et de *Binding of Isaac*.
 
-Le premier lutteur choisi est la **tête d'affiche** : c'est *sa* carrière, et c'est avec lui que comptent les
-déblocages. Les deux autres sont ses partenaires.
+Le lutteur choisi est celui dont c'est la carrière, et c'est avec lui que comptent les déblocages. Les autres
+noms du vestiaire ne sont pas décoratifs pour autant : ce sont eux qu'on appelle en **partenaire d'un soir** sur un
+nœud « match par équipes ».
 
 Deux règles décident de tout le reste :
 
@@ -99,9 +100,47 @@ carrière où il ne s'est rien passé.
 
 ## La carrière — courte, et une seule question au bout
 
-Une carrière, c'est **huit soirs** : sept matchs de route, puis le **Championnat du Monde**. Elle se termine
-toujours par ce match-là, et elle se raconte en une phrase — il est reparti avec la ceinture, ou il est reparti
-sans.
+Une carrière, c'est **un lutteur** et **huit soirs** : sept matchs de route, puis le **Championnat du Monde**. Elle
+se termine toujours par ce match-là, et elle se raconte en une phrase — il est reparti avec la ceinture, ou il est
+reparti sans.
+
+**Un seul lutteur**, pas une écurie. C'est lui qu'on entraîne, c'est son deck qui grossit, c'est sa fiche, et c'est
+avec lui que comptent les déblocages du vestiaire. On ne recrute plus personne : il n'y a pas de roster où faire
+entrer quelqu'un.
+
+### Les matchs par équipes : possibles, jamais obligatoires
+
+Neuf des quatorze matchs écrits demandent deux ou trois lutteurs. Ils n'ont pas disparu — ils sont devenus un
+**type de nœud** sur la carte (🤝), avec un **partenaire d'un soir** choisi parmi les lutteurs qu'on a débloqués.
+Chaque nom gagné au vestiaire sert donc deux fois : on peut faire sa carrière, et on peut l'appeler en renfort. Le
+partenaire vient pour la soirée : il ne rejoint pas la carrière, ne s'entraîne pas, ne gagne pas de carte.
+
+Et **aucun chemin ne peut l'imposer**. L'invariant « au moins un match jouable seul » ne suffisait pas par ligne :
+le joueur ne voit que les nœuds vers lesquels son nœud pointe, et **7,1 %** des ensembles accessibles ne
+proposaient que du tag. Chaque nœud mène maintenant à au moins une porte qu'on passe seul — vérifié en explorant
+*tous* les chemins de 150 cartes.
+
+On ne transforme jamais un match d'équipe en un contre deux : mesuré, l'infériorité numérique donne **0 victoire
+sur 40** dans ce moteur.
+
+### Six soirs en solo, et cinq stipulations enfin jouées
+
+Il ne restait que **cinq** matchs jouables seul dans les shows écrits — cinq matchs pour sept semaines, c'était la
+même soirée trois fois. Six matchs solo ont été ajoutés, et tant qu'à les écrire, ils font servir les cinq
+stipulations que la campagne n'utilisait **jamais** alors qu'elles étaient écrites, mesurées et jouables :
+**street fight**, **soumission uniquement**, **Last Man Standing**, **TLC** et **Hell in a Cell**. Une carrière
+traverse maintenant les 13 stipulations du jeu, contre 8 avant.
+
+### Ce que le solo a cassé dans l'économie
+
+Tout l'argent va sur un seul homme. À barème inchangé, il finissait avec **+15** de bonus de stats au lieu des
+**+5** que chacun avait quand on en entraînait trois — trois fois plus fort, et la ceinture tombait **55 fois sur
+100** au lieu de 30.
+
+On ne baisse pas les revenus (ils servent aussi aux cartes et à l'affichage) : chaque progression coûte
+**100 $ de plus que la précédente** au lieu de 25. Mesuré après correction : **+8** de bonus, **0,8** stat au
+maximum sur 5, et **35 %** de ceintures. Tout maximiser est hors de portée d'une carrière — il faut choisir ce que
+son lutteur devient.
 
 Avant, elle se terminait sur un total de fans (« 2 000 à l'arrivée, sinon la fin *ok* »). Un nombre en guise
 d'histoire : on pouvait jouer huit épisodes sans jamais savoir vers quoi on allait. Le public est maintenant le
@@ -776,8 +815,8 @@ l'une ni l'autre n'est une décision.* La cible est 25–75 % de réussite.
 ## Hub de promotion (entre les shows)
 
 - **Le show** : 2 matchs bookables, adversaires, directives/scripts, récompenses ; choix de l'équipe.
-- **Roster & entraînement** : +1 stat / +10 PV contre de l'argent (max 5 par stat).
-- **Agents libres** : 3 recrues par épisode, salaire payé à la signature.
+- **Votre lutteur** : +1 stat / +10 PV contre de l'argent (max 5 par stat, chaque progression plus chère que la
+  précédente), et son deck, qu'on peut y tailler.
 - **Historique** ; sauvegarde automatique dans `localStorage`.
 
 ## Code

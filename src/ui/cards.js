@@ -93,7 +93,18 @@ export function rosterPicker(defs, opts = {}) {
   const tiles = new Map();
 
   function toggle(def) {
+    // LA PREMIÈRE TUILE EST DÉJÀ POINTÉE AU CHARGEMENT. La consigne dit
+    // « appuyez une fois pour lire, une seconde fois pour choisir » — sur
+    // celle-là, le premier appui choisissait et le second DÉCHOISISSAIT. Un
+    // joueur qui suit la consigne à la lettre repartait donc les mains vides.
+    // Quand il n'y a qu'une place, on ne déchoisit pas : on choisit ailleurs.
+    if (picked.has(def.id) && max === 1) return { ok: true };
     if (picked.has(def.id)) picked.delete(def.id);
+    // UN CHOIX UNIQUE SE REMPLACE, IL NE SE REFUSE PAS. Quand on ne choisit
+    // qu'un lutteur — une carrière est celle d'un seul — désigner quelqu'un
+    // d'autre veut dire « plutôt lui », jamais « c'est complet ». Refuser
+    // obligeait à désélectionner avant de changer d'avis.
+    else if (max === 1) { picked.clear(); picked.add(def.id); }
     else if (picked.size >= max) return { ok: false, reason: `Maximum ${max} lutteur(s)` };
     else picked.add(def.id);
     paint();
@@ -110,7 +121,7 @@ export function rosterPicker(defs, opts = {}) {
       extra: h('button', {
         class: `btn ${picked.has(focus.id) ? 'ghost' : 'primary'} pick-btn`,
         onclick: () => { const r = toggle(focus); if (!r.ok && opts.onFull) opts.onFull(r.reason); },
-      }, picked.has(focus.id) ? '✗ Retirer de l’équipe' : '✓ Ajouter à l’équipe'),
+      }, picked.has(focus.id) ? (opts.labelOff || '✗ Retirer de l’équipe') : (opts.labelOn || '✓ Ajouter à l’équipe')),
     }));
   }
 

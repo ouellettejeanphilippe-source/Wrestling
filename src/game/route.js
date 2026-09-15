@@ -25,7 +25,7 @@
 // à l'autre, c'est lesquels, dans quel ordre, et ce qu'on choisit de faire
 // entre eux.
 import { createRng } from '../engine/rng.js';
-import { SEASON } from '../data/campaign.js';
+import { SEASON, SOLO_MATCHES } from '../data/campaign.js';
 
 // Sept semaines de route, puis le titre. C'est la longueur d'avant — elle
 // était bonne, une carrière tient en une petite quarantaine de minutes.
@@ -38,6 +38,7 @@ export const NODE_TYPES = {
   rest:  { key: 'rest',  icon: '🛋️', name: 'Semaine off', desc: 'Pas de match. Une séance d’entraînement offerte, ou une carte retirée du deck.' },
   event: { key: 'event', icon: '❓', name: 'En coulisses', desc: 'Un angle, une rencontre, une proposition. On ne sait jamais à l’avance.' },
   shop:  { key: 'shop',  icon: '💼', name: 'Bureau du booker', desc: 'On y achète ce qui se vend : un mouvement, un manager, du muscle.' },
+  tag:   { key: 'tag',   icon: '🤝', name: 'Match par équipes', desc: 'Un soir à plusieurs. Il faut trouver un partenaire — quelqu’un que vous avez débloqué acceptera de faire équipe. Ça paie mieux, et ça n’est jamais obligatoire.' },
   boss:  { key: 'boss',  icon: '🏆', name: 'Championnat du Monde', desc: 'Le dernier soir. La seule question de toute la carrière.' },
 };
 
@@ -46,13 +47,33 @@ export const NODE_TYPES = {
 // se lit dans ses récompenses. Le premier alimente donc les nœuds « match »,
 // le second les nœuds « main event ». On n'invente pas une difficulté : on lit
 // celle qui était déjà écrite.
+// TROIS VIVIERS, PARCE QU'UNE CARRIÈRE EST CELLE D'UN SEUL LUTTEUR.
+//
+// Les quatorze matchs écrits à la main ont été pensés pour une écurie : neuf
+// demandent deux ou trois des vôtres. Un lutteur seul ne peut pas les jouer —
+// et on ne les transforme pas en un contre deux, l'infériorité numérique
+// donnant 0 victoire sur 40 dans ce moteur.
+//
+//   solo   : un contre un, ce que la tête d'affiche joue toute seule ;
+//   tag    : les matchs à deux ou trois, qui demandent un PARTENAIRE D'UN SOIR
+//            — c'est une option de la carte, jamais une obligation ;
+//   titre  : le dernier soir.
+//
+// `SOLO_MATCHES` comble le trou du vivier solo (cinq matchs seulement dans les
+// shows écrits) et fait enfin servir les stipulations que la campagne
+// n'utilisait jamais.
 function viviers() {
-  const normal = [], elite = [];
+  const normal = [], elite = [], tag = [];
   for (const show of SEASON.shows) {
     if (show.title_match) continue;
-    show.matches.forEach((m, i) => (i === 0 ? normal : elite).push(m));
+    show.matches.forEach((m, i) => {
+      if (m.teamSize > 1) tag.push(m);
+      else (i === 0 ? normal : elite).push(m);
+    });
   }
-  return { normal, elite };
+  for (const m of SOLO_MATCHES) (m.tier === 'elite' ? elite : normal).push(m);
+  const parFans = (a, b) => a.reward.fans - b.reward.fans;
+  return { normal: normal.sort(parFans), elite: elite.sort(parFans), tag: tag.sort(parFans) };
 }
 
 // Un match pour cette semaine-là : on pioche autour de la position
@@ -91,7 +112,7 @@ function piocheMatch(rng, vivier, semaine, pris) {
 // Ce qu'on peut trouver sur une ligne, et à quelle fréquence. Le match reste
 // le cœur : une semaine sans match est une semaine sans classement, et c'est
 // tout l'arbitrage.
-const POIDS = [['match', 34], ['elite', 22], ['rest', 18], ['event', 16], ['shop', 10]];
+const POIDS = [['match', 30], ['elite', 18], ['tag', 14], ['rest', 15], ['event', 14], ['shop', 9]];
 function tireType(rng) {
   const total = POIDS.reduce((a, [, p]) => a + p, 0);
   let n = rng.next() * total;
@@ -106,7 +127,7 @@ function tireType(rng) {
 // titre.
 export function buildRoute(seed) {
   const rng = createRng(seed || 1);
-  const { normal, elite } = viviers();
+  const { normal, elite, tag } = viviers();
   const pris = new Set();
   const rows = [];
 
@@ -120,12 +141,16 @@ export function buildRoute(seed) {
     const n = s === 0 ? 1 : (rng.next() < 0.45 ? 2 : 3);
     const types = [];
     for (let i = 0; i < n; i++) types.push(s === 0 ? 'match' : tireType(rng));
+    // TOUJOURS UN MATCH JOUABLE SEUL. Le tag ne compte pas : il demande un
+    // partenaire, et personne ne doit être forcé d'en prendre un. C'est tout
+    // le sens de « possible, jamais obligatoire ».
     if (!types.some((t) => t === 'match' || t === 'elite')) types[Math.floor(rng.next() * n)] = 'match';
 
     rows.push(types.map((type, col) => {
       const node = { id: `s${s}n${col}`, row: s, col, type };
       if (type === 'match') node.match = piocheMatch(rng, normal, s, pris);
       if (type === 'elite') { const m = piocheMatch(rng, elite, s, pris); node.match = m ? eliteMatch(m) : m; }
+      if (type === 'tag') node.match = piocheMatch(rng, tag, s, pris);
       return node;
     }));
   }
@@ -156,6 +181,19 @@ function relier(rng, rows) {
       }
       node.next = [...liens].sort((a, b) => a - b);
     }
+    // ET JAMAIS D'IMPASSE VERS UN MATCH PAR ÉQUIPES. L'invariant « au moins un
+    // match jouable seul » valait par LIGNE — mais le joueur ne voit que les
+    // nœuds vers lesquels son nœud pointe. Mesuré : 7,1 % des ensembles
+    // accessibles ne proposaient que du tag, ce qui revenait à l'imposer.
+    // Chaque nœud doit donc mener à au moins une porte qu'on passe seul.
+    for (const node of ici) {
+      if (node.next.some((c) => isSolo(apres[c].type))) continue;
+      const solos = apres.map((n, c) => (isSolo(n.type) ? c : -1)).filter((c) => c >= 0);
+      if (!solos.length) continue;   // impossible : chaque ligne en a un
+      const depuis = node.next[0] ?? 0;
+      const plusProche = solos.reduce((a, c) => (Math.abs(c - depuis) < Math.abs(a - depuis) ? c : a), solos[0]);
+      node.next = [...new Set([...node.next, plusProche])].sort((a, b) => a - b);
+    }
     // Personne d'orphelin : tout nœud sans entrée se fait adopter par le nœud
     // de la ligne d'avant qui lui est le plus proche.
     for (let c = 0; c < apres.length; c++) {
@@ -182,7 +220,9 @@ export function openNodes(route, path) {
   return precedent ? precedent.next : [];
 }
 
-export const isFight = (type) => type === 'match' || type === 'elite' || type === 'boss';
+export const isFight = (type) => type === 'match' || type === 'elite' || type === 'tag' || type === 'boss';
+// Un match qu'on peut prendre seul : tout sauf le tag, qui réclame du monde.
+export const isSolo = (type) => type === 'match' || type === 'elite' || type === 'boss';
 // Ce qu'un nœud rapporte au classement. Le main event en vaut deux : c'est la
 // raison de le prendre, et le risque est la contrepartie.
 export const rankStep = (type) => (type === 'elite' ? 2 : 1);

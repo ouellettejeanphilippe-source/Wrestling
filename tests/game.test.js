@@ -1,26 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, train, recruit, applyResult, buildMatch, currentShow, exhibitionMatch } from '../src/game/state.js';
+import { newGame, train, partnerOffer, applyResult, buildMatch, currentShow, exhibitionMatch } from '../src/game/state.js';
 import { evaluateScript, finishMatches } from '../src/game/script.js';
 import { createBattle, autoPlay } from '../src/engine/battle.js';
 import { rankOf } from '../src/game/rank.js';
 import { WRESTLERS_BY_ID } from '../src/data/wrestlers.js';
 import { SEASON } from '../src/data/campaign.js';
 
-test('nouvelle partie : roster, agents libres, entraînement et recrutement', () => {
-  const st = newGame({ promoName: 'Test', mode: 'kayfabe', starters: ['jean_sina', 'derby_allin', 'brian_danielsson'] });
-  assert.equal(st.roster.length, 3);
-  assert.equal(st.freeAgents.length, 3);
-  assert.ok(!st.freeAgents.includes('jean_sina'));
+test('une carrière, un lutteur : le roster n’a qu’une entrée', () => {
+  // On ne recrute plus personne : il n'y a pas d'écurie où faire entrer
+  // quelqu'un. Ce qui existe, ce sont des partenaires d'un soir, tirés des
+  // lutteurs qu'on a débloqués au vestiaire.
+  const st = newGame({ promoName: 'Test', mode: 'kayfabe', starters: ['jean_sina'] });
+  assert.equal(st.roster.length, 1, 'une carrière est celle d’un seul lutteur');
+  assert.equal(st.roster[0].id, 'jean_sina');
+  assert.equal(st.headliner, 'jean_sina');
+  assert.equal(st.freeAgents, undefined, 'plus d’agents libres');
   const money = st.money;
   assert.ok(train(st, 'jean_sina', 'str').ok);
   assert.equal(st.roster[0].bonus.str, 1);
   assert.ok(st.money < money);
-  const id = st.freeAgents[0];
-  st.money = 5000;
-  assert.ok(recruit(st, id).ok);
-  assert.equal(st.roster.length, 4);
-  assert.ok(!st.freeAgents.includes(id));
+});
+
+test('les partenaires d’un soir viennent des lutteurs débloqués, jamais de soi-même', () => {
+  const st = newGame({ promoName: 'Test', mode: 'kayfabe', starters: ['jean_sina'] });
+  const node = { row: 2, col: 1 };
+  const dispo = ['jean_sina', 'derby_allin', 'becky_lunch', 'gunter', 'inconnu'];
+  const offre = partnerOffer(st, node, dispo, 3);
+  assert.ok(offre.length >= 1 && offre.length <= 3);
+  assert.ok(!offre.includes('jean_sina'), 'on ne fait pas équipe avec soi-même');
+  assert.ok(!offre.includes('inconnu'), 'ni avec quelqu’un qui n’existe pas');
+  assert.equal(new Set(offre).size, offre.length, 'pas deux fois le même');
+  assert.deepEqual(partnerOffer(st, node, dispo, 3), offre, 'la même soirée propose toujours les mêmes');
+  assert.deepEqual(partnerOffer(st, { row: 4, col: 0 }, [], 3), [], 'personne de débloqué : personne à appeler');
 });
 
 test('mode kayfabe : le show avance toujours, mais la défaite coûte la salle', () => {

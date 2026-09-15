@@ -104,4 +104,55 @@ export const SEASON = {
   ],
 };
 
+// LES SOIRS EN SOLO — LA ROUTE D'UN SEUL LUTTEUR
+//
+// Une carrière est celle d'UN lutteur. Les quatorze matchs écrits plus haut
+// ont été pensés pour une écurie : neuf d'entre eux demandent deux ou trois
+// des vôtres, et il n'en restait que cinq jouables seul. Cinq matchs pour sept
+// semaines, c'était la même soirée trois fois.
+//
+// ON NE LES TRANSFORME PAS EN 1 CONTRE 2 : mesuré, l'infériorité numérique
+// dans ce moteur donne 0 victoire sur 40. Un lutteur seul affronte UN homme.
+//
+// Ces six soirs-là comblent le trou — et ils font enfin servir les cinq
+// stipulations que la campagne n'utilisait jamais alors qu'elles étaient
+// écrites, mesurées et jouables : street fight, soumission uniquement, Last
+// Man Standing, TLC et Hell in a Cell.
+//
+// `tier` remplace ici la convention des shows (« le second match est le plus
+// dur ») : il dit si le match alimente les nœuds « match » ou « main event ».
+export const SOLO_MATCHES = [
+  { id: 'so1', tier: 'normal', title: 'Bagarre de parking', type: 'street_fight', teamSize: 1, enemies: ['dannemaison'], directives: ['weapons', 'taunts'], reward: { money: 380, fans: 130 },
+    desc: 'Pas d’arbitre à convaincre, pas de disqualification : le tombé compte n’importe où. Il trichera, évidemment.',
+    script: { summary: 'Un début de rivalité : vous gagnez, mais il faut que ça ait l’air sale.', finish: { winner: 'player', method: 'pin' }, beats: ['weapons', 'taunts'] } },
+
+  { id: 'so2', tier: 'normal', title: 'Le défi du technicien', type: 'submission_only', teamSize: 1, enemies: ['kris_gericault'], directives: ['submission_win', 'cripple'], reward: { money: 520, fans: 190 },
+    desc: 'Aucun tombé ne compte : il faut le faire abandonner. Travaillez un membre, et ne lâchez plus.',
+    script: { summary: 'Le vétéran veut voir si vous savez lutter. Faites-le abandonner.', finish: { winner: 'player', method: 'submission' }, beats: ['submission_win', 'long'] } },
+
+  { id: 'so3', tier: 'elite', title: 'Guerre des nerfs', type: 'last_man_standing', teamSize: 1, enemies: ['randy_python'], directives: ['kickout_drama', 'comeback'], reward: { money: 700, fans: 280 },
+    desc: 'Ni tombé ni abandon : il faut le mettre au sol et qu’il y reste pendant le compte de dix. La Vipère se relève toujours une fois de trop.',
+    script: { summary: 'Un main event long et cruel : vous finissez debout, lui non.', finish: { winner: 'player', method: 'any' }, beats: ['comeback', 'sells', 'long'] } },
+
+  { id: 'so4', tier: 'normal', title: 'Le contrat au-dessus du ring', type: 'tlc', teamSize: 1, enemies: ['seth_rollmops'], directives: ['table', 'high_spot'], reward: { money: 740, fans: 300 },
+    desc: 'Tables, échelles et chaises. Le premier qui décroche le contrat repart avec — s’il tient encore debout.',
+    script: { summary: 'Le spot du show : du bois cassé, un plongeon, et le contrat pour vous.', finish: { winner: 'player', method: 'belt' }, beats: ['table', 'high_spot'] } },
+
+  { id: 'so5', tier: 'normal', title: 'Duel à l’ancienne', type: 'singles', teamSize: 1, enemies: ['cody_roads'], directives: ['finisher_finish', 'no_weapons'], reward: { money: 820, fans: 340 },
+    desc: 'Pas d’arme, pas de gadget, pas d’excuse. Un match propre devant une salle qui connaît la différence.',
+    script: { summary: 'Le match d’école : propre, long, et gagné après votre finisher.', finish: { winner: 'player', method: 'pin', finisher: true }, beats: ['near_fall_self', 'finisher_finish'] } },
+
+  { id: 'so7', tier: 'elite', title: 'Règlement de comptes', type: 'street_fight', teamSize: 1, enemies: ['jon_moxie'], directives: ['weapons', 'kickout_drama'], reward: { money: 560, fans: 200 },
+    desc: 'Il vous attendait dans le parking et l’arbitre a décidé de ne rien voir. Aucune règle, et il aime ça plus que vous.',
+    script: { summary: 'Une guerre de rue que vous finissez debout, après en avoir pris beaucoup.', finish: { winner: 'player', method: 'pin' }, beats: ['weapons', 'sells'] } },
+
+  { id: 'so8', tier: 'elite', title: 'Le mur', type: 'singles', teamSize: 1, enemies: [{ id: 'gunter', boost: { hp: 10 } }], directives: ['comeback', 'cripple'], reward: { money: 880, fans: 330 },
+    desc: 'Pas de gadget, pas de stipulation : juste un homme qu’on ne bouge pas et qui frappe comme un camion. Trouvez un membre et acharnez-vous.',
+    script: { summary: 'On vous laisse survivre au rouleau compresseur — et le battre au bout.', finish: { winner: 'player', method: 'submission' }, beats: ['sells', 'comeback', 'long'] } },
+
+  { id: 'so6', tier: 'elite', title: 'Hell in a Cell', type: 'hell_in_cell', teamSize: 1, enemies: [{ id: 'entrepreneur', boost: { hp: 10 } }], directives: ['whip_hazard', 'kickout_drama'], reward: { money: 1050, fans: 430 },
+    desc: 'Enfermés, et vraiment : la cellule ne s’escalade pas. Il n’y a qu’une porte, et c’est lui qui a la clef.',
+    script: { summary: 'Le main event que personne n’oubliera : vous sortez vainqueur de la cellule.', finish: { winner: 'player', method: 'pin' }, beats: ['whip_hazard', 'sells', 'heat'] } },
+];
+
 export const EXHIBITION_TYPES = ['singles', 'tag', 'hardcore', 'street_fight', 'last_man_standing', 'submission_only', 'battle_royal', 'ladder', 'tlc', 'cage', 'hell_in_cell', 'showdown'];

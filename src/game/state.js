@@ -11,6 +11,16 @@ import { buildRoute, openNodes, nodeAt, isFight, rankStep, rankLoss, SEMAINE_TIT
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
+// CE QUE COÛTE LA PROGRESSION SUIVANTE. Le palier était de 25 $ quand une
+// carrière avait trois lutteurs : l'argent se partageait, et chacun finissait
+// avec cinq points de bonus environ. Depuis qu'une carrière n'a QU'UN homme,
+// la même recette lui donnait quinze points — trois fois plus fort qu'avant,
+// et la ceinture tombait 55 fois sur 100 au lieu de 30.
+//
+// On ne baisse pas les revenus (le public et l'argent servent à autre chose) :
+// on rend chaque progression plus chère que la précédente. Se spécialiser
+// reste possible, tout maximiser ne l'est plus.
+export const TRAIN_STEP = 100;
 // Ce qu'une défaite coûte en public. C'est la seule pression de la saison
 // depuis qu'un épisode perdu ne se rejoue plus : elle doit se sentir.
 export const LOSS_FANS = 0.14;
@@ -35,7 +45,11 @@ export function newGame({ promoName, mode, starters }) {
   const seed = Date.now() % 1000000;
   const state = {
     version: 1, promoName: promoName || 'PPW — Parodie Pro Wrestling', mode: mode || 'kayfabe', showIndex: 0,
-    money: 800, fans: 100, seed, roster: starters.map((id) => rosterEntry(id)), freeAgents: [], history: [], finished: false, ending: null,
+    // UNE CARRIÈRE EST CELLE D'UN SEUL LUTTEUR. Le roster n'a qu'une entrée :
+    // c'est lui qu'on entraîne, c'est son deck qui grossit, c'est sa fiche de
+    // victoires. Les matchs par équipes existent toujours, mais comme une
+    // OPTION de la carte, avec un partenaire pour la soirée (voir `week.js`).
+    money: 800, fans: 100, seed, roster: [rosterEntry(starters[0])], history: [], finished: false, ending: null,
     // La carrière commence huitième prétendant. Sept matchs de route pour
     // remonter, et le huitième soir décide de tout. Une sauvegarde d'avant le
     // classement n'a pas ce champ : tous les lecteurs retombent sur RANK_START.
@@ -51,7 +65,6 @@ export function newGame({ promoName, mode, starters }) {
     headliner: starters[0],
     feats: emptyFeats(),
   };
-  refreshFreeAgents(state);
   return state;
 }
 
@@ -85,7 +98,6 @@ export function takeNode(state, node) {
   state.path.push({ row: node.row, col: node.col, type: node.type });
   state.showIndex = state.path.length;
   if (state.showIndex > SEMAINE_TITRE) state.showIndex = SEMAINE_TITRE;
-  else refreshFreeAgents(state);
 }
 
 // `cards` : les mouvements appris en carrière (voir `deck.js`). `forgotten` :
@@ -119,28 +131,26 @@ export const rosterDefs = (state) => state.roster.map((r) => WRESTLERS_BY_ID[r.i
 // c'est ce qui exclut les decks du mode exhibition, sans un seul `if`.
 export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, { ...r.bonus, ...deckBonus(r) }]));
 
-export function refreshFreeAgents(state) {
-  const rng = createRng(state.seed + state.showIndex * 97);
-  const owned = new Set(state.roster.map((r) => r.id));
-  const pool = WRESTLERS.filter((w) => !w.npc && !w.boss && !owned.has(w.id)).map((w) => w.id);
-  state.freeAgents = rng.shuffle(pool).slice(0, 3);
-}
-
-export function recruit(state, id) {
-  const def = WRESTLERS_BY_ID[id];
-  if (!def || state.roster.some((r) => r.id === id)) return { ok: false, reason: 'Déjà dans le roster' };
-  if (state.money < def.salary) return { ok: false, reason: 'Pas assez d’argent' };
-  state.money -= def.salary;
-  state.roster.push(rosterEntry(id));
-  state.freeAgents = state.freeAgents.filter((f) => f !== id);
-  return { ok: true };
+// LES PARTENAIRES D'UN SOIR. Il n'y a plus d'agents libres à recruter : une
+// carrière n'a qu'un lutteur, et personne ne rejoint son roster. Ce qui existe,
+// c'est du monde qui accepte de faire équipe le temps d'une soirée — et ce
+// monde-là, ce sont les lutteurs qu'on a DÉBLOQUÉS. Chaque nom gagné au
+// vestiaire sert donc deux fois : on peut faire sa carrière, et on peut
+// l'appeler en renfort.
+//
+// Le vivier arrive d'en haut (l'interface lit la progression) plutôt que d'être
+// lu ici : `state.js` ne touche pas au stockage du navigateur.
+export function partnerOffer(state, node, eligibles, combien = 3) {
+  const rng = createRng((state.seed || 1) + node.row * 811 + node.col * 53);
+  const pool = (eligibles || []).filter((id) => id !== state.headliner && WRESTLERS_BY_ID[id]);
+  return rng.shuffle(pool).slice(0, combien);
 }
 
 export function train(state, id, stat) {
   const r = state.roster.find((x) => x.id === id);
   const spec = TRAINABLE.find((t) => t[0] === stat);
   if (!r || !spec) return { ok: false, reason: 'Invalide' };
-  const cost = TRAIN_COST + r.trainings * 25;
+  const cost = TRAIN_COST + r.trainings * TRAIN_STEP;
   if (state.money < cost) return { ok: false, reason: 'Pas assez d’argent' };
   const current = r.bonus[stat] / spec[2];
   if (current >= MAX_TRAIN) return { ok: false, reason: 'Maximum atteint' };
@@ -149,7 +159,7 @@ export function train(state, id, stat) {
   r.trainings += 1;
   return { ok: true, cost };
 }
-export const trainCost = (r) => TRAIN_COST + r.trainings * 25;
+export const trainCost = (r) => TRAIN_COST + r.trainings * TRAIN_STEP;
 
 export function buildMatch(state, matchDef) {
   // LE MATCH DE TITRE SE CONSTRUIT AU DERNIER MOMENT, à partir du classement :
