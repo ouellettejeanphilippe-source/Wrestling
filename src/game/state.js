@@ -3,7 +3,9 @@ import { WRESTLERS, WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { SEASON } from '../data/campaign.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { createRng } from '../engine/rng.js';
+import { avgHeat } from '../engine/util.js';
 import { evaluateDirectives, evaluateScript } from './script.js';
+import { deckBonus, cardOffer, deckSize, DECK_MAX, OFFRE } from './deck.js';
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
@@ -23,7 +25,11 @@ export function newGame({ promoName, mode, starters }) {
   return state;
 }
 
-export const rosterEntry = (id) => ({ id, bonus: { str: 0, agi: 0, tec: 0, def: 0, cha: 0, hp: 0 }, wins: 0, losses: 0, trainings: 0 });
+// `cards` : les mouvements appris en carrière (voir `deck.js`). `forgotten` :
+// ceux de son répertoire d'origine qu'il a laissé tomber pour faire de la
+// place. Les deux sont absents d'une sauvegarde d'avant les decks, et tout le
+// code les traite comme des listes vides — une vieille partie continue.
+export const rosterEntry = (id) => ({ id, bonus: { str: 0, agi: 0, tec: 0, def: 0, cha: 0, hp: 0 }, wins: 0, losses: 0, trainings: 0, cards: [], forgotten: [] });
 
 export function save(state) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch { /* stockage indisponible */ }
@@ -35,7 +41,10 @@ export function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch {
 
 export const currentShow = (state) => SEASON.shows[state.showIndex] || null;
 export const rosterDefs = (state) => state.roster.map((r) => WRESTLERS_BY_ID[r.id]);
-export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, r.bonus]));
+// Ce que la campagne transmet au moteur pour chaque lutteur : les bonus
+// d'entraînement ET son deck. L'exhibition n'appelle jamais cette fonction :
+// c'est ce qui exclut les decks du mode exhibition, sans un seul `if`.
+export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, { ...r.bonus, ...deckBonus(r) }]));
 
 export function refreshFreeAgents(state) {
   const rng = createRng(state.seed + state.showIndex * 97);
@@ -117,7 +126,10 @@ export function applyResult(state, battle, matchDef, teamIds) {
     // qu'en gagnant l'essentiel de ses matchs.
     summary.directives = won ? evaluateDirectives(battle, matchDef.directives) : [];
     const bonus = summary.directives.filter((d) => d.done).reduce((a, d) => ({ money: a.money + d.reward.money, fans: a.fans + d.reward.fans }), { money: 0, fans: 0 });
-    const heatMult = 0.8 + battle.heat / 250;
+    // LA CHALEUR MOYENNE, PAS LA FINALE. La jauge finit à 100 dans 99 % des
+    // matchs (les dernières secondes sont pleines de tombés et de kick-outs) :
+    // le cachet ne dépendait donc de rien. La moyenne, elle, va de 34 à 77.
+    const heatMult = 0.7 + avgHeat(battle) / 150;
     summary.money = won ? Math.round(matchDef.reward.money * heatMult + bonus.money) : Math.round(matchDef.reward.money * 0.3);
     summary.fans = won ? Math.round(matchDef.reward.fans * heatMult + bonus.fans) : -Math.round(state.fans * LOSS_FANS);
     summary.advance = true;
@@ -128,6 +140,18 @@ export function applyResult(state, battle, matchDef, teamIds) {
   state.money += summary.money;
   state.fans = Math.max(0, state.fans + summary.fans);
   for (const r of state.roster) if (teamIds.includes(r.id)) { if (won) r.wins++; else r.losses++; }
+  // UN MATCH APPREND QUELQUE CHOSE. C'est ce qui manquait entre deux épisodes :
+  // le répertoire d'un lutteur était le même au premier et au huitième. On
+  // gagne trois cartes au choix, on en gagne deux quand on a perdu — une
+  // raclée enseigne aussi, mais moins bien. (Rien de tout ça en exhibition :
+  // `applyResult` n'existe qu'en campagne.)
+  summary.cards = teamIds.map((id) => {
+    const entry = state.roster.find((r) => r.id === id);
+    if (!entry) return null;
+    const offer = cardOffer(state, id).slice(0, won ? OFFRE : OFFRE - 1);
+    if (!offer.length) return null;
+    return { id, name: (WRESTLERS_BY_ID[id] || {}).name || id, offer, deck: deckSize(entry), max: DECK_MAX, mustForget: deckSize(entry) >= DECK_MAX };
+  }).filter(Boolean);
   state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn });
   if (summary.advance) {
     state.showIndex += 1;

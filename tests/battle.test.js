@@ -324,12 +324,17 @@ test('les trois actes changent les règles du match', async () => {
   const { matchPhase, PHASES } = await import('../src/engine/phases.js');
   const b = mk('singles', ['jean_sina'], ['jobber_1']);
   assert.equal(matchPhase(b).key, 'early', 'ouverture au premier tour');
+  // Les actes se lisent sur les corps : un match où tout le monde est frais
+  // reste une ouverture, même quelques tours plus tard.
   b.turn = 6; b.heat = 50;
-  assert.equal(matchPhase(b).key, 'mid', 'corps du match ensuite');
+  assert.equal(matchPhase(b).key, 'early', 'des corps frais, c’est encore l’ouverture');
   b.heat = 80;
-  assert.equal(matchPhase(b).key, 'late', 'une foule chaude fait basculer en main event');
-  b.heat = 20; b.turn = 12;
-  assert.equal(matchPhase(b).key, 'late', 'un match long aussi');
+  assert.equal(matchPhase(b).key, 'mid', 'une salle déjà debout fait passer au corps du match');
+  b.heat = 20; b.turn = 30;
+  assert.equal(matchPhase(b).key, 'late', 'le chrono finit toujours par amener le main event');
+  b.turn = 4; b.heat = 0;
+  for (const u of b.units) u.grit = 0;
+  assert.equal(matchPhase(b).key, 'late', 'des cœurs dépensés : main event, même tôt');
   assert.ok(PHASES.late.dmg > PHASES.early.dmg, 'la fin frappe plus fort que le début');
   assert.ok(PHASES.early.momentum > PHASES.late.momentum, 'le début construit le momentum');
   assert.ok(PHASES.late.flashy > PHASES.early.flashy, 'les gros mouvements paient surtout à la fin');

@@ -218,10 +218,39 @@ disponibles **sous le ring**), `tenCount` (compte de dix sur un lutteur au sol).
   (compte de dix), **soumission uniquement**, bataille royale, échelle, **TLC**, cage, **Hell in a Cell**,
   confrontation, survie.
 
+## La chaleur de la foule
+
+**La foule refroidit si on ne lui donne rien.** Chaque tour complet, la salle perd 18 % de sa chaleur (au moins 2
+points) : une jauge pleine ne le reste pas toute seule. Ce qui compte n'est donc plus la chaleur *finale* — elle finit
+toujours haut, le dernier tour d'un match est toujours un gros coup — mais la **moyenne tenue sur tout le match**,
+affichée à côté de la jauge (`moy. 65`).
+
+Elle ne descend jamais sous **10**, la valeur du coup d'envoi : la salle est venue, elle reste là. Ce plancher a été
+trouvé en jouant, pas en simulant — dans le premier match de la saison, contre un jobber, un joueur qui se contentait
+de passer son tour voyait la jauge tomber à zéro et y rester **81 %** du match. Une décrue à quatre points minimum
+dépassait tout ce qu'un petit match rapporte : la règle punissait le match à faible enjeu, pas le joueur mou.
+
+C'est cette moyenne que lisent la note du match, la recette du show, la note en étoiles des scénarios et la directive
+« Foule en délire ». Mesurée sur 40 matchs : la moyenne s'étale de **35 à 76** (médiane 62), et la jauge ne passe plus
+que **3 %** du match collée à 100 — contre **68 %** avant.
+
+| | avant | après |
+| --- | --- | --- |
+| jauge saturée à 100 | 68 % du match | 3 % |
+| chaleur retenue | 99–100 pour tout le monde | moyenne 40 → 76 (médiane 65) |
+| directive « Foule en délire » | réalisée 100 % | réalisée 32 % |
+| temps passé en main event | 91 % | 54 % |
+
 ## Les trois actes d'un match
 
-La phase se déduit de l'état du match (tour, chaleur de la foule, usure des corps), pas d'un minuteur, et elle est
-affichée en haut de l'écran avec ce qu'elle récompense.
+La phase se déduit de l'état du match, pas d'un minuteur, et elle est affichée en haut de l'écran avec ce qu'elle
+récompense. **Elle se lit sur les corps** : les points de vie, les cœurs dépensés, et le chrono en dernier recours. Un
+match où les deux hommes sont frais est une ouverture, même au dixième tour ; un match où les cœurs sont partis est un
+main event, même tôt. Un finisher pousse l'histoire d'un cran — il ne la verrouille plus sur l'acte III.
+
+Sur 40 matchs, le temps de jeu se partage maintenant **23 % / 23 % / 54 %** entre les trois actes (ouverture jusqu'au
+dixième tour environ, corps du match jusqu'au vingt-troisième, main event ensuite). Avant, 91 % du match se jouait en
+main event : les trois actes existaient dans le code et nulle part ailleurs.
 
 | Acte | Rôle | Effets |
 | --- | --- | --- |
@@ -242,7 +271,7 @@ Ils se déclenchent tout seuls quand les conditions sont réunies, s'annoncent d
 | 🪢 Rebond des cordes | Attaquer depuis les cordes |
 | 🔨 Au sol et martelé | Frapper une cible au sol |
 | ☠️ Séquence de finition | Finisher sur une cible encore sonnée |
-| 📣 La foule est debout | Attaquer avec 80+ de chaleur |
+| 📣 La foule est debout | Attaquer avec 70+ de chaleur |
 | 🪑 Décor complice | Frapper une cible acculée à un obstacle |
 | 🔗 Enchaînement | Alterner les familles de coups sur la même cible |
 | 💨 Course dans les cordes | **Traverser** les cordes en chemin (pas s'y arrêter) avant de frapper |
@@ -336,6 +365,38 @@ Deux pièges trouvés en mesurant : mettre les **fondamentaux dans le talon** re
 l'IA passait 56 % de son temps à jeter sa main ; et **noter la défausse dans la boucle de décision** la faisait
 ramasser les bonus de position et battre de vraies attaques — quarante tours pour vingt coups. La défausse vit
 maintenant dans le repli, là où on ne va que si rien d'autre ne vaut le coup.
+
+## Le deck qui se construit — **en carrière, pas en exhibition**
+
+La main a réglé la question du *tour* : on joue ce qu'on a. Mais d'un épisode à l'autre, le répertoire d'un lutteur ne
+bougeait pas d'un pouce — le même à l'épisode 1 et au PPV. Il n'y avait rien à construire entre deux matchs, donc rien
+à regretter dans un choix.
+
+**Chaque match de carrière apprend un mouvement.** L'écran de résultat propose trois cartes (deux si on a perdu — une
+raclée enseigne aussi, mais moins bien), et on peut toujours passer. La carte s'ajoute au deck de ce lutteur-là, et
+elle est sauvegardée avec la saison.
+
+**Le deck plafonne à 22 cartes.** Un lutteur commence la saison avec 13 à 19 cartes piochables (médiane 17) et la
+saison compte huit épisodes : le plafond tombe donc vers le cinquième. Les premières cartes sont un cadeau, les
+dernières sont un arbitrage — apprendre veut alors dire **oublier autre chose**, et c'est le joueur qui choisit quoi.
+La signature et le finisher ne s'oublient jamais : ce sont les marques du personnage.
+
+Ce que coûte réellement une carte de plus, mesuré sur 400 matchs simulés — le nombre de tours avant de **repiocher une
+carte précise**, avec une main de quatre :
+
+| taille du deck | 12 | 14 | 18 | 22 | 26 |
+| --- | --- | --- | --- | --- | --- |
+| tours d'attente | 7,7 | 9,4 | 13,0 | 15,7 | 17,6 |
+
+C'est ça, l'arbitrage — et ce n'est **pas** « un gros deck joue moins varié » : mesuré sur soixante matchs, un deck de
+22 sort même *plus* de coups différents qu'un deck de 18 (10,0 contre 8,8). Ce qu'on perd, c'est de pouvoir compter
+sur une carte au moment précis où on en a besoin. Le deck se consulte et se taille entre deux épisodes, dans l'onglet
+*Roster* du hub.
+
+**Rien de tout ça en exhibition.** Un match d'exhibition ne lit pas la sauvegarde : il n'appelle jamais
+`playerBonuses`, donc les lutteurs y partent toujours avec leur répertoire de fiche, exactement tel qu'il est écrit.
+C'est voulu — une exhibition doit rester lisible et comparable, pas dépendre d'une partie en cours. Un test le
+verrouille (`tests/deck.test.js`).
 
 ## L'usure ciblée — la stratégie longue
 
@@ -535,7 +596,7 @@ une histoire — et ça ne ressemble à rien de connu : un lutteur qui perd le m
 | --- | --- | --- |
 | Vite fait, bien fait | ≤ 8 tours — **réalisée 0 %** | ≤ 22 tours — 57 % |
 | Faites durer le plaisir | ≥ 10 tours — toujours vraie | ≥ 40 tours |
-| Foule en délire | 70+ de chaleur — **réalisée 100 %** | 3 kick-outs et 2 renversements — 21 % |
+| Foule en délire | 70+ de chaleur **finale** — **réalisée 100 %** | 70+ de chaleur **moyenne** — 32 % |
 | Sans une égratignure | aucun lutteur au sol — 11 % | aucun cœur ❤️ perdu — 50 % |
 | Hot tag | faire un tag — **100 %** | deux relais passés sous 40 % de PV |
 
@@ -578,6 +639,7 @@ src/data/    wrestlers.js     roster parodique
              combos.js        enchaînements nommés et leurs conditions
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
+             deck.js          le deck qui se construit en carrière (offre de cartes, plafond, oubli)
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
@@ -585,7 +647,7 @@ src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne, PWA
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, campagne, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique
@@ -599,7 +661,7 @@ pour l'équilibrage.
 
 ## Idées pour la suite
 
-- Rivalités et storylines persistantes (heat entre lutteurs, promos entre les shows).
+- Des cartes qui ne sont pas que des mouvements : une carte qui change une règle du match pour un tour.
+- Le deck d'un lutteur comme partie de son personnage : une carte gagnée contre un adversaire précis.
 - Blessures, moral, contrats en mode Scénarios ; gestion des heels/faces (turns).
-- Managers et interférences (ref bump), matchs à stipulations (No Holds Barred, Last Man Standing).
 - Sons et musiques ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.

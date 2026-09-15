@@ -32,13 +32,62 @@ export const unitAt = (battle, x, y) => battle.units.find((u) => !u.eliminated &
 export function addMomentum(battle, unit, n) {
   unit.momentum = clamp(Math.round(unit.momentum + n), 0, 100);
 }
+// LA CHALEUR EST UNE JAUGE QUI RETOMBE
+//
+// Elle ne faisait que monter : 100 atteint au douzième tour, et 68 % du match
+// passé à saturation. Une jauge toujours pleine ne mesure rien — elle ne
+// pouvait servir ni de directive (« finir avec 70+ » : réalisée 100 fois sur
+// 100), ni de note, ni de repère d'acte. Pire, elle emportait les trois actes
+// avec elle : 91 % du temps de jeu se passait en « main event ».
+//
+// Le public se lasse. Chaque tour qui passe lui reprend une part de son
+// attention — proportionnelle, parce qu'une salle déjà froide ne refroidit
+// plus beaucoup, et qu'une salle debout retombe vite si on ne lui donne rien.
+export const HEAT_DECAY = 0.18, HEAT_DECAY_MIN = 2, HEAT_FLOOR = 10;
+
+// ET UNE SALLE N'EST JAMAIS VIDE. Trouvé en jouant : dans le premier match de
+// la saison, contre un jobber, un joueur qui se contente de passer son tour
+// voyait la jauge tomber à zéro et y rester 81 % du match. La décrue à
+// quatre points minimum dépassait tout ce qu'un petit match rapporte — la
+// règle punissait donc le match à faible enjeu, pas le joueur mou. Le plancher
+// est celui du coup d'envoi : la salle est venue, elle reste là.
+
+// CE QUI DISTINGUE UN MATCH, C'EST LA CHALEUR MOYENNE — PAS LA FINALE.
+//
+// Les dernières secondes d'un match sont pleines de tombés, de kick-outs et
+// d'une élimination : la jauge finit à 100 quoi qu'il arrive, même quand la
+// salle s'est ennuyée pendant trente tours. Tous ceux qui lisaient
+// `battle.heat` à l'arrivée — le cachet de la campagne, la note en étoiles du
+// mode Scénarios — lisaient donc toujours le même nombre.
+//
+// On relève la jauge à chaque tour, et c'est cette moyenne qui sert de mesure.
+export function coolCrowd(battle) {
+  const perte = Math.max(HEAT_DECAY_MIN, battle.heat * HEAT_DECAY);
+  battle.heat = clamp(battle.heat - perte, HEAT_FLOOR, 100);
+  if (battle.stats) {
+    battle.stats.heatSum = (battle.stats.heatSum || 0) + battle.heat;
+    battle.stats.heatTurns = (battle.stats.heatTurns || 0) + 1;
+  }
+}
+
+// La chaleur moyenne du match, de 0 à 100. C'est LA mesure de ce qu'a valu le
+// spectacle ; `battle.heat` n'est que l'instant présent.
+export function avgHeat(battle) {
+  const s = battle.stats || {};
+  return s.heatTurns ? s.heatSum / s.heatTurns : battle.heat;
+}
+
 export function addHeat(battle, n) {
-  battle.heat = clamp(battle.heat + n, 0, 100);
-  // À QUEL TOUR LA SALLE S'EST-ELLE LEVÉE. La chaleur sature à 100 dans
-  // presque tous les matchs : « finir avec 70+ de chaleur » était donc une
-  // directive gratuite, réalisée 100 fois sur 100. Ce qui distingue un match,
-  // c'est la VITESSE à laquelle le public se lève.
-  if (battle.stats && !battle.stats.heatTurn && battle.heat >= 70) battle.stats.heatTurn = battle.turn;
+  // Le plancher vaut aussi ici : trouvé en jouant, la jauge descendait à 6 ou
+  // 8 parce que certaines pénalités passent par `addHeat` et court-circuitaient
+  // le plancher de la décrue. Une salle qui est venue reste là.
+  battle.heat = clamp(battle.heat + n, HEAT_FLOOR, 100);
+  if (!battle.stats) return;
+  // Le PIC, pas la valeur finale : un match peut se terminer sur un temps
+  // mort après avoir mis la salle debout, et c'est quand même arrivé.
+  if (battle.heat > (battle.stats.heatPeak || 0)) battle.stats.heatPeak = battle.heat;
+  // Et la VITESSE à laquelle elle s'est levée la première fois.
+  if (!battle.stats.heatTurn && battle.heat >= 70) battle.stats.heatTurn = battle.turn;
 }
 export function heal(battle, unit, n) {
   const before = unit.hp;

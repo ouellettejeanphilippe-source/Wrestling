@@ -42,6 +42,10 @@ export function isCard(id) {
   return !!m && !ALWAYS.has(id) && m.type !== 'taunt' && !OFF_DECK_TIERS.has(m.tier);
 }
 
+// Le talon d'un lutteur : tout ce qui se pioche dans son répertoire de match.
+// En carrière ce répertoire n'est plus figé — `src/game/deck.js` y ajoute ce
+// qu'il a appris et en retire ce qu'il a oublié. En exhibition, c'est
+// exactement le répertoire de sa fiche.
 export const buildDeck = (unit) => unit.moves.filter(isCard);
 
 // Mélange déterministe : le générateur du match, pour que deux parties avec la

@@ -37,6 +37,20 @@ export function movesFor(def) {
 const HP_SCALE = 1.65;
 const GRIT_BONUS = 3;
 
+// LE RÉPERTOIRE RÉEL D'UN LUTTEUR EN MATCH.
+//
+// C'est son vivier d'origine, plus ce qu'il a appris en carrière (`moves`),
+// moins ce qu'il a choisi d'oublier (`without`). Un match d'exhibition ne
+// passe aucun bonus : le lutteur y garde exactement son répertoire de fiche.
+// Le finisher et la signature ne s'oublient jamais — ce sont les marques du
+// personnage, pas des cartes.
+export function unitMoves(def, bonus = {}) {
+  const jamais = new Set([def.signature, def.finisher]);
+  const sans = new Set((bonus.without || []).filter((id) => !jamais.has(id)));
+  return [...new Set([...movesFor(def), ...(bonus.moves || [])])]
+    .filter((id) => MOVES[id] && !sans.has(id));
+}
+
 export function createUnit(def, team, x, y, opts = {}) {
   const bonus = opts.bonus || {};
   const boost = opts.boost || {};
@@ -62,7 +76,7 @@ export function createUnit(def, team, x, y, opts = {}) {
     // user l'adversaire, garder de quoi finir.
     stamina: 100, maxStamina: 100,
     stats, cls: def.cls, spec: def.spec, gimmick: def.gimmick, alignment: def.alignment,
-    moves: movesFor(def), weight: def.weight || 'heavy', color: def.color, initials: def.initials,
+    moves: unitMoves(def, bonus), weight: def.weight || 'heavy', color: def.color, initials: def.initials,
     // gabarit sur la grille : `size` accepte 2, [3, 2] ou { w, h }.
     // Par défaut les colosses tiennent sur 2×2, les autres sur une case.
     size: def.size || (def.weight === 'super' ? 2 : 1),

@@ -8,6 +8,9 @@ import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
 import { currentShow, train, trainCost, recruit, TRAINABLE, MAX_TRAIN } from '../game/state.js';
 import { describeFinish } from '../game/script.js';
+import { knownMoves, deckSize, forgetCard, DECK_MAX, DECK_MIN } from '../game/deck.js';
+import { isCard } from '../engine/hand.js';
+import { MOVES, MOVE_TIER_LABEL } from '../data/moves.js';
 
 export function showHub(root, app, tab = 'show') {
   const st = app.state;
@@ -74,6 +77,24 @@ function renderRoster(st, app, root) {
         const lvl = r.bonus[k] / step;
         return h('button', { class: 'btn small', disabled: lvl >= MAX_TRAIN || st.money < cost, onclick: () => { const res = train(st, r.id, k); if (!res.ok) return toast(res.reason, 'warn'); app.saveNow(); toast(`+${step} ${label} pour ${d.name}`); showHub(root, app, 'roster'); } }, `+${step} ${label} (${lvl}/${MAX_TRAIN})`);
       })));
+    // LE DECK, ENTRE DEUX ÉPISODES. On ne peut pas décider quoi apprendre si
+    // on ne sait pas ce qu'on a déjà. Les cartes apprises en carrière sont
+    // marquées, et on peut en laisser tomber ici plutôt qu'au pied du mur.
+    const taille = deckSize(r);
+    const piochables = [...knownMoves(r)].filter(isCard).sort((a, b) => MOVES[a].name.localeCompare(MOVES[b].name));
+    const apprises = new Set(r.cards || []);
+    extra.append(h('details', { class: 'deck-box' },
+      h('summary', {}, `🃏 Deck — ${taille}/${DECK_MAX} cartes${apprises.size ? ` (${apprises.size} apprise${apprises.size > 1 ? 's' : ''})` : ''}`),
+      h('p', { class: 'muted small' }, `Ce qui se pioche en match. Les fondamentaux, la signature et le finisher n’en font pas partie : ils sont toujours disponibles. Mesuré : avec ${taille} cartes, il faut environ ${Math.round(taille * 0.7)} tours pour revoir une carte précise — un deck de 12 la ramène en 8. Plancher : ${DECK_MIN} cartes.`),
+      h('div', { class: 'deck-list' }, piochables.map((id) => h('span', { class: `deck-card${apprises.has(id) ? ' learned' : ''}`, title: `${MOVE_TIER_LABEL[MOVES[id].tier] || ''} — ${MOVES[id].desc}` },
+        h('b', {}, MOVES[id].name),
+        h('button', { class: 'deck-drop', title: 'Laisser tomber ce mouvement', onclick: () => {
+          if (!confirm(`${d.name} oublie « ${MOVES[id].name} » ? C’est définitif pour cette saison.`)) return;
+          const res = forgetCard(r, id, true);
+          if (!res.ok) return toast(res.reason, 'warn');
+          app.saveNow(); toast(`${d.name} oublie ${MOVES[id].name}`); showHub(root, app, 'roster');
+        } }, '✕')))),
+    ));
     cards.append(wrestlerCard(d, { bonus: r.bonus, extra }));
   }
   box.append(cards);

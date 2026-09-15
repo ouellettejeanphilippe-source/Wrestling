@@ -83,9 +83,12 @@ test('aucune directive n’est impossible ni gratuite par construction', () => {
   // matchs du jeu.
   assert.ok(!DIRECTIVES.long.check({ turn: 20, stats: {}, units: [], beats: [] }));
   assert.ok(DIRECTIVES.long.check({ turn: 45, stats: {}, units: [], beats: [] }));
-  // « Foule en délire » ne peut plus se fonder sur la chaleur : elle sature.
-  assert.equal(DIRECTIVES.heat.check({ heat: 100, stats: { kickouts: 0, reversals: 0 }, units: [], beats: [] }), false,
-    'une chaleur à 100 ne suffit plus — il faut des faux finishes et des renversements');
+  // « Foule en délire » se lit sur la MOYENNE, pas sur la chaleur finale : la
+  // chaleur finit toujours haut, c'est la tenir tout le match qui coûte.
+  assert.equal(DIRECTIVES.heat.check({ heat: 100, stats: { heatSum: 1200, heatTurns: 30 }, units: [], beats: [] }), false,
+    'finir à 100 après un match froid ne suffit pas');
+  assert.equal(DIRECTIVES.heat.check({ heat: 40, stats: { heatSum: 2400, heatTurns: 30 }, units: [], beats: [] }), true,
+    'une salle tenue à 80 de moyenne, c’est une foule en délire');
 });
 
 test('les directives des épisodes existent toutes', () => {

@@ -280,6 +280,7 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .phase-badge.player { border-color: var(--green); } .phase-badge.enemy { border-color: var(--red); }
 .m-title { flex: 1; min-width: 180px; } .m-title b { font-family: var(--display); font-size: 0.72rem; }
 .heat { display: flex; align-items: center; gap: 8px; min-width: 220px; }
+.heat .moy { font-size: 0.7rem; color: var(--muted, #9aa); white-space: nowrap; }
 .lbl { font-size: 0.7rem; color: var(--gold); font-weight: 700; min-width: 74px; text-transform: uppercase; }
 
 /* La scène : le plateau occupe toute la surface, le HUD flotte aux quatre coins
@@ -863,6 +864,7 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   .m-top .phase-badge b { font-size: 0.62rem; }
   .m-top .phase-badge span, .m-top .heat .lbl { font-size: 0.6rem; }
   .m-top .heat { min-width: 110px; }
+  .heat .moy { display: none; }
   .m-top .btn.small { padding: 3px 6px; font-size: 0.68rem; white-space: nowrap; }
   .m-stage { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(210px, 260px); gap: 6px; }
   .m-center { display: flex !important; min-height: 0; }
@@ -1019,3 +1021,42 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   animation: setup-pulse 1.1s ease-in-out infinite; pointer-events: none;
 }
 @keyframes setup-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* ---- Le deck qui se construit : l'offre de cartes après un match de carrière */
+.card-offer { margin: 16px 0 8px; text-align: left; }
+.card-offer h3 { margin: 0 0 4px; font-size: 0.95rem; }
+.card-offer > p { margin: 0 0 10px; font-size: 0.78rem; }
+.offer-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.offer-card {
+  flex: 1 1 170px; min-width: 150px; max-width: 260px;
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: 9px 11px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.14);
+  color: inherit; font: inherit;
+}
+.offer-card:hover { background: rgba(255, 176, 58, 0.14); border-color: #ffb03a; }
+.offer-card b { font-size: 0.86rem; }
+.offer-card .tier { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.65; }
+.offer-card .muted { font-size: 0.74rem; line-height: 1.3; }
+.offer-card .stats { font-size: 0.72rem; opacity: 0.8; }
+.offer-card.skip { border-style: dashed; opacity: 0.75; }
+@media (max-width: 720px) {
+  .offer-card { flex: 1 1 100%; max-width: none; }
+}
+
+/* ---- Le deck d'un lutteur, dans le hub */
+.deck-box { margin-top: 8px; font-size: 0.78rem; }
+.deck-box summary { cursor: pointer; font-weight: 600; }
+.deck-box > p { margin: 6px 0; line-height: 1.35; }
+.deck-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.deck-card {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 4px 2px 7px; border-radius: 999px; font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.deck-card.learned { border-color: #ffb03a; background: rgba(255, 176, 58, 0.14); }
+.deck-drop {
+  border: 0; background: transparent; color: inherit; opacity: 0.45;
+  cursor: pointer; font-size: 0.72rem; line-height: 1; padding: 2px 3px;
+}
+.deck-drop:hover { opacity: 1; color: #e8433f; }
