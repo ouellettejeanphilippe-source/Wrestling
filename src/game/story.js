@@ -12,6 +12,7 @@
 import { PARTS, wornParts, WEAR_HURT } from '../engine/wear.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { starsText } from './script.js';
+import { avgHeat } from '../engine/util.js';
 
 const first = (beats, kind) => beats.find((b) => b.kind === kind) || null;
 const all = (beats, kind) => beats.filter((b) => b.kind === kind);
@@ -33,10 +34,9 @@ export function rateMatch(battle) {
   n += Math.min(1.0, all(b, 'nearfall').length * 0.3);        // les faux départs
   n += Math.min(0.7, (s.reversals || 0) * 0.2);               // les renversements
   n += Math.min(0.9, varietes / 26);                          // la variété
-  // La chaleur sature à 100 dans presque tous les matchs : telle quelle, elle
-  // donnait une demi-étoile gratuite à tout le monde. Ce qui distingue, c'est
-  // la VITESSE à laquelle la salle s'est levée.
-  n += Math.min(0.6, (battle.heat / Math.max(6, battle.turn)) * 0.2);
+  // La chaleur moyenne remplace le bricolage d'avant (on divisait la jauge
+  // finale par le nombre de tours faute de mieux, parce qu'elle saturait).
+  n += Math.min(0.7, (avgHeat(battle) / 100) * 0.95);
   if (all(b, 'broken').length) n += 0.3;                      // une histoire de corps
   if (all(b, 'manager').length) n += 0.15;                    // du monde au bord du ring
   // Une fin en queue de poisson reste une fin en queue de poisson.

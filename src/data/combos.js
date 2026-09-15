@@ -86,7 +86,7 @@ export const COMBOS = [
     id: 'crowd', name: 'La foule est debout', icon: '📣',
     hint: 'Attaquez avec 80+ de chaleur',
     desc: 'Au-delà de 80 de chaleur, la foule porte celui qui attaque.',
-    when: (b) => b.heat >= 80,
+    when: (b) => b.heat >= 70,
     dmg: 1.1, momentum: 10, heat: 0,
   },
   {

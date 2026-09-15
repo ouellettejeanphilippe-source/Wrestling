@@ -3,7 +3,11 @@ import { WRESTLERS, WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { SEASON } from '../data/campaign.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
 import { createRng } from '../engine/rng.js';
+import { avgHeat } from '../engine/util.js';
 import { evaluateDirectives, evaluateScript } from './script.js';
+import { deckBonus, cardOffer, deckSize, DECK_MAX, OFFRE } from './deck.js';
+import { moveRank, titleMatch, RANK_START, rankOf } from './rank.js';
+import { buildRoute, openNodes, nodeAt, isFight, rankStep, rankLoss, SEMAINE_TITRE } from './route.js';
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
@@ -18,12 +22,57 @@ export function newGame({ promoName, mode, starters }) {
   const state = {
     version: 1, promoName: promoName || 'PPW — Parodie Pro Wrestling', mode: mode || 'kayfabe', showIndex: 0,
     money: 800, fans: 100, seed, roster: starters.map((id) => rosterEntry(id)), freeAgents: [], history: [], finished: false, ending: null,
+    // La carrière commence huitième prétendant. Sept matchs de route pour
+    // remonter, et le huitième soir décide de tout. Une sauvegarde d'avant le
+    // classement n'a pas ce champ : tous les lecteurs retombent sur RANK_START.
+    rank: RANK_START,
+    // LA ROUTE. Une carte à embranchements tirée à la graine de la partie :
+    // deux carrières ne passent jamais par les mêmes semaines. `path` est la
+    // liste des nœuds déjà joués — c'est elle qui dit où l'on peut aller.
+    route: buildRoute(seed), path: [],
   };
   refreshFreeAgents(state);
   return state;
 }
 
-export const rosterEntry = (id) => ({ id, bonus: { str: 0, agi: 0, tec: 0, def: 0, cha: 0, hp: 0 }, wins: 0, losses: 0, trainings: 0 });
+// Une sauvegarde d'avant la carte n'a pas de route : on lui en fabrique une à
+// sa propre graine, et on la place à la semaine où elle en était.
+export function ensureRoute(state) {
+  if (!state.route) { state.route = buildRoute(state.seed || 1); state.path = state.path || []; }
+  if (!state.path) state.path = [];
+  return state.route;
+}
+
+// Les nœuds ouverts cette semaine, prêts à afficher : type, match résolu,
+// et de quoi les distinguer d'un coup d'œil.
+export function weekNodes(state) {
+  ensureRoute(state);
+  const row = state.path.length;
+  if (row >= state.route.rows.length) return [];
+  return openNodes(state.route, state.path)
+    .map((col) => nodeAt(state.route, row, col))
+    .filter(Boolean)
+    .map((node) => (node.type === 'boss'
+      ? { ...node, match: titleMatch(node.match, state, SEASON.champion) }
+      : node));
+}
+
+// Avancer d'une semaine : on note par où l'on est passé, et la semaine
+// courante suit la longueur du chemin. C'est le seul endroit qui fait avancer
+// la carrière — match joué, semaine off ou passage au bureau du booker.
+export function takeNode(state, node) {
+  ensureRoute(state);
+  state.path.push({ row: node.row, col: node.col, type: node.type });
+  state.showIndex = state.path.length;
+  if (state.showIndex > SEMAINE_TITRE) state.showIndex = SEMAINE_TITRE;
+  else refreshFreeAgents(state);
+}
+
+// `cards` : les mouvements appris en carrière (voir `deck.js`). `forgotten` :
+// ceux de son répertoire d'origine qu'il a laissé tomber pour faire de la
+// place. Les deux sont absents d'une sauvegarde d'avant les decks, et tout le
+// code les traite comme des listes vides — une vieille partie continue.
+export const rosterEntry = (id) => ({ id, bonus: { str: 0, agi: 0, tec: 0, def: 0, cha: 0, hp: 0 }, wins: 0, losses: 0, trainings: 0, cards: [], forgotten: [] });
 
 export function save(state) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch { /* stockage indisponible */ }
@@ -34,8 +83,21 @@ export function load() {
 export function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ } }
 
 export const currentShow = (state) => SEASON.shows[state.showIndex] || null;
+
+// LES MATCHS DE L'ÉPISODE, TELS QU'ILS SERONT JOUÉS. Le hub doit annoncer le
+// match de titre avec ses vraies conditions — ses vrais adversaires et le
+// nombre de lutteurs qu'il faut amener — sinon l'écran promet un contre un et
+// le moteur en sert un autre.
+export function showMatches(state) {
+  const show = currentShow(state);
+  if (!show) return [];
+  return show.title_match ? show.matches.map((m) => titleMatch(m, state, SEASON.champion)) : show.matches;
+}
 export const rosterDefs = (state) => state.roster.map((r) => WRESTLERS_BY_ID[r.id]);
-export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, r.bonus]));
+// Ce que la campagne transmet au moteur pour chaque lutteur : les bonus
+// d'entraînement ET son deck. L'exhibition n'appelle jamais cette fonction :
+// c'est ce qui exclut les decks du mode exhibition, sans un seul `if`.
+export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, { ...r.bonus, ...deckBonus(r) }]));
 
 export function refreshFreeAgents(state) {
   const rng = createRng(state.seed + state.showIndex * 97);
@@ -70,11 +132,23 @@ export function train(state, id, stat) {
 export const trainCost = (r) => TRAIN_COST + r.trainings * 25;
 
 export function buildMatch(state, matchDef) {
-  return { ...matchDef, mode: state.mode, script: state.mode === 'scenario' ? matchDef.script : null };
+  // LE MATCH DE TITRE SE CONSTRUIT AU DERNIER MOMENT, à partir du classement :
+  // c'est le seul endroit du jeu où la route parcourue change ce qui vous
+  // attend dans le ring.
+  const def = isTitleMatch(state, matchDef) ? titleMatch(matchDef, state, SEASON.champion) : matchDef;
+  return { ...def, mode: state.mode, script: state.mode === 'scenario' ? def.script : null };
+}
+
+// Le match de championnat se reconnaît à son identifiant, pas à la semaine où
+// on se trouve : avec une carte à embranchements, la position ne suffit plus
+// (et deux carrières n'arrivent pas au titre par le même chemin).
+export const TITLE_MATCH_ID = SEASON.shows[SEASON.shows.length - 1].matches[0].id;
+export function isTitleMatch(state, matchDef) {
+  return !!matchDef && matchDef.id === TITLE_MATCH_ID;
 }
 
 // Applique le résultat d'un match de campagne. Renvoie un résumé pour l'écran de résultat.
-export function applyResult(state, battle, matchDef, teamIds) {
+export function applyResult(state, battle, matchDef, teamIds, node = null) {
   const won = battle.result.winner === 'player';
   const summary = { won, matchTitle: matchDef.title, money: 0, fans: 0, directives: [], script: null, advance: false, message: '' };
   if (state.mode === 'scenario') {
@@ -117,7 +191,10 @@ export function applyResult(state, battle, matchDef, teamIds) {
     // qu'en gagnant l'essentiel de ses matchs.
     summary.directives = won ? evaluateDirectives(battle, matchDef.directives) : [];
     const bonus = summary.directives.filter((d) => d.done).reduce((a, d) => ({ money: a.money + d.reward.money, fans: a.fans + d.reward.fans }), { money: 0, fans: 0 });
-    const heatMult = 0.8 + battle.heat / 250;
+    // LA CHALEUR MOYENNE, PAS LA FINALE. La jauge finit à 100 dans 99 % des
+    // matchs (les dernières secondes sont pleines de tombés et de kick-outs) :
+    // le cachet ne dépendait donc de rien. La moyenne, elle, va de 34 à 77.
+    const heatMult = 0.7 + avgHeat(battle) / 150;
     summary.money = won ? Math.round(matchDef.reward.money * heatMult + bonus.money) : Math.round(matchDef.reward.money * 0.3);
     summary.fans = won ? Math.round(matchDef.reward.fans * heatMult + bonus.fans) : -Math.round(state.fans * LOSS_FANS);
     summary.advance = true;
@@ -128,13 +205,56 @@ export function applyResult(state, battle, matchDef, teamIds) {
   state.money += summary.money;
   state.fans = Math.max(0, state.fans + summary.fans);
   for (const r of state.roster) if (teamIds.includes(r.id)) { if (won) r.wins++; else r.losses++; }
-  state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn });
+  // UN MATCH APPREND QUELQUE CHOSE. C'est ce qui manquait entre deux épisodes :
+  // le répertoire d'un lutteur était le même au premier et au huitième. On
+  // gagne trois cartes au choix, on en gagne deux quand on a perdu — une
+  // raclée enseigne aussi, mais moins bien. (Rien de tout ça en exhibition :
+  // `applyResult` n'existe qu'en campagne.)
+  summary.cards = teamIds.map((id) => {
+    const entry = state.roster.find((r) => r.id === id);
+    if (!entry) return null;
+    const offer = cardOffer(state, id).slice(0, won ? OFFRE : OFFRE - 1);
+    if (!offer.length) return null;
+    return { id, name: (WRESTLERS_BY_ID[id] || {}).name || id, offer, deck: deckSize(entry), max: DECK_MAX, mustForget: deckSize(entry) >= DECK_MAX };
+  }).filter(Boolean);
+  // LE CLASSEMENT BOUGE À CHAQUE MATCH DE ROUTE, jamais au match de titre : le
+  // soir du PPV, on ne monte plus au classement, on prend la ceinture ou on
+  // ne la prend pas.
+  const titre = isTitleMatch(state, matchDef);
+  summary.title = titre;
+  // CE QUI FAIT MONTER AU CLASSEMENT N'EST PAS LE MÊME MÉTIER DANS LES DEUX
+  // MODES. En Kayfabe on est le lutteur : on monte en gagnant. En Scénarios on
+  // est le bookeur, et plusieurs scripts EXIGENT qu'on perde — y faire monter
+  // le classement sur la victoire demandait au joueur de saboter son propre
+  // show pour avoir son match de titre. On y monte donc en livrant le finish
+  // demandé, qui est la monnaie de ce mode.
+  const monte = state.mode === 'scenario' ? !!(summary.script && summary.script.finishOk) : won;
+  if (!titre) {
+    const avant = rankOf(state);
+    // UN MAIN EVENT VAUT DEUX PLACES. C'est la raison de le prendre sur la
+    // carte, et l'adversaire plus dur en est la contrepartie.
+    const type = (node && node.type) || matchDef.nodeType || 'match';
+    const pas = monte ? rankStep(type) : rankLoss(type);
+    for (let i = 0; i < pas; i++) summary.rank = moveRank(state, monte);
+    summary.rankBefore = avant;
+    summary.rankStep = pas;
+    summary.rankReason = state.mode === 'scenario' ? 'finish' : 'victoire';
+  } else {
+    summary.rank = rankOf(state);
+    summary.rankBefore = summary.rank;
+    summary.champion = won;
+  }
+  state.history.push({ show: state.showIndex + 1, match: matchDef.title, won, stars: summary.script ? summary.script.stars : null, money: summary.money, fans: summary.fans, turns: battle.turn, title: titre });
   if (summary.advance) {
-    state.showIndex += 1;
-    if (state.showIndex >= SEASON.shows.length) {
+    takeNode(state, node || { row: state.path ? state.path.length : 0, col: 0, type: titre ? 'boss' : (matchDef.nodeType || 'match') });
+    if (titre) {
       state.finished = true;
-      state.ending = state.fans >= SEASON.finalFansGoal ? 'good' : 'ok';
-    } else refreshFreeAgents(state);
+      // UNE SEULE QUESTION À LA FIN : la ceinture, ou pas. Le total de fans
+      // n'est plus le verdict, seulement une mention sur l'écran de fin.
+      state.champion = won;
+      state.ending = won ? 'champion' : 'contender';
+      state.sellout = state.fans >= SEASON.finalFansGoal;
+    }
   }
   return summary;
 }

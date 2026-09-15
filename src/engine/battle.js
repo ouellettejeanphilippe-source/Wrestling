@@ -13,7 +13,7 @@ import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
 import { initHand, refill, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE } from './hand.js';
 import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
-import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
+import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, coolCrowd, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
   standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
@@ -135,7 +135,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
     // fait partie de ce qu'on lit avant de décider de tricher.
     ref: makeReferee(createRng(seed ^ 0x9e37)),
-    stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0, heatTurn: 0, playerRedraws: 0 },
+    stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0, heatTurn: 0, heatPeak: 0, playerRedraws: 0 },
   };
   // LES MANAGERS. Un par camp au maximum, deux interventions chacun pour tout
   // le match. `match.managers` vient de l'écran de préparation : { player,
@@ -1742,6 +1742,9 @@ export function* enemySteps(battle) {
 export function endEnemyPhase(battle) {
   if (battle.result) return;
   tickStatuses(battle, 'enemy');
+  // Un tour complet vient de s'écouler : la salle en reprend une part. C'est
+  // ici, et seulement ici, pour que la perte soit d'un tour et pas d'une phase.
+  coolCrowd(battle);
   battle.turn++;
   startPhase(battle, 'player');
 }

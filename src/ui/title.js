@@ -9,6 +9,7 @@ import { load } from '../game/state.js';
 import { MANAGER_LIST, MANAGERS } from '../data/managers.js';
 import { loadRivalries, rivalryFor } from '../game/rivalry.js';
 import { showTutorial } from './tutorial.js';
+import { soundOn, setSound, play } from './sound.js';
 import { EVENT as INSTALLABLE, canInstall, promptInstall, isInstalled, needsIosHint } from '../pwa.js';
 
 // Bouton d'installation : présent seulement quand le navigateur a vraiment de
@@ -35,6 +36,16 @@ function installButton() {
   return btn;
 }
 
+// Le son se coupe depuis le menu, et le choix est retenu.
+function soundToggle() {
+  const b = h('button', { class: 'btn big', onclick: () => {
+    setSound(!soundOn());
+    b.textContent = soundOn() ? '🔊 Son : activé' : '🔇 Son : coupé';
+    if (soundOn()) play('bell');
+  } }, soundOn() ? '🔊 Son : activé' : '🔇 Son : coupé');
+  return b;
+}
+
 export function showTitle(root, app) {
   clear(root);
   const saved = load();
@@ -43,6 +54,7 @@ export function showTitle(root, app) {
     saved ? h('button', { class: 'btn big', onclick: () => app.continueCampaign() }, `▶ Continuer (${saved.promoName}, épisode ${Math.min(saved.showIndex + 1, 8)})`) : null,
     h('button', { class: 'btn big', onclick: () => showExhibition(root, app) }, '🥊 Match d’exhibition'),
     h('button', { class: 'btn big', onclick: () => showTutorial(root, {}) }, '📖 Comment jouer'),
+    soundToggle(),
     installButton(),
   );
   root.append(h('div', { class: 'title' },

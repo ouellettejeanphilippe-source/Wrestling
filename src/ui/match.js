@@ -8,8 +8,11 @@ import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayer
 import { movePart, wearFrom, wearOf, wearLevel, wornParts, PARTS, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from '../engine/wear.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt, pathIn } from '../engine/grid.js';
 import { deckState, isCard } from '../engine/hand.js';
-import { unitAt, living } from '../engine/util.js';
+import { unitAt, living, avgHeat } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
+import { SEASON } from '../data/campaign.js';
+import { play, startCrowd, setCrowd, crowdPop, stopCrowd, soundOn, setSound } from './sound.js';
+import { rankLabel, titleTerms } from '../game/rank.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 import { matchPhase } from '../engine/phases.js';
 import { activeCombos } from '../engine/battle.js';
@@ -89,7 +92,7 @@ function boardView() {
 }
 function setBoardView(v) { try { localStorage.setItem(VIEW_KEY, v); } catch { /* mode privé : tant pis */ } }
 
-export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit }) {
+export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit, onLearn, deckOf }) {
   const ui = { sel: null, mode: 'idle', cat: null, action: null, pending: null, reach: null, atkRange: null, hover: null, hoverTile: null, hoverXY: null, inspect: null, busy: false, resultShown: false, acting: null };
   const g = battle.grid;
   clear(root);
@@ -218,11 +221,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   requestAnimationFrame(fitBoard);
   showBanner('🔔 DING DING DING !', 'start');
   render();
+  // La cloche et la salle : le contexte audio ne peut naître que d'un geste de
+  // l'utilisateur, et booker un match en est un.
+  startCrowd(); setCrowd(battle.heat); play('bell');
   if (!tutorialSeen()) showTutorial(root, {});
 
   // ------------------------------------------------------------ rendu global
   function render() {
     renderTop(); renderBoard(); renderPopover(); renderRight(); renderEndTurn(); renderParty(); renderLog(); flushEvents(); fitBoard();
+    // LA FOULE EST UNE JAUGE QU'ON ENTEND. Depuis que la chaleur retombe pour
+    // de bon, on sent la salle se refroidir sans quitter le plateau des yeux.
+    setCrowd(battle.heat);
     if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
   }
 
@@ -239,9 +248,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       h('div', { class: 'm-title' }, h('b', {}, battle.match.title || r.name),
         h('span', { class: 'muted' }, ` ${r.icon} ${r.name}${battle.mode === 'scenario' ? ' · 🎬 Scénarios' : ''}`),
         refBadge(), mgrBadge('player'), mgrBadge('enemy')),
-      h('div', { class: 'heat' }, h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${battle.heat}`)),
+      // La chaleur redescend entre deux tours : c'est la MOYENNE tenue sur
+      // tout le match qui compte pour la note et les directives, pas le pic.
+      h('div', { class: 'heat', title: 'La foule refroidit si on ne lui donne rien. C’est la moyenne tenue sur tout le match qui paie.' },
+        // Arrondi à l'affichage seulement : la décrue est proportionnelle, donc
+        // la jauge vaut « 11,1528 » à l'intérieur, et c'est très bien pour la
+        // moyenne — mais on ne montre pas ça à personne.
+        h('span', { class: 'lbl' }, '🔥 Chaleur'), bar(battle.heat, 100, 'heatbar', `${Math.round(battle.heat)}`),
+        h('span', { class: 'moy' }, `moy. ${Math.round(avgHeat(battle))}`)),
       h('button', { class: 'btn small ghost', title: 'Basculer entre la caméra isométrique et la vue de dessus', onclick: toggleView }, boardWrap.classList.contains('view-iso') ? '🎥 Vue iso' : '🗺️ Vue dessus'),
 
+      soundBtn(),
       h('button', { class: 'btn small ghost', onclick: () => showTutorial(root, {}) }, '📖 Aide'),
       h('button', { class: 'btn small ghost', onclick: () => { if (confirm('Abandonner ce match ? (compte comme une défaite)')) { cleanup(); onQuit(); } } }, 'Quitter'),
     );
@@ -897,8 +914,30 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const e of battle.log.slice(-10).reverse()) el.log.append(h('div', { class: `le ${e.cls || ''}` }, h('span', { class: 'lt' }, `T${e.turn}`), ' ', e.text));
   }
 
+  // LE SON SE BRANCHE ICI, SUR LES ÉVÉNEMENTS DU MOTEUR — pas sur les clics.
+  // Un coup qui touche sonne parce que le moteur a dit « dégâts », pas parce
+  // qu'on a appuyé quelque part : les coups de l'IA sonnent donc aussi, et
+  // rien ne sonne quand une action est annulée.
+  function sonner(ev) {
+    switch (ev.type) {
+      case 'damage': play(ev.crit ? 'bigHit' : 'hit'); if (ev.crit) crowdPop(0.8); break;
+      case 'miss': play('miss'); break;
+      case 'down': play('slam'); crowdPop(0.5); break;
+      case 'pin':
+        play('count', ev.count);
+        if (ev.count === 2.9 || ev.count === 2) { play('kickout'); crowdPop(1); }
+        if (ev.count === 3) crowdPop(1);
+        break;
+      case 'eliminated': crowdPop(1); break;
+      case 'taunt': crowdPop(0.35); break;
+      case 'combo': crowdPop(0.5); break;
+      default: break;
+    }
+  }
+
   function flushEvents() {
     const evs = battle.events.splice(0, battle.events.length);
+    for (const ev of evs) sonner(ev);
     for (const ev of evs) {
       const cell = el.board.querySelector(`.cell[data-x="${ev.x}"][data-y="${ev.y}"]`);
       if (!cell) continue;
@@ -926,6 +965,16 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     cell.append(f);
     setTimeout(() => f.remove(), 1400);
   }
+  // Le son se coupe d'un geste, et le choix survit au rechargement.
+  function soundBtn() {
+    const b = h('button', { class: 'btn small ghost', title: 'Couper ou remettre le son', onclick: () => {
+      setSound(!soundOn());
+      b.textContent = soundOn() ? '🔊 Son' : '🔇 Son';
+      if (soundOn()) { startCrowd(); setCrowd(battle.heat); play('ui'); }
+    } }, soundOn() ? '🔊 Son' : '🔇 Son');
+    return b;
+  }
+
   function showBanner(text, cls = '') {
     el.banner.textContent = text; el.banner.className = `turn-banner ${cls}`; el.banner.hidden = false;
     setTimeout(() => { el.banner.hidden = true; }, 1100);
@@ -992,6 +1041,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     const u = ui.sel;
     const r = executeAction(battle, u, id, target);
     if (!r.ok) { toast(r.reason, 'warn'); return; }
+    // La carte qui quitte la main a son petit bruit de papier ; le finisher a
+    // le sien, annoncé, comme pour l'IA.
+    if (isCard(id)) play('card');
+    if (MOVES[id] && MOVES[id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
     if (r.countered) toast('CONTRÉ !', 'warn');
     if (u.onlyPin && !battle.result) { ui.mode = 'menu'; ui.action = null; ui.cat = null; render(); return; }
     deselect();
@@ -1012,6 +1065,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp, true);
     document.body.classList.remove('sheet-open', 'in-match');
+    stopCrowd();
   }
 
   // Le plateau doit tenir dans la place qui lui reste : on calcule la taille de
@@ -1049,7 +1103,11 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const step of enemySteps(battle)) {
       ui.acting = step.unit;
       render();
-      if (step.type === 'action') { const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id; floatAt(step.unit, name); }
+      if (step.type === 'action') {
+        const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id;
+        if (MOVES[a.id] && MOVES[a.id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
+        floatAt(step.unit, name);
+      }
       await sleep(step.type === 'move' ? 420 : 800);
       if (battle.result) break;
     }
@@ -1062,10 +1120,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function showResult() {
     cleanup();
     const res = battle.result;
+    play('bell');
+    setTimeout(() => play(res.winner === 'player' ? 'win' : 'lose'), 550);
+    stopCrowd();
     const summary = onFinish ? onFinish(battle) : null;
     const won = res.winner === 'player';
     const box = h('div', { class: 'result' });
-    box.append(h('h2', { class: won ? 'win' : 'lose' }, won ? '🏆 VICTOIRE' : '💀 DÉFAITE'), h('p', { class: 'reason' }, res.reason), h('p', { class: 'muted' }, `${battle.turn} tours · chaleur finale ${battle.heat} · ${battle.stats.kickouts} kick-out(s) · ${battle.stats.tables} table(s) · ${battle.stats.finishers} finisher(s)`));
+    box.append(h('h2', { class: won ? 'win' : 'lose' }, won ? '🏆 VICTOIRE' : '💀 DÉFAITE'), h('p', { class: 'reason' }, res.reason), h('p', { class: 'muted' }, `${battle.turn} tours · chaleur moyenne ${Math.round(avgHeat(battle))} · ${battle.stats.kickouts} kick-out(s) · ${battle.stats.tables} table(s) · ${battle.stats.finishers} finisher(s)`));
     if (summary) {
       if (summary.script) {
         box.append(h('div', { class: 'stars' }, starsText(summary.script.stars), h('span', { class: 'muted' }, ` (${summary.script.stars}/5)`)));
@@ -1075,6 +1136,20 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         for (const d of summary.directives) box.append(h('div', { class: `obj-item ${d.done ? 'done' : ''}` }, `${d.done ? '✅' : '⬜'} ${d.name} ${d.done ? `(+${d.reward.fans} fans, +${d.reward.money} $)` : ''}`));
       }
       box.append(h('p', { class: 'reward' }, `${summary.money >= 0 ? '+' : ''}${summary.money} $ · ${summary.fans >= 0 ? '+' : ''}${summary.fans} fans`), h('p', {}, summary.message));
+      // LA ROUTE VERS LA CEINTURE. Un match de carrière ne rapporte pas que de
+      // l'argent : il déplace la place au classement, et c'est elle qui fixera
+      // les conditions du match de titre.
+      if (summary.title) {
+        box.append(h('p', { class: `rank-move ${summary.champion ? 'up' : 'down'}` }, summary.champion
+          ? `🏆 LA CEINTURE EST À VOUS. ${SEASON.beltName}.`
+          : `🥈 Le champion garde le ${SEASON.beltName}.`));
+      } else if (summary.rank !== undefined) {
+        const monte = summary.rank < summary.rankBefore;
+        const t = titleTerms(summary.rank);
+        box.append(h('p', { class: `rank-move ${monte ? 'up' : 'down'}` },
+          `${monte ? '▲' : '▼'} ${rankLabel(summary.rankBefore)} → ${rankLabel(summary.rank)}`,
+          h('span', { class: 'muted' }, ` · au titre ce serait : ${t.icon} ${t.name}`)));
+      }
     }
     // L'HISTOIRE DU MATCH. C'est ce qu'on raconte le lendemain, et c'est ce qui
     // manquait : le match produisait des chiffres, jamais une phrase. Elle est
@@ -1087,7 +1162,61 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         h('h3', {}, `« ${story.headline} »`)),
       story.acts.map((a) => h('div', { class: 'story-act' },
         h('b', {}, `${a.icon} ${a.title}`), h('p', {}, a.text)))));
-    box.append(h('button', { class: 'btn primary', onclick: onContinue }, 'Continuer'));
+    // LE DECK QUI SE CONSTRUIT (carrière uniquement). `summary.cards` n'existe
+    // qu'en campagne : une exhibition ne fait rien apprendre à personne.
+    const suite = h('button', { class: 'btn primary', onclick: onContinue }, 'Continuer');
+    const offres = (summary && summary.cards) ? [...summary.cards] : [];
+    if (offres.length) {
+      const zone = h('div', { class: 'card-offer' });
+      box.append(zone);
+      suite.disabled = true;
+      suite.textContent = 'Choisissez d’abord une carte';
+      const suivant = () => {
+        clear(zone);
+        const o = offres.shift();
+        if (!o) { suite.disabled = false; suite.textContent = 'Continuer'; return; }
+        zone.append(h('h3', {}, `🃏 ${o.name} apprend un mouvement`),
+          h('p', { class: 'muted' }, o.mustForget
+            ? `Deck plein (${o.deck}/${o.max}) : la nouvelle carte en remplacera une. Vous choisirez laquelle.`
+            : `Deck : ${o.deck}/${o.max}. Une carte de plus, c’est un outil de plus — et quelques tours d’attente en plus avant de revoir chacun des autres.`));
+        const grille = h('div', { class: 'offer-grid' });
+        for (const id of o.offer) {
+          const m = MOVES[id];
+          grille.append(h('button', { class: 'offer-card', onclick: () => prendre(o, id) },
+            h('b', {}, m.name),
+            h('span', { class: 'tier' }, MOVE_TIER_LABEL[m.tier] || m.tier),
+            h('span', { class: 'muted' }, m.desc),
+            h('span', { class: 'stats' }, `${m.power ? `💥 ${m.power}` : ''} ${m.acc ? `· 🎯 ${m.acc} %` : ''}${m.requires && m.requires.ran ? ` · 🏃 course ${m.requires.ran}` : ''}`)));
+        }
+        grille.append(h('button', { class: 'offer-card skip', onclick: suivant },
+          h('b', {}, 'Passer'), h('span', { class: 'muted' }, 'Garder son deck tel quel : moins d’outils, mais chacun revient plus souvent.')));
+        zone.append(grille);
+      };
+      const prendre = (o, id) => {
+        if (o.mustForget) return choisirOubli(o, id);
+        const r = onLearn ? onLearn(o.id, id) : { ok: true };
+        if (!r.ok && r.mustForget) return choisirOubli(o, id);
+        suivant();
+      };
+      const choisirOubli = (o, id) => {
+        clear(zone);
+        zone.append(h('h3', {}, `🗑️ ${o.name} doit oublier un mouvement`),
+          h('p', { class: 'muted' }, `Pour apprendre ${MOVES[id].name}, il faut laisser tomber autre chose.`));
+        const grille = h('div', { class: 'offer-grid' });
+        for (const vieux of (deckOf ? deckOf(o.id) : []).filter(isCard).sort((a, b) => MOVES[a].name.localeCompare(MOVES[b].name))) {
+          const m = MOVES[vieux];
+          grille.append(h('button', { class: 'offer-card', onclick: () => { if (onLearn) onLearn(o.id, id, vieux); suivant(); } },
+            h('b', {}, m.name), h('span', { class: 'tier' }, MOVE_TIER_LABEL[m.tier] || m.tier), h('span', { class: 'muted' }, m.desc)));
+        }
+        // On doit pouvoir faire marche arrière : un deck plein, ça veut aussi
+        // dire qu'on a le droit de trouver que rien ne vaut ce qu'on a déjà.
+        grille.append(h('button', { class: 'offer-card skip', onclick: suivant },
+          h('b', {}, 'Renoncer à la carte'), h('span', { class: 'muted' }, 'Garder son deck intact.')));
+        zone.append(grille);
+      };
+      suivant();
+    }
+    box.append(suite);
     root.append(h('div', { class: 'overlay' }, box));
   }
 }

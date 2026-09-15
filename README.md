@@ -51,15 +51,119 @@ joueur. La nouvelle version prend la main au lancement suivant.
 | Mode | Vous êtes… | Objectif d'un match | Récompenses |
 | --- | --- | --- | --- |
 | **🎭 Kayfabe** | le promoteur d'une promotion qui monte | gagner le match | argent + fans, bonus pour les **directives du Network** |
-| **🎬 Scénarios (IRL)** | le booker en coulisses | réaliser le **script** : un finish imposé (parfois *votre* lutteur doit perdre) + des spots | note en étoiles (★1 à ★5) → argent + fans ; sous 2,5★ le Network exige une reprise |
+| **🎬 Scénarios (IRL)** | le booker en coulisses | réaliser le **script** : un finish imposé (parfois *votre* lutteur doit perdre) + des spots | note en étoiles (★1 à ★5) → argent + fans ; le classement monte sur le finish livré |
 
 En mode Scénarios, vos lutteurs ont deux actions supplémentaires : **Vendre** (prendre un bump : chaleur, momentum
 pour l'adversaire) et **Faire le job** (prendre le tombé / abandonner / passer par-dessus la corde, quand le script le
 prévoit). L'adversaire IA « travaille » le match : ses tombés contraires au script réussissent rarement… mais un
 **shoot** reste possible.
 
-La saison compte 8 épisodes (salle de bingo → PPV), 2 matchs bookables par épisode, avec renforts, tables,
-échelle, cage et un Boss Final.
+## La carrière — courte, et une seule question au bout
+
+Une carrière, c'est **huit soirs** : sept matchs de route, puis le **Championnat du Monde**. Elle se termine
+toujours par ce match-là, et elle se raconte en une phrase — il est reparti avec la ceinture, ou il est reparti
+sans.
+
+Avant, elle se terminait sur un total de fans (« 2 000 à l'arrivée, sinon la fin *ok* »). Un nombre en guise
+d'histoire : on pouvait jouer huit épisodes sans jamais savoir vers quoi on allait. Le public est maintenant le
+**moyen** — il achète les entraînements et les recrues — et plus le but.
+
+### La route — une carte à embranchements
+
+Le modèle est celui de *Slay the Spire*, parce que la correspondance avec le catch tombe juste. La carrière n'est
+plus une ligne droite de huit épisodes identiques à chaque partie : c'est une **carte tirée à la graine de la
+partie**, dont on choisit le chemin.
+
+| Slay the Spire | La route vers la ceinture |
+| --- | --- |
+| combat normal | 🤼 **Match** — une victoire, une place au classement |
+| élite | ⭐ **Main event** — un adversaire classé : **deux places**, et il cogne |
+| feu de camp | 🛋️ **Semaine off** — une séance offerte, un deck resserré, ou un house show |
+| événement `?` | ❓ **En coulisses** — un angle, deux portes, jamais gratuit |
+| boutique | 💼 **Bureau du booker** — un mouvement, une séance, de l'affichage, un contrat |
+| boss d'acte | 🏆 **Le Championnat du Monde** |
+
+**Ce qu'on n'a pas jeté : les quatorze matchs écrits à la main**, avec leurs scripts, leurs adversaires et leurs
+textes. Une carte qui tirerait des adversaires au hasard dans des stipulations au hasard produirait des matchs
+incohérents — « un chien enragé, quatre armes, deux tables » contre un voltigeur. On tire donc des **matchs
+entiers**, et ce qui change d'une carrière à l'autre, c'est lesquels, dans quel ordre, et ce qu'on choisit de faire
+entre eux. Dans chaque épisode écrit, le second match était déjà le plus dur des deux : il alimente les nœuds
+*main event*, le premier les nœuds *match*. On n'invente pas une difficulté, on lit celle qui était écrite.
+
+Trois invariants, tenus par des tests sur 120 cartes :
+
+- **Chaque semaine propose au moins un match.** Sans ça, une carte peut offrir une semaine où l'on ne peut pas se
+  battre, et le classement devient hors de portée.
+- **Aucun nœud n'est orphelin ni en cul-de-sac.** Tout chemin mène à la ceinture.
+- **La difficulté suit la semaine** à ±1 les trois premières semaines, ±2 ensuite — jamais plus. Sur 200 graines,
+  200 cartes différentes.
+
+### Ce que la mesure a corrigé
+
+La première version de la carte était **décorative** : les trois façons de la jouer donnaient le même résultat
+(30 % / 33 % / 25 % de ceintures), et le rang médian au PPV était le même dans les trois cas. Deux raisons, toutes
+les deux mesurées :
+
+- **Le main event n'était pas plus dur** — 65 % de victoires sur les nœuds *élite* contre 67 % sur les nœuds
+  *match*. Deux places au classement offertes sans risque : ce n'était pas une décision, c'était la bonne réponse.
+  Son adversaire arrive maintenant comme le champion arrive à son match de titre (+10 PV, +1 partout), ce qui met
+  le nœud à **44 %** de victoires.
+- **Une semaine sur trois seulement offrait un choix** : un nœud ne menait souvent qu'à un seul autre. Un nœud mène
+  maintenant à deux quand la ligne suivante le permet — **75 %** des semaines offrent un vrai choix, dont **52 %**
+  avec une option sans match.
+
+Et un troisième défaut, arithmétique celui-là : à coût symétrique, l'espérance du main event (−0,2 place) était
+*pire* que celle d'un match de carte (−0,3). Le nœud « risqué et payant » était donc toujours le mauvais choix. Une
+victoire en main event vaut **deux places, une défaite n'en coûte qu'une** : perdre un main event serré contre un
+lutteur classé ne doit pas enterrer une carrière, c'est le gagner qui doit la faire.
+
+Après correction, la façon de jouer la carte décide enfin — sur 40 carrières par profil :
+
+| Manière de jouer | Ceinture | Rang médian au PPV |
+| --- | --- | --- |
+| tout combattre, main events compris | **33 %** | 4ᵉ |
+| équilibré (une semaine off sur trois) | **30 %** | 4ᵉ |
+| éviter les matchs dès que possible | **18 %** | 6ᵉ — jamais premier prétendant |
+
+L'arbitrage est celui du genre : une semaine off ne fait pas monter au classement, et ça se paie le soir du titre.
+
+### Le classement
+
+Vous commencez **sixième prétendant**. Chaque victoire vous fait monter d'une place, chaque défaite en fait perdre
+une, et votre place le soir du PPV fixe les **conditions** du match de titre. Elle ne décide jamais si vous l'avez :
+vous l'avez toujours.
+
+| Classement | Le soir du titre | À roster égal |
+| --- | --- | --- |
+| **1ᵉʳ prétendant** (6-7 victoires) | ⚖️ Un contre un. Le champion vous doit un match propre. | ceinture **55 %** |
+| **2ᵉ à 5ᵉ** (4-5 victoires) | 🪙 Un contre un, mais il a choisi la date, la salle et l'arbitre : +25 PV, +1 partout. | **37 %** |
+| **6ᵉ et en dessous** (≤3 victoires) | 🐺 Il prend le match pour l'insulte et **amène son homme de main** — amenez le vôtre. | **15 %** |
+
+Ces trois taux sont mesurés **à roster égal** : soixante finales par palier, avec le même roster de fin de carrière.
+C'est ce que valent les conditions elles-mêmes.
+
+Sur **cent carrières complètes** jouées de bout en bout (avec entraînement entre les épisodes, comme un vrai
+joueur), **28 % finissent avec la ceinture**, et le classement du soir se répartit **17 / 59 / 24** entre les trois
+paliers : celui du milieu est le cas courant, les deux autres se méritent ou se paient. L'écart entre paliers y est
+plus serré (35 / 29 / 21) qu'à roster égal — sur des échantillons de cette taille, seul le palier de la ceinture
+gagnée un tiers du temps est solide.
+
+Trois choses trouvées en mesurant, et gardées dans `src/game/rank.js` pour ne pas les refaire :
+
+- **Le un contre deux est un mur, pas une punition** : 0 victoire sur 40, dans toutes ses variantes, même contre un
+  champion sans bonus. L'infériorité numérique ne se négocie pas dans ce moteur. Le champion amène donc son homme,
+  et vous avez le droit d'amener le vôtre.
+- **Partir huitième envoyait 37 carrières sur 40 dans le pire palier.** Un palier que presque tout le monde touche
+  n'est pas un palier.
+- **Au-delà de +25 PV / +1 stat, le bonus du champion ne fait plus rien** (+35/+2 donne le même 38 %). Il ne devient
+  pas plus dur, juste plus lent à tomber.
+
+En **mode Scénarios** on ne monte pas au classement en gagnant le combat mais en **livrant le finish demandé** :
+plusieurs scripts exigent que votre lutteur perde, et faire monter le classement sur la victoire revenait à
+demander au joueur de saboter son propre show pour avoir son match de titre.
+
+La carrière compte 8 semaines (salle de bingo → PPV) sur une carte à embranchements générée, avec renforts,
+tables, échelle, cage et un champion du monde au bout.
 
 ## Structure d'un lutteur
 
@@ -218,16 +322,65 @@ disponibles **sous le ring**), `tenCount` (compte de dix sur un lutteur au sol).
   (compte de dix), **soumission uniquement**, bataille royale, échelle, **TLC**, cage, **Hell in a Cell**,
   confrontation, survie.
 
+## La chaleur de la foule
+
+**La foule refroidit si on ne lui donne rien.** Chaque tour complet, la salle perd 18 % de sa chaleur (au moins 2
+points) : une jauge pleine ne le reste pas toute seule. Ce qui compte n'est donc plus la chaleur *finale* — elle finit
+toujours haut, le dernier tour d'un match est toujours un gros coup — mais la **moyenne tenue sur tout le match**,
+affichée à côté de la jauge (`moy. 65`).
+
+Elle ne descend jamais sous **10**, la valeur du coup d'envoi : la salle est venue, elle reste là. Ce plancher a été
+trouvé en jouant, pas en simulant — dans le premier match de la saison, contre un jobber, un joueur qui se contentait
+de passer son tour voyait la jauge tomber à zéro et y rester **81 %** du match. Une décrue à quatre points minimum
+dépassait tout ce qu'un petit match rapporte : la règle punissait le match à faible enjeu, pas le joueur mou.
+
+C'est cette moyenne que lisent la note du match, la recette du show, la note en étoiles des scénarios et la directive
+« Foule en délire ». Mesurée sur 40 matchs : la moyenne s'étale de **35 à 76** (médiane 62), et la jauge ne passe plus
+que **3 %** du match collée à 100 — contre **68 %** avant.
+
+| | avant | après |
+| --- | --- | --- |
+| jauge saturée à 100 | 68 % du match | 3 % |
+| chaleur retenue | 99–100 pour tout le monde | moyenne 40 → 76 (médiane 65) |
+| directive « Foule en délire » | réalisée 100 % | réalisée 32 % |
+| temps passé en main event | 91 % | 54 % |
+
 ## Les trois actes d'un match
 
-La phase se déduit de l'état du match (tour, chaleur de la foule, usure des corps), pas d'un minuteur, et elle est
-affichée en haut de l'écran avec ce qu'elle récompense.
+La phase se déduit de l'état du match, pas d'un minuteur, et elle est affichée en haut de l'écran avec ce qu'elle
+récompense. **Elle se lit sur les corps** : les points de vie, les cœurs dépensés, et le chrono en dernier recours. Un
+match où les deux hommes sont frais est une ouverture, même au dixième tour ; un match où les cœurs sont partis est un
+main event, même tôt. Un finisher pousse l'histoire d'un cran — il ne la verrouille plus sur l'acte III.
+
+Sur 40 matchs, le temps de jeu se partage maintenant **23 % / 23 % / 54 %** entre les trois actes (ouverture jusqu'au
+dixième tour environ, corps du match jusqu'au vingt-troisième, main event ensuite). Avant, 91 % du match se jouait en
+main event : les trois actes existaient dans le code et nulle part ailleurs.
 
 | Acte | Rôle | Effets |
 | --- | --- | --- |
 | 🔔 **Ouverture** | Build-up | Dégâts -15 %, momentum +35 %, chaleur -30 %, gros mouvements -15 % (personne n'y croit encore), tombés plus durs |
 | 🔥 **Corps du match** | Prendre l'avantage | Valeurs normales, soumissions +8 % d'abandon : c'est le moment d'user, de marquer et de contrôler le terrain |
 | 🏆 **Main event** | Tout donner | Dégâts +15 %, mouvements spectaculaires +15 %, chaleur +40 %, tombés +12 % |
+
+## Le son — synthétisé, pas téléchargé
+
+Le jeu n'avait **pas un seul son**. Pour du catch — la cloche, le claquement d'un corps sur le tapis, la salle —
+c'est le manque qui s'entend le plus.
+
+Tout est fabriqué au vol en **Web Audio** (`src/ui/sound.js`) : pas un octet de plus à télécharger, rien de neuf
+dans le service worker, et ça marche hors ligne comme le reste. Un vrai fichier de foule ferait mieux — il pèserait
+aussi plus lourd que tout le jeu réuni.
+
+Les sons se branchent sur les **événements du moteur**, pas sur les clics : un coup sonne parce que le moteur a dit
+« dégâts », donc les coups de l'IA sonnent aussi, et rien ne sonne quand une action est annulée.
+
+**La foule est une jauge qu'on entend.** Une nappe de bruit rose dont le volume suit la chaleur de la salle, avec un
+pic à chaque near-fall, chaque chute et chaque finisher. Depuis que la chaleur retombe pour de bon, on sent la salle
+se refroidir sans quitter le plateau des yeux.
+
+Le son se coupe depuis le menu ou depuis la barre du match, et le choix est retenu. Règle tenue dans tout le
+fichier : **aucune fonction audio ne peut faire planter un match** — pas de Web Audio, contexte refusé, onglet en
+arrière-plan, tout est avalé.
 
 ## Combos
 
@@ -242,7 +395,7 @@ Ils se déclenchent tout seuls quand les conditions sont réunies, s'annoncent d
 | 🪢 Rebond des cordes | Attaquer depuis les cordes |
 | 🔨 Au sol et martelé | Frapper une cible au sol |
 | ☠️ Séquence de finition | Finisher sur une cible encore sonnée |
-| 📣 La foule est debout | Attaquer avec 80+ de chaleur |
+| 📣 La foule est debout | Attaquer avec 70+ de chaleur |
 | 🪑 Décor complice | Frapper une cible acculée à un obstacle |
 | 🔗 Enchaînement | Alterner les familles de coups sur la même cible |
 | 💨 Course dans les cordes | **Traverser** les cordes en chemin (pas s'y arrêter) avant de frapper |
@@ -336,6 +489,38 @@ Deux pièges trouvés en mesurant : mettre les **fondamentaux dans le talon** re
 l'IA passait 56 % de son temps à jeter sa main ; et **noter la défausse dans la boucle de décision** la faisait
 ramasser les bonus de position et battre de vraies attaques — quarante tours pour vingt coups. La défausse vit
 maintenant dans le repli, là où on ne va que si rien d'autre ne vaut le coup.
+
+## Le deck qui se construit — **en carrière, pas en exhibition**
+
+La main a réglé la question du *tour* : on joue ce qu'on a. Mais d'un épisode à l'autre, le répertoire d'un lutteur ne
+bougeait pas d'un pouce — le même à l'épisode 1 et au PPV. Il n'y avait rien à construire entre deux matchs, donc rien
+à regretter dans un choix.
+
+**Chaque match de carrière apprend un mouvement.** L'écran de résultat propose trois cartes (deux si on a perdu — une
+raclée enseigne aussi, mais moins bien), et on peut toujours passer. La carte s'ajoute au deck de ce lutteur-là, et
+elle est sauvegardée avec la saison.
+
+**Le deck plafonne à 22 cartes.** Un lutteur commence la saison avec 13 à 19 cartes piochables (médiane 17) et la
+saison compte huit épisodes : le plafond tombe donc vers le cinquième. Les premières cartes sont un cadeau, les
+dernières sont un arbitrage — apprendre veut alors dire **oublier autre chose**, et c'est le joueur qui choisit quoi.
+La signature et le finisher ne s'oublient jamais : ce sont les marques du personnage.
+
+Ce que coûte réellement une carte de plus, mesuré sur 400 matchs simulés — le nombre de tours avant de **repiocher une
+carte précise**, avec une main de quatre :
+
+| taille du deck | 12 | 14 | 18 | 22 | 26 |
+| --- | --- | --- | --- | --- | --- |
+| tours d'attente | 7,7 | 9,4 | 13,0 | 15,7 | 17,6 |
+
+C'est ça, l'arbitrage — et ce n'est **pas** « un gros deck joue moins varié » : mesuré sur soixante matchs, un deck de
+22 sort même *plus* de coups différents qu'un deck de 18 (10,0 contre 8,8). Ce qu'on perd, c'est de pouvoir compter
+sur une carte au moment précis où on en a besoin. Le deck se consulte et se taille entre deux épisodes, dans l'onglet
+*Roster* du hub.
+
+**Rien de tout ça en exhibition.** Un match d'exhibition ne lit pas la sauvegarde : il n'appelle jamais
+`playerBonuses`, donc les lutteurs y partent toujours avec leur répertoire de fiche, exactement tel qu'il est écrit.
+C'est voulu — une exhibition doit rester lisible et comparable, pas dépendre d'une partie en cours. Un test le
+verrouille (`tests/deck.test.js`).
 
 ## L'usure ciblée — la stratégie longue
 
@@ -535,7 +720,7 @@ une histoire — et ça ne ressemble à rien de connu : un lutteur qui perd le m
 | --- | --- | --- |
 | Vite fait, bien fait | ≤ 8 tours — **réalisée 0 %** | ≤ 22 tours — 57 % |
 | Faites durer le plaisir | ≥ 10 tours — toujours vraie | ≥ 40 tours |
-| Foule en délire | 70+ de chaleur — **réalisée 100 %** | 3 kick-outs et 2 renversements — 21 % |
+| Foule en délire | 70+ de chaleur **finale** — **réalisée 100 %** | 70+ de chaleur **moyenne** — 32 % |
 | Sans une égratignure | aucun lutteur au sol — 11 % | aucun cœur ❤️ perdu — 50 % |
 | Hot tag | faire un tag — **100 %** | deux relais passés sous 40 % de PV |
 
@@ -578,14 +763,19 @@ src/data/    wrestlers.js     roster parodique
              combos.js        enchaînements nommés et leurs conditions
              campaign.js      la saison (8 épisodes, scripts pour le mode Scénarios)
 src/game/    state.js         campagne : argent, fans, roster, entraînement, recrutement, sauvegarde
+             deck.js          le deck qui se construit en carrière (offre de cartes, plafond, oubli)
+             rank.js          le classement et les trois termes du match de championnat
+             route.js         la carte à embranchements (nœuds, arêtes, vivier de matchs)
+             week.js          les semaines sans match : repos, coulisses, boutique
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
+             sound.js         cloche, coups, foule — tout synthétisé en Web Audio, aucun fichier
              spriteart.js     les planches 24x32 (GÉNÉRÉ — ne pas éditer à la main)
              spritepixel.js   palette, postures, vêtements peints sur le corps, rendu SVG
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, campagne, PWA
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, route, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique
@@ -599,7 +789,7 @@ pour l'équilibrage.
 
 ## Idées pour la suite
 
-- Rivalités et storylines persistantes (heat entre lutteurs, promos entre les shows).
+- Des cartes qui ne sont pas que des mouvements : une carte qui change une règle du match pour un tour.
+- Le deck d'un lutteur comme partie de son personnage : une carte gagnée contre un adversaire précis.
 - Blessures, moral, contrats en mode Scénarios ; gestion des heels/faces (turns).
-- Managers et interférences (ref bump), matchs à stipulations (No Holds Barred, Last Man Standing).
 - Sons et musiques ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.

@@ -19,6 +19,7 @@
 // propre » et « Sang et acier » dépendent de ce que le JOUEUR choisit de
 // faire des armes, et l'IA n'en ramasse jamais.
 import { WEAR_BROKEN } from '../engine/wear.js';
+import { avgHeat } from '../engine/util.js';
 
 export const DIRECTIVES = {
   fast: { final: true, name: 'Vite fait, bien fait', desc: 'Gagner en 22 tours ou moins.', check: (b) => b.turn <= 22, reward: { fans: 40, money: 150 } },
@@ -39,12 +40,11 @@ export const DIRECTIVES = {
   clean_sweep: { final: true, name: 'Sans une égratignure', desc: 'Aucun de vos lutteurs ne perd le moindre cœur ❤️.', check: (b) => b.units.every((u) => u.team !== 'player' || u.grit >= u.maxGrit), reward: { fans: 60, money: 250 } },
   no_weapons: { final: true, name: 'Lutte propre', desc: 'N’utilisez aucune arme.', check: (b) => b.stats.playerWeaponHits === 0, reward: { fans: 40, money: 150 } },
   weapons: { name: 'Sang et acier', desc: 'Frapper avec une arme au moins 2 fois.', check: (b) => b.stats.playerWeaponHits >= 2, reward: { fans: 60, money: 150 } },
-  // LA CHALEUR NE MESURE PLUS RIEN. Elle sature à 100 dans presque tous les
-  // matchs, et même « 70 avant le tour 5 » se réalise 95 fois sur 100 : la
-  // jauge monte trop vite pour distinguer quoi que ce soit. On demande donc ce
-  // qui fait RÉELLEMENT lever une salle — des faux finishes et des
-  // renversements — plutôt qu'un compteur qui dit toujours oui.
-  heat: { final: true, name: 'Foule en délire', desc: 'Trois kick-outs et deux renversements dans le même match.', check: (b) => b.stats.kickouts >= 3 && (b.stats.reversals || 0) >= 2, reward: { fans: 100, money: 200 } },
+  // La chaleur redevient une vraie mesure depuis que la salle RETOMBE quand on
+  // ne lui donne rien : la moyenne d'un match va de 34 à 77. On demande le
+  // quart supérieur — tenir une salle chaude trente tours, pas la faire hurler
+  // une fois.
+  heat: { final: true, name: 'Foule en délire', desc: 'Garder la foule à 70 de chaleur en moyenne sur tout le match.', check: (b) => avgHeat(b) >= 70, reward: { fans: 100, money: 200 } },
   escape: { name: 'Évasion spectaculaire', desc: 'Gagner par évasion de la cage.', check: (b) => b.units.some((u) => u.team === 'player' && u.flags.escaped), reward: { fans: 80, money: 250 } },
   taunts: { name: 'Show-off', desc: 'Provoquer au moins 3 fois.', check: (b) => b.stats.playerTaunts >= 3, reward: { fans: 50, money: 100 } },
   submission_win: { name: 'Fais-le abandonner', desc: 'Gagner par soumission.', check: (b) => b.stats.lastElimReason === 'submission', reward: { fans: 70, money: 200 } },

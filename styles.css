@@ -280,6 +280,7 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .phase-badge.player { border-color: var(--green); } .phase-badge.enemy { border-color: var(--red); }
 .m-title { flex: 1; min-width: 180px; } .m-title b { font-family: var(--display); font-size: 0.72rem; }
 .heat { display: flex; align-items: center; gap: 8px; min-width: 220px; }
+.heat .moy { font-size: 0.7rem; color: var(--muted, #9aa); white-space: nowrap; }
 .lbl { font-size: 0.7rem; color: var(--gold); font-weight: 700; min-width: 74px; text-transform: uppercase; }
 
 /* La scène : le plateau occupe toute la surface, le HUD flotte aux quatre coins
@@ -863,6 +864,7 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   .m-top .phase-badge b { font-size: 0.62rem; }
   .m-top .phase-badge span, .m-top .heat .lbl { font-size: 0.6rem; }
   .m-top .heat { min-width: 110px; }
+  .heat .moy { display: none; }
   .m-top .btn.small { padding: 3px 6px; font-size: 0.68rem; white-space: nowrap; }
   .m-stage { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(210px, 260px); gap: 6px; }
   .m-center { display: flex !important; min-height: 0; }
@@ -1019,3 +1021,115 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
   animation: setup-pulse 1.1s ease-in-out infinite; pointer-events: none;
 }
 @keyframes setup-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* ---- Le deck qui se construit : l'offre de cartes après un match de carrière */
+.card-offer { margin: 16px 0 8px; text-align: left; }
+.card-offer h3 { margin: 0 0 4px; font-size: 0.95rem; }
+.card-offer > p { margin: 0 0 10px; font-size: 0.78rem; }
+.offer-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.offer-card {
+  flex: 1 1 170px; min-width: 150px; max-width: 260px;
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: 9px 11px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.14);
+  color: inherit; font: inherit;
+}
+.offer-card:hover { background: rgba(255, 176, 58, 0.14); border-color: #ffb03a; }
+.offer-card b { font-size: 0.86rem; }
+.offer-card .tier { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.65; }
+.offer-card .muted { font-size: 0.74rem; line-height: 1.3; }
+.offer-card .stats { font-size: 0.72rem; opacity: 0.8; }
+.offer-card.skip { border-style: dashed; opacity: 0.75; }
+@media (max-width: 720px) {
+  .offer-card { flex: 1 1 100%; max-width: none; }
+}
+
+/* ---- Le deck d'un lutteur, dans le hub */
+.deck-box { margin-top: 8px; font-size: 0.78rem; }
+.deck-box summary { cursor: pointer; font-weight: 600; }
+.deck-box > p { margin: 6px 0; line-height: 1.35; }
+.deck-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.deck-card {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 4px 2px 7px; border-radius: 999px; font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.deck-card.learned { border-color: #ffb03a; background: rgba(255, 176, 58, 0.14); }
+.deck-drop {
+  border: 0; background: transparent; color: inherit; opacity: 0.45;
+  cursor: pointer; font-size: 0.72rem; line-height: 1; padding: 2px 3px;
+}
+.deck-drop:hover { opacity: 1; color: #e8433f; }
+
+/* ---- La route vers la ceinture : classement et conditions du match de titre */
+.rank-band {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+  margin-top: 8px; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.04); border-left: 3px solid var(--muted, #888);
+}
+.rank-band b { font-size: 0.92rem; }
+.rank-band .terms { font-weight: 600; }
+.rank-band .muted { flex-basis: 100%; font-size: 0.72rem; line-height: 1.35; }
+.rank-band.terms-net { border-left-color: #ffd34a; }
+.rank-band.terms-net .terms { color: #ffd34a; }
+.rank-band.terms-avantage { border-left-color: #ffb03a; }
+.rank-band.terms-avantage .terms { color: #ffb03a; }
+.rank-band.terms-handicap { border-left-color: #e8433f; }
+.rank-band.terms-handicap .terms { color: #e8433f; }
+
+.season-end.won h1 { color: #ffd34a; text-shadow: 0 0 22px rgba(255, 211, 74, 0.35); }
+.season-end.lost h1 { color: var(--muted, #9aa); }
+
+.rank-move { font-weight: 600; margin: 6px 0; }
+.rank-move.up { color: #ffd34a; }
+.rank-move.down { color: #e8433f; }
+.rank-move .muted { font-weight: 400; font-size: 0.8rem; }
+
+.terms-line { font-weight: 700; margin: 2px 0 6px; font-size: 0.86rem; }
+.terms-line.terms-net { color: #ffd34a; }
+.terms-line.terms-avantage { color: #ffb03a; }
+.terms-line.terms-handicap { color: #e8433f; }
+
+/* ---- La route vers la ceinture : la carte à embranchements */
+.route-map { position: relative; margin: 10px 0 14px; }
+.route-lines { position: absolute; inset: 0 0 26px 34px; pointer-events: none; }
+.route-lines svg { width: 100%; height: 100%; }
+.route-lines line { stroke: rgba(255, 255, 255, 0.13); stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.route-lines line.vif { stroke: rgba(255, 176, 58, 0.55); stroke-width: 1.4; }
+.route-rows { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.route-row { display: flex; align-items: center; gap: 8px; }
+.route-week {
+  width: 30px; flex: 0 0 30px; text-align: right;
+  font-size: 0.64rem; letter-spacing: 0.04em; color: var(--muted, #8a8f98);
+}
+.route-nodes { flex: 1; display: flex; justify-content: space-around; }
+.route-node {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; font-size: 0.95rem;
+  background: #171a20; border: 2px solid rgba(255, 255, 255, 0.14);
+  transition: transform 0.12s ease;
+}
+.route-node.far { opacity: 0.32; }
+.route-node.done { border-color: rgba(255, 255, 255, 0.4); opacity: 0.6; }
+.route-node.open { border-color: #ffb03a; box-shadow: 0 0 0 3px rgba(255, 176, 58, 0.18); transform: scale(1.12); }
+.route-node.n-boss { border-color: #ffd34a; }
+.route-node.n-boss.open { box-shadow: 0 0 0 4px rgba(255, 211, 74, 0.28); }
+.route-node.n-elite.open { border-color: #ff7a3a; box-shadow: 0 0 0 3px rgba(255, 122, 58, 0.2); }
+.route-key { margin: 8px 0 0 34px; font-size: 0.68rem; }
+
+/* Les nœuds sans match */
+.node-card .node-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.node-card .node-actions .btn { text-align: left; }
+.node-card .node-actions .btn .muted { font-weight: 400; font-size: 0.78rem; }
+.node-card .event-text { font-style: italic; line-height: 1.45; margin: 0 0 4px; }
+.mcard.n-rest { border-left: 3px solid #6fd3a0; }
+.mcard.n-event { border-left: 3px solid #8ab4ff; }
+.mcard.n-shop { border-left: 3px solid #ffb03a; }
+
+.result.choix { max-width: 560px; }
+.result.choix .offer-card { width: 100%; max-width: none; margin-bottom: 6px; }
+
+@media (max-width: 720px) {
+  .route-node { width: 26px; height: 26px; font-size: 0.82rem; }
+  .route-lines { inset: 0 0 24px 30px; }
+}

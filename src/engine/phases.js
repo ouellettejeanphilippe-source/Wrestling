@@ -1,4 +1,6 @@
 // Phases de match : un match de lutte raconte une histoire en trois actes.
+import { living } from './util.js';
+
 // La phase se déduit de l'état du match (tour, chaleur de la foule, usure), pas d'un compteur fixe.
 //   dmg      multiplicateur de dégâts
 //   momentum multiplicateur du momentum gagné en frappant
@@ -27,12 +29,54 @@ export const PHASES = {
   },
 };
 
+// Les deux bornes, calibrées pour qu'un match de trente-cinq tours se partage
+// en trois actes à peu près égaux : ouverture jusqu'au onzième, corps du match
+// jusqu'au vingt-quatrième, main event ensuite.
+export const ACTE_II = 0.28, ACTE_III = 0.42;
+const USURE_MAX = 0.30;                 // l'usure seule n'ouvre jamais l'acte III
+const HEAT_ENCORE_FROIDE = 75;          // au-delà, la salle est déjà dans le match
+
 export const FLASHY_TIERS = ['signature', 'finisher'];
 export const isFlashy = (move) => move.type === 'aerial' || FLASHY_TIERS.includes(move.tier);
 
+// LES TROIS ACTES SE LISENT SUR LES CORPS, PAS SUR UN COMPTEUR
+//
+// L'ancienne règle était : « tour ≥ 9, ou chaleur ≥ 65, ou un finisher » = main
+// event. Elle avait été écrite quand un match durait treize tours. Depuis qu'il
+// en dure trente-cinq et que la chaleur saturait dès le douzième, 91 % DU TEMPS
+// DE JEU se passait en main event : les trois actes existaient dans le code et
+// nulle part ailleurs.
+//
+// L'avancement se mesure maintenant sur ce qui avance vraiment — les points de
+// vie, les cœurs dépensés, et le chrono en dernier recours. Un match où les
+// deux hommes sont frais est une ouverture, même au vingtième tour ; un match
+// où les cœurs sont partis est un main event, même au dixième.
 export function matchPhase(battle) {
-  const worn = battle.units.filter((u) => !u.eliminated).some((u) => u.hp / u.maxHp < 0.45);
-  if (battle.turn <= 3 && battle.heat < 45 && !worn) return PHASES.early;
-  if (battle.turn >= 9 || battle.heat >= 65 || battle.stats.finishers > 0) return PHASES.late;
+  const vivants = living(battle);
+  if (!vivants.length) return PHASES.late;
+  const moy = (f) => vivants.reduce((a, u) => a + f(u), 0) / vivants.length;
+  const usure = 1 - moy((u) => (u.maxHp ? u.hp / u.maxHp : 0));
+  const coeurs = 1 - moy((u) => (u.maxGrit ? u.grit / u.maxGrit : 1));
+  const limite = (battle.match && battle.match.maxTurns) || (battle.rules && battle.rules.maxTurns) || 60;
+  // Mesuré sur quarante matchs, tour par tour :
+  //   · l'USURE monte vite puis plafonne vers 0,65 dès le vingtième tour — on
+  //     se relève à 55 % de ses PV, donc la moyenne ne descend plus. Elle dit
+  //     « le match a commencé », jamais « le match se termine » : on la
+  //     plafonne sous le seuil du troisième acte ;
+  //   · le CŒUR monte lentement et ne redescend JAMAIS (0,00 au douzième tour,
+  //     0,24 au trente-cinquième). C'est le vrai arc de l'histoire ;
+  //   · le CHRONO sert de garde-fou quand les deux autres traînent.
+  const avancement = Math.max(
+    Math.min(USURE_MAX, usure * 0.65),
+    coeurs * 2.2,
+    battle.turn / limite,
+  // UN FINISHER POUSSE L'HISTOIRE, IL NE LA VERROUILLE PAS. La règle était
+  // « un finisher est tombé → main event », pour toujours : le premier gros
+  // coup du quinzième tour figeait l'acte III sur les vingt tours suivants, et
+  // 71 % du temps de jeu s'y passait. Chaque finisher avance le récit d'un
+  // cran, et c'est tout.
+  ) + Math.min(0.08, battle.stats.finishers * 0.04);
+  if (avancement >= ACTE_III) return PHASES.late;
+  if (avancement < ACTE_II && battle.heat < HEAT_ENCORE_FROIDE) return PHASES.early;
   return PHASES.mid;
 }

@@ -1,11 +1,19 @@
-// Campagne : une saison de 8 épisodes. Chaque épisode propose 2 matchs ; le joueur en réserve un.
+// Campagne : une carrière courte de 8 épisodes. Chaque épisode propose 2
+// matchs ; le joueur en réserve un. Le huitième est le match de championnat
+// du monde — c'est là que la carrière se joue.
 // Chaque match : type, adversaires (id ou {id, boost}), taille d'équipe, directives du Network, récompenses.
 export const SEASON = {
-  name: 'Saison 1 — De la salle de bingo au PPV',
-  // L'OBJECTIF DU PPV. Il ne se décroche qu'en gagnant l'essentiel de ses
-  // matchs : sur cent saisons simulées, la médiane tombe à 1 950 fans en
-  // Kayfabe et 1 815 en Scénarios. À 1 500, huit saisons sur dix passaient
-  // sans effort — un objectif que tout le monde atteint n'est pas un objectif.
+  name: 'Une carrière — De la salle de bingo à la ceinture',
+  // LE CHAMPION DU MONDE. Sept matchs de route, puis lui. Le classement (voir
+  // `src/game/rank.js`) ne décide pas si on a son match — on l'a toujours —
+  // mais dans quelles conditions on l'obtient.
+  champion: 'le_caillou',
+  beltName: 'Championnat du Monde PPW',
+  // LE PUBLIC N'EST PLUS LE BUT, IL EST LE MOYEN. Il payait la fin de la
+  // saison : « 2 000 fans à l'arrivée, sinon fin “ok” ». Un nombre en guise
+  // d'histoire. Les fans achètent maintenant les entraînements et les recrues
+  // qui vous emmènent jusqu'à la ceinture, et ce seuil n'est plus qu'une
+  // mention honorable sur l'écran de fin.
   finalFansGoal: 2000,
   shows: [
     {
@@ -79,14 +87,18 @@ export const SEASON = {
           desc: 'Éliminez tous les envahisseurs et leur nouveau leader. Pas de compte, pas de DQ.' },
       ],
     },
+    // LE HUITIÈME ÉPISODE N'OFFRE PAS DE CHOIX. Tous les autres en proposent
+    // deux ; celui-là n'en propose qu'un, parce qu'il n'y a plus qu'une
+    // question. Les adversaires écrits ici sont ceux du meilleur cas —
+    // `titleMatch()` les remplace selon votre classement, et c'est la seule
+    // chose que le classement décide.
     {
-      id: 'ep8', title: 'Épisode 8 — Le PPV : Bataille du Siècle',
-      intro: 'Le grand soir. Le Boss Final et le Chef Tribal veulent racheter votre promotion. Le Network diffuse en direct.',
+      id: 'ep8', title: 'Épisode 8 — Le PPV : le Championnat du Monde',
+      intro: 'Le grand soir. Une ceinture, un champion, et vous. Le Network diffuse en direct et tout le monde sait ce qui se joue : sept matchs de route s’arrêtent ici, d’une manière ou d’une autre.',
+      title_match: true,
       matches: [
-        { id: 'ep8a', script: { summary: 'Le main event parfait : vous gagnez par tombé après votre finisher, après avoir survécu au sien.', finish: { winner: 'player', method: 'pin', finisher: true }, beats: ['near_fall_self', 'took_finisher', 'heat'] }, title: 'Main event : le Boss Final', type: 'showdown', teamSize: 2, enemies: [{ id: 'le_caillou', boost: { hp: 20, stats: 1 } }, 'ronan_rains'], directives: ['finisher_finish', 'kickout_drama', 'heat'], reward: { money: 2000, fans: 800 },
-          desc: 'Deux contre deux, tout le monde doit être éliminé. Le Boss se relève toujours une fois.' },
-        { id: 'ep8b', script: { summary: 'Évasion héroïque de la cage devant le Chef Tribal.', finish: { winner: 'player', method: 'escape' }, beats: ['whip_hazard', 'comeback', 'heat'] }, title: 'Main event : la Lignée en cage', type: 'cage', teamSize: 1, enemies: [{ id: 'ronan_rains', boost: { hp: 20, stats: 1 } }], directives: ['escape', 'heat'], reward: { money: 1800, fans: 700 },
-          desc: 'Un contre un dans la cage contre le Chef Tribal. Reconnaissez-le… ou évadez-vous.' },
+        { id: 'ep8a', script: { summary: 'Le main event parfait : vous gagnez par tombé après votre finisher, après avoir survécu au sien.', finish: { winner: 'player', method: 'pin', finisher: true }, beats: ['near_fall_self', 'took_finisher', 'heat'] }, title: 'Championnat du Monde PPW', type: 'showdown', teamSize: 1, enemies: ['le_caillou'], directives: ['finisher_finish', 'kickout_drama', 'heat'], reward: { money: 2000, fans: 800 },
+          desc: 'Tout le monde doit être éliminé. Le champion se relève toujours une fois de plus qu’on ne le croit.' },
       ],
     },
   ],

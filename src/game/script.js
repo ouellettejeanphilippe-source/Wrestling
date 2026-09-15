@@ -1,5 +1,6 @@
 // Évaluation des directives (mode Kayfabe) et des scripts (mode Scénarios).
 import { DIRECTIVES } from '../data/directives.js';
+import { avgHeat } from '../engine/util.js';
 
 export function evaluateDirectives(battle, ids) {
   return (ids || []).map((id) => ({ id, ...DIRECTIVES[id], done: !!DIRECTIVES[id] && DIRECTIVES[id].check(battle) }));
@@ -33,7 +34,10 @@ export function evaluateScript(battle, script) {
   const finishOk = finishMatches(battle, script.finish);
   const beats = evaluateDirectives(battle, script.beats);
   const ratio = beats.length ? beats.filter((b) => b.done).length / beats.length : 1;
-  let stars = 1 + ratio * 2.5 + (battle.heat / 100) * 1.5;
+  // Même raison : la chaleur finale valait 100 pour tout le monde, donc cette
+  // moitié d'étoile et demie était offerte à tous les shows. La moyenne se
+  // situe entre 34 et 77 — on la ramène sur la même échelle.
+  let stars = 1 + ratio * 2.5 + Math.min(1, avgHeat(battle) / 75) * 1.5;
   if (!finishOk) stars = Math.min(stars, 1.5);
   stars = Math.max(1, Math.min(5, Math.round(stars * 2) / 2));
   return { finishOk, beats, stars };
