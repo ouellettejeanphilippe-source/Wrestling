@@ -2,7 +2,11 @@
 // Chaque match : type, adversaires (id ou {id, boost}), taille d'équipe, directives du Network, récompenses.
 export const SEASON = {
   name: 'Saison 1 — De la salle de bingo au PPV',
-  finalFansGoal: 1500,
+  // L'OBJECTIF DU PPV. Il ne se décroche qu'en gagnant l'essentiel de ses
+  // matchs : sur cent saisons simulées, la médiane tombe à 1 950 fans en
+  // Kayfabe et 1 815 en Scénarios. À 1 500, huit saisons sur dix passaient
+  // sans effort — un objectif que tout le monde atteint n'est pas un objectif.
+  finalFansGoal: 2000,
   shows: [
     {
       id: 'ep1', title: 'Épisode 1 — Le Bingo du Centre Communautaire',

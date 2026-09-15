@@ -7,6 +7,9 @@ import { evaluateDirectives, evaluateScript } from './script.js';
 
 export const SAVE_KEY = 'ppw-save-v1';
 export const TRAIN_COST = 150;
+// Ce qu'une défaite coûte en public. C'est la seule pression de la saison
+// depuis qu'un épisode perdu ne se rejoue plus : elle doit se sentir.
+export const LOSS_FANS = 0.14;
 export const MAX_TRAIN = 5;
 export const TRAINABLE = [['str', 'FOR', 1], ['agi', 'AGI', 1], ['tec', 'TEC', 1], ['def', 'DEF', 1], ['cha', 'CHA', 1], ['hp', 'PV', 10]];
 
@@ -77,20 +80,50 @@ export function applyResult(state, battle, matchDef, teamIds) {
   if (state.mode === 'scenario') {
     const ev = evaluateScript(battle, matchDef.script);
     summary.script = ev;
-    summary.money = Math.round(matchDef.reward.money * (ev.stars / 5) * 1.2);
-    summary.fans = Math.round(matchDef.reward.fans * (ev.stars / 5) * 1.3);
-    summary.advance = ev.stars >= 2.5;
+    // EN MODE SCÉNARIOS, LA QUALITÉ EST LE PRODUIT. Le cachet suivait les
+    // étoiles mais avec un coefficient calé sur rien : une saison de bookeur
+    // finissait à 1 206 fans là où une saison de lutteur en faisait 2 001, et
+    // l'objectif du PPV devenait inatteignable dans un mode sur deux. Un show
+    // à cinq étoiles doit rapporter le double d'un show moyen, et une saison
+    // bien bookée doit tirer autant qu'une saison bien luttée.
+    summary.money = Math.round(matchDef.reward.money * (ev.stars / 5) * 1.8);
+    summary.fans = Math.round(matchDef.reward.fans * (ev.stars / 5) * 2);
+    // Le show continue, quelle qu'ait été la note — comme en Kayfabe. Un
+    // verrou à 2,5★ bloquait la saison au premier épisode raté ; ce qui se
+    // paie, c'est le cachet et le public, pas le droit de continuer.
+    //
+    // Un finish non respecté reste ce qu'il est : un « shoot ». Le Network
+    // coupe la moitié du cachet et une partie de la salle s'en va.
+    summary.advance = true;
+    if (!ev.finishOk) {
+      summary.money = Math.round(summary.money * 0.5);
+      summary.fans = Math.round(summary.fans * 0.5) - Math.round(state.fans * LOSS_FANS);
+    }
     summary.message = !ev.finishOk
-      ? 'Vous n’avez pas respecté le finish. Le Network parle de « shoot ». Reprise obligatoire.'
-      : ev.stars >= 4.5 ? 'Match de l’année ! Le Network est aux anges.' : ev.stars >= 2.5 ? 'Épisode validé par le Network.' : 'Note trop basse : le Network exige une reprise.';
+      ? 'Vous n’avez pas respecté le finish. Le Network parle de « shoot » — cachet coupé de moitié, et la salle vous en veut.'
+      : ev.stars >= 4.5 ? 'Match de l’année ! Le Network est aux anges.'
+        : ev.stars >= 2.5 ? 'Épisode validé par le Network.'
+          : 'Note basse. Le Network diffuse quand même, en soupirant.';
   } else {
+    // UNE DÉFAITE FAIT AVANCER LE SHOW. Avant, il fallait GAGNER pour passer à
+    // l'épisode suivant — et sur 30 saisons simulées, une sur quatre restait
+    // bloquée : six épisodes différents se rejouaient six fois sans succès.
+    // Un mode histoire qui exige de rejouer un épisode quatre fois n'est pas
+    // une histoire, c'est un mur. Et ça ne ressemble à rien de connu : un
+    // lutteur qui perd le mardi lutte quand même le mardi suivant.
+    //
+    // La saison continue donc toujours ; ce qui se paie, c'est le PUBLIC. Le
+    // véritable enjeu redevient l'objectif de fans du PPV, qui ne se décroche
+    // qu'en gagnant l'essentiel de ses matchs.
     summary.directives = won ? evaluateDirectives(battle, matchDef.directives) : [];
     const bonus = summary.directives.filter((d) => d.done).reduce((a, d) => ({ money: a.money + d.reward.money, fans: a.fans + d.reward.fans }), { money: 0, fans: 0 });
     const heatMult = 0.8 + battle.heat / 250;
     summary.money = won ? Math.round(matchDef.reward.money * heatMult + bonus.money) : Math.round(matchDef.reward.money * 0.3);
-    summary.fans = won ? Math.round(matchDef.reward.fans * heatMult + bonus.fans) : -Math.round(state.fans * 0.05);
-    summary.advance = won;
-    summary.message = won ? 'Victoire ! Le show continue.' : 'Défaite. Le Network vous accorde une reprise de l’épisode… avec moins de fans.';
+    summary.fans = won ? Math.round(matchDef.reward.fans * heatMult + bonus.fans) : -Math.round(state.fans * LOSS_FANS);
+    summary.advance = true;
+    summary.message = won
+      ? 'Victoire ! Le show continue.'
+      : 'Défaite. Le show continue — mais une partie de la salle ne reviendra pas.';
   }
   state.money += summary.money;
   state.fans = Math.max(0, state.fans + summary.fans);

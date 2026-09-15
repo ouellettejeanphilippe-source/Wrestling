@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBattle, listActions, executeAction, moveUnit, computeDamage, pinChance, hitChance, pushUnit, endPlayerPhase, runEnemyPhase, autoPlay, getStats } from '../src/engine/battle.js';
+import { createBattle, listActions, executeAction, moveUnit, computeDamage, pinChance, hitChance, pushUnit, endPlayerPhase, runEnemyPhase, autoPlay, getStats, climbNeeded, startPhase } from '../src/engine/battle.js';
 import { WRESTLERS_BY_ID, WRESTLERS } from '../src/data/wrestlers.js';
 import { MOVES } from '../src/data/moves.js';
 import { CLASSES, SPECIALTIES } from '../src/data/classes.js';
@@ -192,40 +192,71 @@ test('bataille royale : élimination par-dessus la corde uniquement', () => {
   assert.equal(b.result.winner, 'player');
 });
 
-test('match d’échelle : deux tours d’escalade sans dégâts pour gagner', () => {
+test('match d’échelle : trois échelons sans dégâts pour décrocher la ceinture', () => {
   const b = mk('ladder', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina');
   place(s, 9, 7);                         // sur l'échelle, au centre du ring
+  // Trois tours et non deux : à deux, le premier arrivé gagnait sans être
+  // inquiété et un match d'échelle durait sept tours pour cinq coups.
+  assert.equal(climbNeeded(b), 3);
   executeAction(b, s, 'climb');
   assert.equal(s.climb, 1);
   s.acted = false;
   b.api.applyDamage(s, 5, findE(b, 'jobber_1'), {});
   assert.equal(s.climb, 0, 'les dégâts font retomber');
-  executeAction(b, s, 'climb'); s.acted = false; executeAction(b, s, 'climb');
+  const souffle = s.stamina;
+  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; executeAction(b, s, 'climb'); }
+  assert.ok(s.stamina < souffle, 'chaque échelon coûte du souffle');
   assert.ok(s.flags.belt);
   assert.equal(b.result.winner, 'player');
+});
+
+test('la cage se quitte en deux, et seulement là où la stipulation le prévoit', () => {
+  const cage = mk('cage', ['jean_sina'], ['jobber_1']);
+  assert.equal(climbNeeded(cage), 3, 'trois échelons partout : à deux, le premier arrivé gagnait sans être inquiété');
+  // Hell in a Cell annonce « Enfermés. Pas d'évasion » : 60 % de ses matchs se
+  // terminaient pourtant par une évasion, parce que le code lisait `cage` au
+  // lieu de la condition de victoire.
+  const hiac = mk('hell_in_cell', ['jean_sina'], ['jobber_1']);
+  const s = findP(hiac, 'jean_sina');
+  place(s, 5, 3);                          // dans un coin
+  assert.equal(listActions(hiac, s).find((a) => a.id === 'climb'), undefined,
+    'pas d’escalade en Hell in a Cell');
+  const evadable = findP(cage, 'jean_sina');
+  place(evadable, 5, 3);
+  assert.ok(listActions(cage, evadable).find((a) => a.id === 'climb'), 'mais bien en cage');
 });
 
 test('cage : évasion depuis un coin', () => {
   const b = mk('cage', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina');
   place(s, 5, 3);
-  executeAction(b, s, 'climb'); s.acted = false; executeAction(b, s, 'climb');
+  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; executeAction(b, s, 'climb'); }
   assert.ok(s.flags.escaped);
   assert.equal(b.result.winner, 'player');
 });
 
-test('tag : seul le lutteur légal peut couvrir, le tag soigne et donne du momentum', () => {
+test('tag : seul le légal peut couvrir, et le repos se prend au coin, pas au relais', () => {
   const b = mk('tag', ['jean_sina', 'derby_allin'], ['jobber_1', 'jobber_2']);
   const s = findP(b, 'jean_sina'), d = findP(b, 'derby_allin'), j = findE(b, 'jobber_1');
   assert.ok(s.legal && !d.legal);
   place(s, 6, 5); place(d, 5, 5); place(j, 7, 5); j.hp = 5;
   assert.ok(!listActions(b, d).find((a) => a.id === 'pin').ok, 'le non-légal ne peut pas couvrir');
-  d.hp = 40;
+  d.hp = 40; d.stamina = 40;
   executeAction(b, s, 'tag', { unit: d });
   assert.ok(d.legal && !s.legal);
-  assert.ok(d.hp > 40 && d.momentum >= 30);
   assert.equal(b.stats.tags, 1);
+  assert.ok(d.momentum >= 30, 'le relais donne du momentum');
+  assert.ok(d.stamina > 40, 'et des jambes fraîches');
+  // Le relais NE SOIGNE PLUS. Soigner 15 % à chaque tag faisait un tapis
+  // roulant : 18 relais par match et 88 % des matchs à la limite de temps.
+  assert.equal(d.hp, 40, 'le relais lui-même ne rend aucun PV');
+
+  // Ce qui rend des PV, c'est le TEMPS passé au coin, hors du match.
+  const avant = s.hp = 40;
+  s.hadTurn = true;
+  startPhase(b, 'player');
+  assert.ok(s.hp > avant, 'le partenaire qui attend son tour se remet, lentement');
 });
 
 test('compte à l’extérieur : 6 tours dehors = éliminé', () => {
@@ -270,10 +301,11 @@ test('l’IA joue une phase complète sans erreur et finit par gagner ou perdre'
   for (const show of SEASON.shows) for (const m of show.matches) {
     const team = ['jean_sina', 'derby_allin', 'brian_danielsson'].slice(0, m.teamSize).map((id) => W[id]);
     const b = createBattle({ match: m, playerTeam: team, seed: 3 });
-    // Un match dure maintenant une trentaine de tours : le plafond du test
-    // doit rester au-dessus de la limite de temps du moteur (45), sinon il
-    // mesure sa propre impatience.
-    const r = autoPlay(b, 60);
+    // Le plafond du test doit rester au-dessus de la limite de temps du MOTEUR,
+    // sinon il mesure sa propre impatience. Cette limite appartient désormais à
+    // la stipulation : 60 tours en général, 85 pour les formes longues (match
+    // par équipes, Last Man Standing).
+    const r = autoPlay(b, 90);
     assert.ok(r && ['player', 'enemy'].includes(r.winner), `${m.id} se termine`);
   }
 });
@@ -390,17 +422,25 @@ test('les armes se cherchent sous le ring, depuis le bord du tablier', () => {
   assert.equal(b.underRing, stock - 1);
 });
 
-test('Last Man Standing : deux tours au sol et c’est le compte de dix', () => {
+test('Last Man Standing : on se relève tant qu’il reste du cœur, et le dernier décide', () => {
   const b = mk('last_man_standing', ['jean_sina'], ['jobber_1']);
   assert.ok(b.rules.tenCount && b.rules.noPin);
   const j = findE(b, 'jobber_1');
-  j.down = true; j.downTurns = 0; j.hp = 0;
-  endPlayerPhase(b);                    // premier passage : l'arbitre commence à compter
-  assert.ok(!j.eliminated, 'il a encore un tour pour se relever');
-  assert.equal(j.downTurns, 1);
-  runEnemyPhase(b);
-  endPlayerPhase(b);                    // deuxième passage : dix !
-  assert.ok(j.eliminated && j.elimReason === 'stoppage');
+  // Avec du cœur, il répond au compte. Deux tours au sol suffisaient à finir
+  // le match, quel que soit le porteur : un Last Man Standing durait seize
+  // tours, alors que « se relever » EST la stipulation.
+  j.grit = 2; j.down = true; j.downTurns = 0; j.hp = 0;
+  endPlayerPhase(b);
+  assert.ok(!j.eliminated, 'l’arbitre commence à compter');
+  runEnemyPhase(b); endPlayerPhase(b);
+  assert.ok(!j.eliminated, 'il est debout à neuf');
+  assert.equal(j.down, false);
+  assert.equal(j.grit, 1, 'et ça lui a coûté un cœur');
+
+  // Sans cœur, le compte va au bout.
+  j.grit = 0; j.down = true; j.downTurns = 1; j.hp = 0;
+  runEnemyPhase(b); endPlayerPhase(b);
+  assert.ok(j.eliminated && j.elimReason === 'stoppage', 'dix !');
 });
 
 test('la précision se calcule depuis la case d’où l’on frappera', () => {

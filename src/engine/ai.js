@@ -1,7 +1,7 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
 import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } from './grid.js';
 import { enemiesOf, hpRatio } from './util.js';
-import { listActions, getReachable, hitChance, computeDamage, moveRange, tapChance, novelty, DAMAGE_SCALE } from './battle.js';
+import { listActions, getReachable, hitChance, computeDamage, moveRange, tapChance, tossChance, subIsTheRoute, novelty, DAMAGE_SCALE } from './battle.js';
 import { movePart, wearFrom, wearOf, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from './wear.js';
 import { matchPhase } from './phases.js';
 import { MOVES } from '../data/moves.js';
@@ -129,8 +129,25 @@ function scoreAction(battle, unit, pos, a, tg) {
       if (a.id === 'whip') return E(scoreWhip(battle, unit, pos, tg.unit));
       return E(tg.unit.momentum >= 50 ? 45 : 5);
     }
+    // LE MODE SCÉNARIOS. Ces deux actions n'existent que pour l'équipe du
+    // joueur, donc l'IA adverse ne les voit jamais — et elles n'avaient donc
+    // aucun score. Résultat : toute partie automatique en mode Scénarios
+    // plantait à la première évaluation, et le mode n'a jamais pu être mesuré.
+    case 'sell': return E(12 + (100 - battle.heat) * 0.2);
+    case 'job': {
+      // Faire le job, c'est perdre EXPRÈS — mais pas n'importe quand. On donne
+      // la fin quand on est bien amoché et que le match a duré : un job au
+      // troisième tour, c'est un mauvais match, et la note s'en ressent.
+      const pret = hpRatio(unit) < 0.4 && battle.turn >= 14;
+      return E(pret ? 260 : 3);
+    }
     default: {
       const m = a.move, t = tg.unit;
+      // GARDE-FOU DE CLASSE. Une action sans cible qui atterrit ici parce que
+      // personne n'a pensé à lui écrire un `case` faisait planter l'IA — c'est
+      // arrivé deux fois, avec la défausse puis avec le mode Scénarios. Une
+      // action inconnue vaut désormais « presque rien », pas « crash ».
+      if (!m || !t) return 1;
       const hit = hitChance(battle, unit, t, m, { pos }) / 100;
       const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos, travel: pos.travel });
       let s = hit * dmg * 2;
@@ -141,7 +158,14 @@ function scoreAction(battle, unit, pos, a, tg) {
       // comprise. Sans ça, l'IA ne voyait pas que sa clé de jambe vaut trois
       // fois plus après dix tours de travail sur cette jambe — et le seul
       // vrai plan long du catch restait un plan que personne ne jouait.
-      if (m.type === 'submission') s += hit * tapChance(battle, unit, t, m) * 250;
+      // Une soumission qui peut faire abandonner vaut ce que vaut la VICTOIRE.
+      // Là où c'est la seule porte de sortie, elle doit peser autant qu'un
+      // tombé à forte chance (200 + c×400), sinon l'IA joue le match comme
+      // s'il y avait un tombé au bout — et il n'y en a pas.
+      if (m.type === 'submission') {
+        const c = tapChance(battle, unit, t, m);
+        s += subIsTheRoute(battle) && c >= 0.15 ? 200 + c * 400 : hit * c * 250;
+      }
       // Ce que le coup laisse SUR LE CORPS, en plus de ce qu'il retire aux PV.
       s += wearValue(battle, unit, t, m, dmg) * hit;
       // La prudence se mesure à ce qu'il reste de patience à l'arbitre. Tant
@@ -163,10 +187,13 @@ function scoreAction(battle, unit, pos, a, tg) {
       // Entrer sans être légal : même logique. Un arbitre complaisant qui a
       // encore trois avertissements en réserve, ça se tente — c'est du catch.
       // Au dernier, c'est perdre le match sur un coup de sang.
-      if (rules.tag && !unit.legal && battle.refDistracted <= 0) {
-        const marge = risqueArbitre(battle, unit);
-        s = marge >= 0.9 ? Math.min(s * 0.15, 12) : s * (1 - 0.55 * marge);
-      }
+      // Attaquer sans être légal n'est pas une triche qu'on dose : c'est la
+      // seule action qui peut donner le match à l'adversaire sans qu'il ait
+      // rien fait. Pondérer le malus par la patience restante de l'arbitre le
+      // rendait quasi nul en début de match (0,94 avec un arbitre complaisant)
+      // et le partenaire illégal frappait tranquillement. Hors arbitre
+      // distrait, c'est non.
+      if (rules.tag && !unit.legal && battle.refDistracted <= 0) s = Math.min(s * 0.08, 6);
       // Elle joue un SPECTACLE, pas un solveur. Un mouvement déjà servi rapporte
       // moins de momentum et moins de chaleur (le moteur s'en charge), et l'IA
       // doit le voir : sans ce terme, elle trouvait la meilleure prise du tour
@@ -273,7 +300,12 @@ function scoreWhip(battle, unit, pos, target) {
     if (tile === 'steps') return 80 * mult;
     if (tile === 'turnbuckle') return 70 * mult;
     if (tile === 'rope') { s = battle.rules.toss ? 60 : 14; break; }
-    if (battle.rules.toss && isOutside(g, target.x + dx * i, target.y + dy * i)) return 230 * mult;
+    // Projeter dehors ne vaut que ce que vaut la CHANCE de le sortir. Un 230
+     // fixe faisait projeter l'IA sans relâche vers les cordes, et les
+     // lutteurs étaient éliminés à 80 % de leurs PV.
+     if (battle.rules.toss && isOutside(g, target.x + dx * i, target.y + dy * i)) {
+       return (40 + tossChance(battle, unit, target) * 320) * mult;
+     }
     if (tile === 'void') break;
   }
   return s * mult;
@@ -316,6 +348,12 @@ function positional(battle, unit, pos, action = null) {
   // Prendre la hauteur : on y frappe plus juste et on encaisse moins. On ne
   // compare qu'aux adversaires proches, sinon un lutteur irait se percher au
   // bout de l'aréna pour un bonus théorique.
+  // QUELQU'UN EST SUR L'ÉCHELLE. Le bonus d'attaque contre un grimpeur ne
+  // servait que s'il était déjà à portée : les deux lutteurs couraient vers
+  // l'échelle et le premier arrivé gagnait sans être inquiété. Se rapprocher
+  // d'un grimpeur doit valoir plus que tout le reste.
+  const grimpeur = enemiesOf(battle, unit).find((e) => e.climb > 0);
+  if (grimpeur) s += Math.max(0, 90 - manhattan(grimpeur, pos) * 12);
   const near = enemiesOf(battle, unit).filter((e) => manhattan(e, pos) <= 4);
   if (near.length) {
     const mine = heightAt(g, pos.x, pos.y);
@@ -333,6 +371,20 @@ function positional(battle, unit, pos, action = null) {
   // remède est pire que pas de garde-fou du tout.
   const rentre = action && action.type === 'rollin';
   if (rules.countOut > 0 && isOutside(g, pos.x, pos.y) && !rentre) s -= 35 + (unit.outsideCount || 0) * 30;
+  // LE PARTENAIRE ILLÉGAL RESTE SUR LE TABLIER, LA MAIN TENDUE.
+  //
+  // C'est la racine du problème, pas le score d'attaque : 73 % des matchs par
+  // équipes finissaient en disqualification, et 100 % de ces DQ venaient d'un
+  // partenaire non légal qui frappait. Il frappait parce qu'il était à portée,
+  // et il était à portée parce que rien ne l'empêchait de traverser le ring.
+  // Un lutteur illégal a une seule raison d'être quelque part : à côté de son
+  // partenaire, prêt à recevoir le tag.
+  if (rules.tag && !unit.legal) {
+    const dedans = !isOutside(g, pos.x, pos.y) && !['rope', 'turnbuckle'].includes(tileAt(g, pos.x, pos.y));
+    if (dedans && battle.refDistracted <= 0) s -= 120;
+    const partenaire = battle.units.find((v) => v.team === unit.team && v !== unit && !v.eliminated && v.legal);
+    if (partenaire) s += Math.max(0, 22 - manhattan(partenaire, pos) * 6);
+  }
   if (rules.toss && ['rope', 'turnbuckle'].includes(tileAt(g, pos.x, pos.y))) s -= 30;
   if (rules.cage && hpRatio(unit) < 0.4 && tileAt(g, pos.x, pos.y) === 'turnbuckle') s += 25;
   return s;

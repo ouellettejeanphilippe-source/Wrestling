@@ -22,18 +22,47 @@ test('nouvelle partie : roster, agents libres, entraînement et recrutement', ()
   assert.ok(!st.freeAgents.includes(id));
 });
 
-test('mode kayfabe : la victoire fait avancer l’épisode, la défaite non', () => {
+test('mode kayfabe : le show avance toujours, mais la défaite coûte la salle', () => {
+  // La règle a changé pour une raison mesurée : quand il fallait GAGNER pour
+  // passer à l'épisode suivant, une saison simulée sur quatre restait bloquée,
+  // six épisodes différents se rejouant six fois sans succès. Un mode histoire
+  // qui exige de rejouer un épisode quatre fois n'est pas une histoire.
   const st = newGame({ promoName: 'T', mode: 'kayfabe', starters: ['jean_sina', 'derby_allin', 'brian_danielsson'] });
   const m = currentShow(st).matches[0];
   const b = createBattle({ match: buildMatch(st, m), playerTeam: [WRESTLERS_BY_ID.jean_sina], seed: 5 });
   b.result = { winner: 'player', reason: 'x', turns: 5 };
   const s = applyResult(st, b, m, ['jean_sina']);
-  assert.ok(s.advance && st.showIndex === 1 && s.money > 0);
+  assert.ok(s.advance && st.showIndex === 1 && s.money > 0, 'la victoire paie et fait avancer');
+
+  const fansAvant = st.fans;
   const m2 = currentShow(st).matches[0];
   const b2 = createBattle({ match: buildMatch(st, m2), playerTeam: [WRESTLERS_BY_ID.jean_sina], seed: 5 });
   b2.result = { winner: 'enemy', reason: 'x', turns: 5 };
   const s2 = applyResult(st, b2, m2, ['jean_sina']);
-  assert.ok(!s2.advance && st.showIndex === 1 && s2.fans <= 0);
+  assert.equal(s2.advance, true, 'la défaite fait avancer le show elle aussi');
+  assert.equal(st.showIndex, 2);
+  assert.ok(s2.fans < 0, 'mais une partie de la salle ne revient pas');
+  assert.ok(st.fans < fansAvant, 'et le total en souffre');
+  assert.ok(s2.money > 0 && s2.money < s.money, 'le cachet est réduit, pas supprimé');
+});
+
+test('la saison va toujours au bout : c’est le total de fans qui décide', () => {
+  // Le garde-fou : huit épisodes, huit matchs, et une fin — quoi qu'il arrive.
+  for (const mode of ['kayfabe', 'scenario']) {
+    const st = newGame({ promoName: 'T', mode, starters: ['jean_sina', 'derby_allin', 'brian_danielsson'] });
+    let joues = 0;
+    while (!st.finished && joues < 20) {
+      const m = currentShow(st).matches[0];
+      const ids = st.roster.slice(0, m.teamSize).map((r) => r.id);
+      const b = createBattle({ match: buildMatch(st, m), playerTeam: ids.map((i) => WRESTLERS_BY_ID[i]), seed: 5 });
+      b.result = { winner: 'enemy', reason: 'x', turns: 5 };   // on perd TOUT
+      applyResult(st, b, m, ids);
+      joues++;
+    }
+    assert.equal(st.finished, true, `${mode} : la saison se termine même en perdant tout`);
+    assert.equal(joues, SEASON.shows.length, `${mode} : un match par épisode, pas de reprise`);
+    assert.equal(st.ending, 'ok', `${mode} : mais sans l’objectif du PPV`);
+  }
 });
 
 test('mode scénarios : le finish et les spots donnent une note, un shoot plafonne à 1,5★', () => {

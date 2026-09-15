@@ -428,11 +428,36 @@ La note est sévère par construction : sur 135 matchs simulés, la moyenne est 
 | --- | --- |
 | 🥇 Match simple / 🤝 Par équipes | premier tombé, soumission, count-out ou DQ décide |
 | 🪑 Hardcore | idem, sans DQ ni compte, armes et tables partout, tombé n'importe où |
-| 👑 Bataille royale | jeter les adversaires par-dessus la corde (ils doivent être sur les cordes/coin) |
-| 🪜 Échelle | grimper au centre 2 tours de suite sans subir de dégâts |
-| 🔒 Cage | tombé, soumission ou évasion (2 tours depuis un coin) |
+| 👑 Bataille royale | jeter les adversaires par-dessus la corde — **il faut les user d'abord** |
+| 🪜 Échelle | grimper au centre **3 tours de suite** sans subir de dégâts |
+| 🔒 Cage | tombé, soumission ou évasion (3 tours depuis un coin) |
+| 😈 Hell in a Cell | **pas d'évasion** : tombé ou soumission, et les murs font mal |
+| 🔟 Last Man Standing | au sol et incapable de répondre au compte — il se relève tant qu'il a du cœur ❤️ |
+| 🔗 Soumission uniquement | le faire abandonner, et rien d'autre |
 | ⏱️ Survie | tenir N tours face aux renforts |
 | ⚔️ Confrontation | éliminer tous les adversaires |
+
+### Les douze stipulations, mesurées
+
+Personne ne les avait jamais mesurées. Aucune ne **plantait** — elles produisaient de mauvais matchs, ce qui est pire
+parce que ça ne se voit pas. Cinq étaient cassées :
+
+| stipulation | avant | après | ce qui n'allait pas |
+| --- | --- | --- | --- |
+| 🪜 Échelle / TLC | 7,3 tours · ★1,5 | **23 tours · ★2,3** | deux échelons : le premier arrivé gagnait sans être inquiété |
+| 👑 Bataille royale | 11,4 tours · 6,6 coups · ★1,6 | **19,6 tours · 41,6 coups · ★2,9** | on sortait à 80 % de ses PV, et un « 1 contre 2 » n'est pas une bataille royale |
+| 🤝 Par équipes | **73 % de DQ** | **20 % au chrono · ★3,5** | le partenaire illégal entrait dans le ring ; puis le soin du relais a fait un tapis roulant |
+| 🔗 Soumission uniquement | **85 % au chrono** (57 tours) | **67 % par abandon · ★3,1** | sans tombé, rien ne faisait descendre le cœur : la seule route restait fermée |
+| 🔟 Last Man Standing | 15,9 tours · ★2,2 | **47,4 tours · 97 % au compte · ★3,5** | deux tours au sol et c'était fini, alors que « se relever » EST la stipulation |
+| 😈 Hell in a Cell | 60 % par évasion | **80 % par tombé · ★3,1** | il annonçait « pas d'évasion » et se terminait par une évasion six fois sur dix |
+
+Trois principes en sont sortis, et ils valent pour toute nouvelle stipulation :
+
+- **Le cœur ❤️ est l'horloge là où il n'y a pas de tombé.** Sans kick-outs il ne descend plus que d'un cran par relevé ;
+  on en donne donc moitié moins à user.
+- **L'arbitre arrête le match sauf si la stipulation a sa PROPRE façon d'éliminer** (par-dessus la corde, la ceinture).
+  Le garde-fou était accroché à « pas de tombé », ce qui n'est pas la même question.
+- **On use d'abord, on élimine ensuite.** Un homme frais s'accroche aux cordes, répond au compte et passe son relais.
 
 ## Interface de match (façon Fire Emblem)
 
@@ -477,6 +502,52 @@ de tapis.
   coiffé d'un clap de cinéma (qui sert de poignée à la feuille d'actions sur mobile), onomatopées à contour épais pour
   les dégâts, bannière de tour en balayage diagonal.
 - `prefers-reduced-motion` coupe les animations d'ambiance.
+
+## La campagne, jouée de bout en bout
+
+Comme les stipulations, elle n'avait jamais été mesurée. Cent saisons simulées plus tard, trois choses en sont
+sorties.
+
+**Le mode Scénarios plantait.** « Vendre » et « faire le job » n'existent que pour l'équipe du joueur, donc l'IA
+adverse ne les voit jamais et personne ne leur avait écrit de score : elles tombaient dans la branche par défaut, qui
+lit une cible qu'elles n'ont pas. Toute partie automatique en mode Scénarios s'arrêtait là — ce qui explique que le
+mode n'ait jamais pu être mesuré. C'est le **troisième** bogue de cette famille (après la défausse et le mode
+Scénarios) : la branche par défaut du score de l'IA renvoie désormais « presque rien » plutôt que de planter.
+
+**Une saison sur quatre restait bloquée.** Il fallait *gagner* pour passer à l'épisode suivant, et six épisodes
+différents se rejouaient six fois sans succès. Un mode histoire qui exige de rejouer un épisode quatre fois n'est pas
+une histoire — et ça ne ressemble à rien de connu : un lutteur qui perd le mardi lutte quand même le mardi suivant.
+
+> **Le show continue toujours.** Ce qui se paie, c'est le **public** : une défaite coûte 14 % de la salle, un finish
+> non respecté (un « shoot ») coupe le cachet de moitié. L'enjeu redevient l'objectif de fans du PPV — porté de 1 500 à
+> **2 000**, parce qu'à 1 500 huit saisons sur dix l'atteignaient sans effort.
+
+| | avant | après |
+| --- | --- | --- |
+| saisons qui se terminent | 44 % | **100 %** |
+| matchs joués pour 8 épisodes | 16,8 | **8,0** |
+| argent inutilisé à l'arrivée | 13 468 $ | **1 687 $** |
+| objectif du PPV atteint | 100 % | **46 % (Kayfabe) · 36 % (Scénarios)** |
+
+**Les directives du Network ne décrivaient plus le jeu.** Elles avaient été écrites quand un match durait six tours.
+
+| directive | avant | après |
+| --- | --- | --- |
+| Vite fait, bien fait | ≤ 8 tours — **réalisée 0 %** | ≤ 22 tours — 57 % |
+| Faites durer le plaisir | ≥ 10 tours — toujours vraie | ≥ 40 tours |
+| Foule en délire | 70+ de chaleur — **réalisée 100 %** | 3 kick-outs et 2 renversements — 21 % |
+| Sans une égratignure | aucun lutteur au sol — 11 % | aucun cœur ❤️ perdu — 50 % |
+| Hot tag | faire un tag — **100 %** | deux relais passés sous 40 % de PV |
+
+Plus deux nouvelles, qui parlent des systèmes récents : **Le membre qui lâche** (mettre un membre adverse hors service)
+et **On joue ce qu'on a** (ne jamais jeter sa main).
+
+Le principe, écrit dans `src/data/directives.js` : *une directive impossible et une directive gratuite se valent — ni
+l'une ni l'autre n'est une décision.* La cible est 25–75 % de réussite.
+
+> **Attention à la mesure.** Les premiers relevés étaient faussés : tant qu'une défaite obligeait à rejouer l'épisode,
+> les matchs *difficiles* étaient rejoués en boucle et pesaient cinq fois plus lourd dans la moyenne. Le bon
+> échantillon, c'est huit matchs par saison, une fois chacun.
 
 ## Hub de promotion (entre les shows)
 

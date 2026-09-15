@@ -31,7 +31,7 @@ export function showHub(root, app, tab = 'show') {
 function renderShow(show, st, app, root) {
   const box = h('div', {});
   box.append(h('h2', {}, show.title), h('p', { class: 'intro' }, show.intro));
-  box.append(h('p', { class: 'muted' }, st.mode === 'scenario' ? 'Choisissez un match à booker. Le script indique le finish imposé et les spots à réaliser ; la note en étoiles décide des récompenses (2,5★ minimum pour valider l’épisode).' : 'Choisissez un match à booker. Les directives du Network sont des bonus si vous gagnez.'));
+  box.append(h('p', { class: 'muted' }, st.mode === 'scenario' ? 'Choisissez un match à booker. Le script indique le finish imposé et les spots à réaliser ; la note en étoiles décide du cachet et du public. Le show continue quoi qu’il arrive — mais un finish non respecté est un « shoot », et ça se paie.' : 'Choisissez un match à booker. Les directives du Network sont des bonus si vous gagnez. Une défaite ne bloque pas la saison : elle vous coûte une partie de la salle.'));
   const list = h('div', { class: 'matches' });
   for (const m of show.matches) list.append(matchCard(m, st, app, root));
   box.append(list);
@@ -108,6 +108,7 @@ export function showSeasonEnd(root, app) {
     h('p', {}, good
       ? `${st.promoName} termine la saison avec ${st.fans} fans. Le Network signe un contrat de cinq ans, le buffet est enfin chaud, et quelqu’un a même acheté un vrai ring.`
       : `${st.promoName} termine la saison avec ${st.fans} fans (objectif : ${SEASON.finalFansGoal}). Le Network renouvelle pour six épisodes, à condition de trouver une meilleure salle que le bingo.`),
+    h('p', { class: 'muted' }, 'Les huit épisodes se jouent quoi qu’il arrive : une défaite fait avancer le show, elle coûte une partie de la salle. C’est le total de fans à l’arrivée qui décide.'),
     h('p', { class: 'muted' }, `Argent final : ${st.money} $ · Matchs : ${st.history.filter((x) => x.won).length} victoires / ${st.history.length}`),
     renderHistory(st),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => app.abandonCampaign() }, 'Nouvelle saison'), h('button', { class: 'btn ghost', onclick: () => app.toTitle() }, 'Menu')),
