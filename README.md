@@ -58,6 +58,45 @@ pour l'adversaire) et **Faire le job** (prendre le tombé / abandonner / passer 
 prévoit). L'adversaire IA « travaille » le match : ses tombés contraires au script réussissent rarement… mais un
 **shoot** reste possible.
 
+## Le vestiaire — faire le tour des 29 lutteurs
+
+Une carrière dure quarante minutes et finit sur une ceinture, gagnée ou pas. Mais une fois la ceinture prise, il n'y
+avait **aucune raison de recommencer** : la carrière suivante repartait du même vestiaire. Un roguelike sans
+méta-jeu n'a qu'une seule bonne partie.
+
+**Six lutteurs au départ, vingt-neuf en tout.** Chaque carrière en ouvre d'autres. Le modèle est celui de *Slay the
+Spire* (on débloque la Silencieuse en terminant avec l'Ironclad) et de *Binding of Isaac*.
+
+Le premier lutteur choisi est la **tête d'affiche** : c'est *sa* carrière, et c'est avec lui que comptent les
+déblocages. Les deux autres sont ses partenaires.
+
+Deux règles décident de tout le reste :
+
+1. **On débloque en jouant, pas seulement en gagnant.** Douze des vingt-trois conditions ne demandent pas la
+   ceinture — passer un adversaire à travers une table, gagner une cage, arriver premier prétendant. Une carrière
+   ratée doit quand même avoir servi à quelque chose.
+2. **Chaque condition est écrite à l'écran avant d'être remplie.** Un déblocage surprise ne récompense rien : on ne
+   peut pas viser ce qu'on ne voit pas. Le vestiaire (menu principal) montre les 29 portraits, les verrouillés
+   grisés avec leur condition en clair.
+
+Trois familles :
+
+| | |
+| --- | --- |
+| **L'héritage** (6) | Gagner la ceinture avec un lutteur ouvre la porte à celui qui lui ressemble — ou à celui qui l'attendait au tournant. |
+| **Les exploits** (15) | Une manière de jouer : 3 victoires par soumission, 3 main events, un colosse battu, un deck de 12 cartes, 4 000 $ en caisse, une carrière en mode Scénarios… |
+| **Le haut de l'affiche** (2) | Ne se prennent pas en une carrière : deux ceintures, puis cinq têtes d'affiche différentes sacrées. |
+
+**Mesuré sur 24 carrières simulées enchaînées** : 27 lutteurs sur 29, avec 5 déblocages dès la première carrière —
+les deux derniers sont justement les deux qui demandent une intention (tailler son deck sous 12 cartes, finir sans
+avoir tout dépensé), et un robot qui joue comme un robot ne les vise jamais.
+
+**Une condition était cassée et la mesure l'a attrapée** : « passez 3 adversaires à travers une table » — sur trente
+carrières, la médiane est de **zéro** table et le maximum de **deux**. Une condition que personne ne peut remplir
+n'est pas difficile, elle rend un lutteur injouable à vie. Un test construit maintenant, pour *chaque* condition, la
+carrière qui devrait la remplir, et exige qu'elle la remplisse — et vérifie l'inverse : qu'aucune ne tombe sur une
+carrière où il ne s'est rien passé.
+
 ## La carrière — courte, et une seule question au bout
 
 Une carrière, c'est **huit soirs** : sept matchs de route, puis le **Championnat du Monde**. Elle se termine
@@ -766,6 +805,7 @@ src/game/    state.js         campagne : argent, fans, roster, entraînement, re
              deck.js          le deck qui se construit en carrière (offre de cartes, plafond, oubli)
              rank.js          le classement et les trois termes du match de championnat
              route.js         la carte à embranchements (nœuds, arêtes, vivier de matchs)
+             unlocks.js       le vestiaire : les 23 conditions de déblocage et la progression
              week.js          les semaines sans match : repos, coulisses, boutique
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
@@ -775,7 +815,7 @@ src/ui/      title.js hub.js match.js cards.js tutorial.js dom.js
              avatar.js        enrobage DOM des sprites (vignettes, pions, repos animé)
 manifest.webmanifest, sw.js   installation et mode hors ligne (PWA)
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, route, PWA
+tests/                        node:test — grille, moteur, gimmicks, types de matchs, chaleur, decks, carrière, route, vestiaire, PWA
 ```
 
 Le moteur est indépendant du DOM et déterministe (seed) : `autoPlay(battle)` fait jouer l'IA contre l'IA, pratique
@@ -789,7 +829,9 @@ pour l'équilibrage.
 
 ## Idées pour la suite
 
+- Une difficulté montante entre les runs (l'Ascension de *Slay the Spire*, la Chaleur de *Hades*).
+- L'accessibilité : jouer un match entièrement au clavier, rôles et labels ARIA.
 - Des cartes qui ne sont pas que des mouvements : une carte qui change une règle du match pour un tour.
 - Le deck d'un lutteur comme partie de son personnage : une carte gagnée contre un adversaire précis.
 - Blessures, moral, contrats en mode Scénarios ; gestion des heels/faces (turns).
-- Sons et musiques ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.
+- Des musiques d'entrée ; animations de coups (sprites d'attaque) ; éditeur de lutteurs.

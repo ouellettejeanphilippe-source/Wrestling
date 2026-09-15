@@ -4,12 +4,14 @@ import { rosterPicker } from './cards.js';
 import { avatar } from './avatar.js';
 import { WRESTLERS, WRESTLERS_BY_ID, STARTER_CHOICES } from '../data/wrestlers.js';
 import { MATCH_TYPES } from '../data/matchTypes.js';
+import { CLASSES } from '../data/classes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
 import { load } from '../game/state.js';
 import { MANAGER_LIST, MANAGERS } from '../data/managers.js';
 import { loadRivalries, rivalryFor } from '../game/rivalry.js';
 import { showTutorial } from './tutorial.js';
 import { soundOn, setSound, play } from './sound.js';
+import { loadProgress, locker, UNLOCKS, isUnlocked, resetProgress } from '../game/unlocks.js';
 import { EVENT as INSTALLABLE, canInstall, promptInstall, isInstalled, needsIosHint } from '../pwa.js';
 
 // Bouton d'installation : présent seulement quand le navigateur a vraiment de
@@ -53,6 +55,7 @@ export function showTitle(root, app) {
     h('button', { class: 'btn primary big', onclick: () => showSetup(root, app) }, '🆕 Nouvelle saison'),
     saved ? h('button', { class: 'btn big', onclick: () => app.continueCampaign() }, `▶ Continuer (${saved.promoName}, épisode ${Math.min(saved.showIndex + 1, 8)})`) : null,
     h('button', { class: 'btn big', onclick: () => showExhibition(root, app) }, '🥊 Match d’exhibition'),
+    h('button', { class: 'btn big', onclick: () => showLocker(root, app) }, `🔒 Vestiaire (${loadProgress().wrestlers.length}/29)`),
     h('button', { class: 'btn big', onclick: () => showTutorial(root, {}) }, '📖 Comment jouer'),
     soundToggle(),
     installButton(),
@@ -96,25 +99,70 @@ function showSetup(root, app) {
   function modeCard(id, title, desc) {
     return h('div', { class: `mode-card ${mode === id ? 'on' : ''}`, 'data-mode': id, onclick: () => { mode = id; modeBtns.querySelectorAll('.mode-card').forEach((c) => c.classList.toggle('on', c.dataset.mode === id)); } }, h('b', {}, title), h('p', {}, desc));
   }
+  // LE VESTIAIRE S'OUVRE AU FIL DES CARRIÈRES. On ne choisit que parmi les
+  // lutteurs débloqués — et on voit les autres, avec ce qu'il faut faire pour
+  // les obtenir : on ne peut pas viser ce qu'on ne voit pas.
+  const progres = loadProgress();
+  const dispo = locker(progres).filter((x) => x.unlocked).map((x) => x.def);
   const counter = h('span', { class: 'muted' }, '0/3 choisis');
-  const cards = rosterPicker(STARTER_CHOICES.map((id) => WRESTLERS_BY_ID[id]), {
+  // LA TÊTE D'AFFICHE est le premier choisi : c'est SA carrière, et c'est avec
+  // lui que comptent les déblocages (« gagnez la ceinture avec X »).
+  const tete = h('p', { class: 'headliner muted' }, 'Le premier lutteur choisi sera votre tête d’affiche.');
+  const majTete = () => {
+    const premier = [...picked][0];
+    tete.textContent = premier
+      ? `⭐ Tête d’affiche : ${WRESTLERS_BY_ID[premier].name} — c’est sa carrière, et c’est avec lui que comptent les déblocages.`
+      : 'Le premier lutteur choisi sera votre tête d’affiche.';
+    tete.classList.toggle('on', !!premier);
+  };
+  const cards = rosterPicker(dispo, {
     max: 3, picked,
-    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); counter.textContent = `${picked.size}/3 choisis`; },
+    onChange: (ids) => { picked.clear(); ids.forEach((i) => picked.add(i)); counter.textContent = `${picked.size}/3 choisis`; majTete(); },
     onFull: () => toast('Maximum 3 lutteurs de départ', 'warn'),
   });
   root.append(h('div', { class: 'setup' },
-    h('h2', {}, 'Nouvelle saison'),
+    h('h2', {}, 'Nouvelle carrière'),
     h('label', {}, 'Nom de votre promotion ', nameInput),
     h('h3', {}, 'Mode de jeu'), modeBtns,
-    h('h3', {}, 'Choisissez 3 lutteurs de départ ', counter),
+    h('h3', {}, `Choisissez 3 lutteurs `, counter,
+      h('span', { class: 'muted small' }, ` · vestiaire : ${dispo.length}/${dispo.length + UNLOCKS.filter((u) => !isUnlocked(progres, u.id)).length}`)),
     h('p', { class: 'muted hint' }, 'Appuyez sur un portrait pour lire sa fiche, une seconde fois pour l’ajouter.'),
+    tete,
     cards,
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
-      h('button', { class: 'btn primary', onclick: () => { if (picked.size !== 3) return toast('Choisissez exactement 3 lutteurs', 'warn'); app.startCampaign({ promoName: nameInput.value.trim() || 'PPW', mode, starters: [...picked] }); } }, 'Lancer la saison →'),
+      h('button', { class: 'btn ghost', onclick: () => showLocker(root, app) }, '🔒 Vestiaire'),
+      h('button', { class: 'btn primary', onclick: () => { if (picked.size !== 3) return toast('Choisissez exactement 3 lutteurs', 'warn'); app.startCampaign({ promoName: nameInput.value.trim() || 'PPW', mode, starters: [...picked] }); } }, 'Lancer la carrière →'),
     ),
   ));
 }
+
+// LE VESTIAIRE. Tout le monde y figure, débloqué ou non, et chaque portrait
+// grisé porte sa condition en clair. C'est la carte du méta-jeu : ce qu'on a
+// fait, et ce qu'il reste à aller chercher.
+export function showLocker(root, app) {
+  clear(root);
+  const p = loadProgress();
+  const tout = locker(p);
+  const pris = tout.filter((x) => x.unlocked).length;
+  root.append(h('div', { class: 'setup locker' },
+    h('h2', {}, `🔒 Le vestiaire — ${pris}/${tout.length}`),
+    h('p', { class: 'muted' }, `${p.careers || 0} carrière${(p.careers || 0) > 1 ? 's' : ''} jouée${(p.careers || 0) > 1 ? 's' : ''} · ${p.belts || 0} ceinture${(p.belts || 0) > 1 ? 's' : ''} · ${(p.beltHeadliners || []).length} tête${(p.beltHeadliners || []).length > 1 ? 's' : ''} d’affiche sacrée${(p.beltHeadliners || []).length > 1 ? 's' : ''}`),
+    h('p', { class: 'muted hint' }, 'Chaque carrière ouvre le vestiaire un peu plus. La moitié des conditions ne demandent pas la ceinture : une carrière ratée sert quand même à quelque chose.'),
+    h('div', { class: 'locker-grid' }, tout.map((x) => h('div', { class: `locker-card ${x.unlocked ? 'on' : 'off'}` },
+      avatar(x.def, 52, { view: 'bust', bg: 'none' }),
+      h('b', {}, x.unlocked ? x.def.name : '???'),
+      h('span', { class: 'muted' }, x.unlocked ? `${CLASSES_ICON(x.def)} ${x.def.nick || ''}` : x.hint)))),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Menu'),
+      h('button', { class: 'btn ghost danger', onclick: () => {
+        if (!confirm('Remettre tout le vestiaire à zéro ? Les carrières et les ceintures gagnées seront oubliées.')) return;
+        resetProgress(); toast('Vestiaire remis à zéro'); showLocker(root, app);
+      } }, '🗑 Tout remettre à zéro'),
+    ),
+  ));
+}
+const CLASSES_ICON = (def) => (CLASSES[def.cls] || {}).icon || '';
 
 function showExhibition(root, app) {
   clear(root);

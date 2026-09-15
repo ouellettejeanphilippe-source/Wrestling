@@ -45,6 +45,7 @@ const ASSETS = [
   './src/game/deck.js',
   './src/game/script.js',
   './src/game/state.js',
+  './src/game/unlocks.js',
   './src/game/story.js',
   './src/main.js',
   './src/pwa.js',
