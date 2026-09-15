@@ -129,8 +129,25 @@ function scoreAction(battle, unit, pos, a, tg) {
       if (a.id === 'whip') return E(scoreWhip(battle, unit, pos, tg.unit));
       return E(tg.unit.momentum >= 50 ? 45 : 5);
     }
+    // LE MODE SCÉNARIOS. Ces deux actions n'existent que pour l'équipe du
+    // joueur, donc l'IA adverse ne les voit jamais — et elles n'avaient donc
+    // aucun score. Résultat : toute partie automatique en mode Scénarios
+    // plantait à la première évaluation, et le mode n'a jamais pu être mesuré.
+    case 'sell': return E(12 + (100 - battle.heat) * 0.2);
+    case 'job': {
+      // Faire le job, c'est perdre EXPRÈS — mais pas n'importe quand. On donne
+      // la fin quand on est bien amoché et que le match a duré : un job au
+      // troisième tour, c'est un mauvais match, et la note s'en ressent.
+      const pret = hpRatio(unit) < 0.4 && battle.turn >= 14;
+      return E(pret ? 260 : 3);
+    }
     default: {
       const m = a.move, t = tg.unit;
+      // GARDE-FOU DE CLASSE. Une action sans cible qui atterrit ici parce que
+      // personne n'a pensé à lui écrire un `case` faisait planter l'IA — c'est
+      // arrivé deux fois, avec la défausse puis avec le mode Scénarios. Une
+      // action inconnue vaut désormais « presque rien », pas « crash ».
+      if (!m || !t) return 1;
       const hit = hitChance(battle, unit, t, m, { pos }) / 100;
       const { dmg } = computeDamage(battle, unit, t, m, { noRng: true, pos, travel: pos.travel });
       let s = hit * dmg * 2;

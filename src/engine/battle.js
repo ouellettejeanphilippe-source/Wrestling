@@ -135,7 +135,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
     // L'arbitre du soir : sa tolérance change d'un match à l'autre, et elle
     // fait partie de ce qu'on lit avant de décider de tricher.
     ref: makeReferee(createRng(seed ^ 0x9e37)),
-    stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0 },
+    stats: { tables: 0, kickouts: 0, tags: 0, weaponsUsed: 0, playerWeaponHits: 0, highSpots: 0, finishers: 0, playerDowned: 0, playerStandUps: 0, playerTaunts: 0, playerTosses: 0, hazardWhips: 0, finisherFinish: false, lastElimReason: null, damageDealt: 0, sells: 0, playerKickouts: 0, playerTookFinisher: 0, heatTurn: 0, playerRedraws: 0 },
   };
   // LES MANAGERS. Un par camp au maximum, deux interventions chacun pour tout
   // le match. `match.managers` vient de l'écran de préparation : { player,
@@ -645,6 +645,7 @@ export function executeAction(battle, unit, actionId, target = null) {
     case 'wait': heal(battle, unit, 4); unit.rested = true; break;
     case 'redraw': {
       const avant = unit.hand.length;
+      if (unit.team === 'player') battle.stats.playerRedraws++;
       redraw(battle, unit);
       unit.rested = true;
       log(battle, `🔄 ${unit.name} n’a rien qui passe : il se replace, souffle, et repart sur autre chose. (${avant} carte(s) jetées)`);

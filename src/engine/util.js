@@ -34,6 +34,11 @@ export function addMomentum(battle, unit, n) {
 }
 export function addHeat(battle, n) {
   battle.heat = clamp(battle.heat + n, 0, 100);
+  // À QUEL TOUR LA SALLE S'EST-ELLE LEVÉE. La chaleur sature à 100 dans
+  // presque tous les matchs : « finir avec 70+ de chaleur » était donc une
+  // directive gratuite, réalisée 100 fois sur 100. Ce qui distingue un match,
+  // c'est la VITESSE à laquelle le public se lève.
+  if (battle.stats && !battle.stats.heatTurn && battle.heat >= 70) battle.stats.heatTurn = battle.turn;
 }
 export function heal(battle, unit, n) {
   const before = unit.hp;
