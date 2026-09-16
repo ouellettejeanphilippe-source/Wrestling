@@ -10,8 +10,7 @@
 import { createRng } from '../engine/rng.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { TRAINABLE, MAX_TRAIN } from './state.js';
-import { cardOffer, learnCard, forgetCard, knownMoves, deckSize, DECK_MIN } from './deck.js';
-import { isCard } from '../engine/hand.js';
+import { cardOffer, learnCard, forgetCard, knownMoves, deckSize, oubliable, DECK_MIN } from './deck.js';
 import { MOVES } from '../data/moves.js';
 
 // Une graine propre à chaque nœud : le même passage propose toujours la même
@@ -59,7 +58,7 @@ export function restGate(state) {
   return { ok: true, message: `Un house show tranquille : +${GATE_MONEY} $, +${GATE_FANS} fans.` };
 }
 
-export const trimmable = (entry) => [...knownMoves(entry)].filter(isCard).sort((a, b) => MOVES[a].name.localeCompare(MOVES[b].name));
+export const trimmable = (entry) => [...knownMoves(entry)].filter(oubliable).sort((a, b) => MOVES[a].name.localeCompare(MOVES[b].name));
 
 // ------------------------------------------------------------------ COULISSES
 //

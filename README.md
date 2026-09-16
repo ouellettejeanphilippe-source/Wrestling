@@ -540,11 +540,60 @@ Le menu à la Final Fantasy Tactics avait un défaut de fond : avec dix-huit mou
 s'allonge mais la **décision**, elle, ne devient jamais plus intéressante. Le meilleur coup du tour est presque
 toujours le même que celui du tour précédent, et on déroule une routine au lieu de lutter.
 
-Chaque lutteur a désormais **4 cartes en main** sur la vingtaine qu'il connaît.
+Chaque lutteur a désormais **5 cartes en main** sur la vingtaine qu'il connaît, et **tout est une carte**.
 
 | ce qui se pioche | ce qui ne se pioche jamais |
 | --- | --- |
-| classe, spécialité, course, cordes, usure — tout le reste | **les fondamentaux** (coup de poing, prise, Irish Whip, provoquer) sont toujours là ; la **signature** et le **finisher** s'ouvrent au momentum, pas au tirage |
+| tout, fondamentaux compris | la **signature** et le **finisher** s'ouvrent au momentum, pas au tirage |
+
+### Tout est une carte — même le coup de poing
+
+Les fondamentaux (coup de poing, prise, Irish Whip, provoquer) étaient hors du talon, toujours disponibles.
+C'était un filet : une mauvaise main voulait dire « je n'ai que les bases », jamais « je ne peux rien faire ». Mais
+ça voulait dire aussi que **la moitié des tours se jouait en dehors du système de cartes**, et qu'un coup de poing
+ne coûtait jamais rien. Une main qu'on peut ignorer n'est pas une main.
+
+La contrepartie est obligatoire, et c'est la réponse classique du genre : les fondamentaux entrent dans le talon
+**en plusieurs exemplaires**, comme les cinq Frappes du paquet de départ de *Slay the Spire*. On ne tire pas *le*
+coup de poing — on en a deux, qui reviennent souvent.
+
+La provocation, elle, reste à **un seul exemplaire** : elle ne fait aucun dégât. À deux, les matchs perdaient une
+chute chacun (3,00 → 2,68 sur soixante matchs) parce qu'un tour sur treize ne servait à rien.
+
+### Les cartes qui déplacent (`step`)
+
+Une carte `step: N` **emmène son lutteur** : on avance jusqu'à N cases vers la cible, puis le coup part. C'est le
+même geste — on ne frappe pas de loin, on entre dedans. Le pas s'ajoute au déplacement libre du tour, il compte
+comme de la course (donc pour l'élan et les combos), il coûte le souffle d'une course, et il ne consomme pas le
+droit de se déplacer.
+
+Sans lui, « tout est carte » ne marche pas : **69 %** des tours se passaient à marcher avant de pouvoir agir, et un
+match sur quatre finissait au chrono. Les trois coups de base portent donc un pas d'une case.
+
+| | avant (fondamentaux hors talon) | tout en cartes | **+ le pas** |
+| --- | --- | --- | --- |
+| tours par match | 37,3 | 40,2 | **34,5** |
+| coups portés | 10,6 | 10,1 | **11,1** |
+| coups distincts | 6,2 | 6,9 | **7,8** |
+| le coup le plus servi | 34 % | 37 % | **29 %** |
+| fins à la limite de temps | 15 % | 25 % | **8 %** |
+| il faut bouger avant d'agir | — | 69 % | **18 %** |
+| **tours entièrement morts** | 0 % | 0 % | **0 %** |
+
+### Ce que « tout est carte » a cassé ailleurs
+
+Deux conséquences systémiques, trouvées en mesurant :
+
+- **L'échelle est devenue une autoroute.** La seule chose qui interrompait une escalade, c'était d'encaisser des
+  dégâts — ce qui supposait que l'adversaire ait toujours un coup sous la main. Quand il lui arrive de n'avoir rien
+  à jouer, le grimpeur passe : les matchs d'échelle tombaient de 27 à **14 tours**, gagnés à **98 %** par la
+  ceinture. La règle manquante n'était pas dans l'IA, elle était dans le ring — **on ne grimpe pas avec quelqu'un
+  debout à côté de soi**, qu'il ait ou non de quoi frapper. Un homme *sonné*, lui, ne retient personne : les effets
+  d'étourdissement retrouvent une raison d'être.
+- **Grimper ne demande plus le même nombre d'échelons des deux côtés.** L'échelle se *dispute* (2 échelons : trois
+  tours tranquilles d'affilée ne se trouvent jamais une fois qu'on peut être bloqué), la cage se *fuit* (3 : là,
+  personne ne vous bloque, donc la longueur est la difficulté). À 2 partout, l'évasion de cage passait de 70 à 88 %
+  et le match tombait de 22 à 15 tours.
 
 **Ce qu'on ne joue pas, on le garde.** C'est la règle qui compte : tenir son Lariat lancé pendant trois tours en
 cherchant ses quatre cases de course, c'est du catch ; une main rebattue chaque tour, ce serait du hasard.
@@ -578,10 +627,13 @@ bougeait pas d'un pouce — le même à l'épisode 1 et au PPV. Il n'y avait rie
 raclée enseigne aussi, mais moins bien), et on peut toujours passer. La carte s'ajoute au deck de ce lutteur-là, et
 elle est sauvegardée avec la saison.
 
-**Le deck plafonne à 22 cartes.** Un lutteur commence la saison avec 13 à 19 cartes piochables (médiane 17) et la
+**Le deck plafonne à 32 cartes.** Depuis que tout est une carte — fondamentaux compris, en plusieurs exemplaires —
+un lutteur commence avec 24 à 28 cartes réelles (médiane 26) au lieu des 13 à 19 d'avant, et la
 saison compte huit épisodes : le plafond tombe donc vers le cinquième. Les premières cartes sont un cadeau, les
 dernières sont un arbitrage — apprendre veut alors dire **oublier autre chose**, et c'est le joueur qui choisit quoi.
-La signature et le finisher ne s'oublient jamais : ce sont les marques du personnage.
+La signature et le finisher ne s'oublient jamais : ce sont les marques du personnage. **Les fondamentaux non plus** —
+ils valent plusieurs cartes dans le talon, et ce sont les seuls qui entrent au corps à corps tout seuls : les
+retirer ne resserrerait pas un deck, ça le casserait. Le plancher passe de 8 à **12 cartes** pour la même raison.
 
 Ce que coûte réellement une carte de plus, mesuré sur 400 matchs simulés — le nombre de tours avant de **repiocher une
 carte précise**, avec une main de quatre :

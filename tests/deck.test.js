@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle } from '../src/engine/battle.js';
 import { newGame, playerBonuses, buildMatch, applyResult, exhibitionMatch } from '../src/game/state.js';
-import { cardOffer, learnCard, knownMoves, deckSize, CARD_POOL, DECK_MAX, OFFRE } from '../src/game/deck.js';
+import { cardOffer, learnCard, knownMoves, deckSize, oubliable, CARD_POOL, DECK_MAX, DECK_MIN, OFFRE } from '../src/game/deck.js';
 import { WRESTLERS_BY_ID } from '../src/data/wrestlers.js';
 import { movesFor, unitMoves } from '../src/engine/units.js';
 import { isCard, buildDeck } from '../src/engine/hand.js';
@@ -64,8 +64,10 @@ test('le deck a un plafond : au-delà, apprendre oblige à oublier', () => {
   const refus = learnCard(st, 'jean_sina', suivante);
   assert.equal(refus.ok, false);
   assert.equal(refus.mustForget, true, 'le refus doit dire pourquoi');
-  // Avec un sacrifice, ça passe — et la taille ne bouge pas.
-  const sacrifie = [...knownMoves(e)].filter(isCard)[0];
+  // Avec un sacrifice, ça passe — et la taille ne bouge pas. Le sacrifié doit
+  // être une carte à exemplaire unique : on n'oublie pas un fondamental, qui
+  // vaut trois cartes dans le talon.
+  const sacrifie = [...knownMoves(e)].filter(oubliable)[0];
   assert.ok(learnCard(st, 'jean_sina', suivante, sacrifie).ok);
   assert.equal(deckSize(e), DECK_MAX, 'une carte apprise, une carte perdue');
   assert.ok(!knownMoves(e).has(sacrifie), 'le mouvement sacrifié a bien disparu');
@@ -127,19 +129,25 @@ test('une sauvegarde d’avant les decks continue de marcher', () => {
 });
 
 test('un deck ne se vide pas : il y a un plancher', async () => {
-  const { forgetCard, DECK_MIN } = await import('../src/game/deck.js');
+  const { forgetCard } = await import('../src/game/deck.js');
   const st = partie();
   const e = st.roster[0];
   let garde = 0;
   while (deckSize(e) > DECK_MIN && garde++ < 40) {
-    const [carte] = [...knownMoves(e)].filter(isCard);
+    const [carte] = [...knownMoves(e)].filter(oubliable);
+    if (!carte) break;
     assert.ok(forgetCard(e, carte, true).ok, 'tailler son deck est une stratégie valable');
   }
-  assert.equal(deckSize(e), DECK_MIN);
-  const [derniere] = [...knownMoves(e)].filter(isCard);
+  assert.ok(deckSize(e) <= DECK_MIN + 1, `on descend jusqu’au plancher (obtenu ${deckSize(e)})`);
+  const derniere = [...knownMoves(e)].filter(oubliable)[0];
   const refus = forgetCard(e, derniere, true);
   assert.equal(refus.ok, false, 'sous le plancher, la main n’aurait plus rien à piocher');
-  assert.match(refus.reason, /8/);
+  assert.match(refus.reason, new RegExp(String(DECK_MIN)));
+  // UN FONDAMENTAL NE S'OUBLIE PAS. Il vaut plusieurs cartes dans le talon, et
+  // c'est la seule chose qui entre au corps à corps toute seule.
+  assert.equal(forgetCard(e, 'punch').ok, false, 'on ne désapprend pas le coup de poing');
+  assert.equal(oubliable('punch'), false);
+  assert.equal(oubliable('moonsault'), true);
   // Le plancher ne s'applique qu'au hub : l'échange « une carte apprise contre
   // une oubliée » passe toujours, il ne change pas la taille.
   assert.ok(forgetCard(e, derniere).ok, 'sans le garde-fou, l’échange reste possible');
