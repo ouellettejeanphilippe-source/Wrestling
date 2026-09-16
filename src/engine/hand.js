@@ -19,34 +19,45 @@
 // Une main rebattue chaque tour, ce serait du hasard.
 import { MOVES } from '../data/moves.js';
 
-export const HAND_SIZE = 4;
+export const HAND_SIZE = 5;
 
-// LES FONDAMENTAUX NE SE PIOCHENT PAS
+// TOUT EST UNE CARTE — Y COMPRIS LES FONDAMENTAUX
 //
-// Frapper, attraper, projeter : un lutteur sait faire ça les yeux fermés, à
-// n'importe quel moment du match. Les mettre dans le talon produisait des
-// tours entièrement morts — 41 % des tours l'étaient, et l'IA passait plus de
-// la moitié de son temps à jeter sa main. Ce n'est pas la tension qu'on
-// cherche : une mauvaise main doit vouloir dire « je n'ai que les bases ce
-// tour-ci », pas « je ne peux rien faire ».
+// Ils étaient hors du talon, toujours disponibles. C'était un filet : une
+// mauvaise main voulait dire « je n'ai que les bases », jamais « je ne peux
+// rien faire ». Mais ça voulait dire aussi que la moitié des tours se jouait
+// en dehors du système de cartes, et qu'un coup de poing ne coûtait jamais
+// rien. Une main de quatre qu'on peut ignorer n'est pas une main.
 //
-// C'est aussi ce qui fait exister les bonnes cartes. Un Lariat lancé n'est
-// spécial que parce qu'il y a un coup de poing à côté pour le comparer.
-export const ALWAYS = new Set(['punch', 'grapple', 'whip', 'taunt']);
-// La signature et le finisher ne se piochent pas non plus : ils se MÉRITENT.
-// Le momentum les ouvre, comme avant. Un finisher qu'on tire au sort n'aurait
-// plus rien d'un finisher.
+// LA CONTREPARTIE EST OBLIGATOIRE, et c'est la réponse classique du genre :
+// les fondamentaux entrent dans le talon EN PLUSIEURS EXEMPLAIRES, comme les
+// cinq Frappes du paquet de départ de Slay the Spire. On ne tire pas « le »
+// coup de poing, on en a plusieurs qui reviennent souvent — c'est ce qui rend
+// « tout est carte » jouable au lieu de bloquant.
+//
+// Le premier essai (fondamentaux au talon, un seul exemplaire chacun) donnait
+// 41 % de tours entièrement morts. Les copies et les cartes qui déplacent
+// (`step`) existent pour ça, et un test mesure le résultat.
+export const COPIES = { punch: 2, grapple: 2, whip: 2, taunt: 1 };
+
+// Ce qui ne se pioche toujours pas : la signature et le finisher. Le momentum
+// les ouvre, comme avant. Un finisher qu'on tire au sort n'aurait plus rien
+// d'un finisher.
 export const OFF_DECK_TIERS = new Set(['signature', 'finisher']);
 export function isCard(id) {
   const m = MOVES[id];
-  return !!m && !ALWAYS.has(id) && m.type !== 'taunt' && !OFF_DECK_TIERS.has(m.tier);
+  return !!m && !OFF_DECK_TIERS.has(m.tier);
 }
 
-// Le talon d'un lutteur : tout ce qui se pioche dans son répertoire de match.
-// En carrière ce répertoire n'est plus figé — `src/game/deck.js` y ajoute ce
-// qu'il a appris et en retire ce qu'il a oublié. En exhibition, c'est
-// exactement le répertoire de sa fiche.
-export const buildDeck = (unit) => unit.moves.filter(isCard);
+// Combien d'exemplaires de cette carte dans un talon neuf.
+export const copiesOf = (id) => COPIES[id] || 1;
+
+// Le talon d'un lutteur : tout ce qui se pioche dans son répertoire de match,
+// les fondamentaux en plusieurs exemplaires. En carrière ce répertoire n'est
+// plus figé — `src/game/deck.js` y ajoute ce qu'il a appris et en retire ce
+// qu'il a oublié. En exhibition, c'est exactement le répertoire de sa fiche.
+export const buildDeck = (unit) => unit.moves.filter(isCard)
+  .flatMap((id) => Array.from({ length: copiesOf(id) }, () => id));
 
 // Mélange déterministe : le générateur du match, pour que deux parties avec la
 // même graine se déroulent à l'identique (c'est ce dont vivent les tests).
@@ -114,6 +125,9 @@ export const deckState = (unit) => ({
 // ils apparaissent verrouillés, avec ce qu'il manque. Les retirer de la liste
 // ferait disparaître l'objectif : on ne monte pas une jauge vers un finisher
 // qu'on ne voit pas.
+// Les mouvements jouables ce tour : LA MAIN, plus les paliers mérités qui ne
+// se piochent pas. Il n'y a plus rien d'autre — plus de coup de poing gratuit
+// à côté du système.
 export function availableMoves(unit) {
   return [...new Set([...(unit.hand || []), ...unit.moves.filter((id) => !isCard(id) && MOVES[id])])];
 }

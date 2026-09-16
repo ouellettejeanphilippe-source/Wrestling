@@ -76,11 +76,13 @@ test('une carte qui n’est pas en main n’est pas proposée', () => {
   d.momentum = 100;
   enMain(d);
   assert.equal(listActions(b, d).find((a) => a.id === 'moonsault'), undefined, 'pas en main, pas proposé');
-  // Les fondamentaux, eux, sont toujours là : une mauvaise main veut dire
-  // « je n'ai que les bases », jamais « je ne peux rien faire ».
+  // LES FONDAMENTAUX NON PLUS. Tout est une carte : hors de la main, un coup
+  // de poing n'existe pas. C'est ce qui donne son poids à la main.
   for (const id of ['punch', 'grapple', 'whip', 'taunt']) {
-    assert.ok(listActions(b, d).find((a) => a.id === id), `${id} reste disponible`);
+    assert.equal(listActions(b, d).find((a) => a.id === id), undefined, `${id} ne s’offre plus gratuitement`);
   }
+  enMain(d, 'punch');
+  assert.ok(listActions(b, d).find((a) => a.id === 'punch'), 'en main, le coup de poing revient');
   // Et le finisher ne se pioche pas : c'est la jauge qui l'ouvre.
   assert.ok(listActions(b, d).find((a) => a.id === 'coffin_drop'), 'le finisher est mérité, pas pioché');
   enMain(d, 'moonsault');
@@ -90,10 +92,11 @@ test('une carte qui n’est pas en main n’est pas proposée', () => {
 test('portée et prérequis des mouvements filtrent les cibles', () => {
   const b = mk('singles', ['derby_allin'], ['jobber_1']);
   const d = findP(b, 'derby_allin'), j = findE(b, 'jobber_1');
-  enMain(d, 'moonsault', 'crossbody');
+  enMain(d, 'moonsault', 'crossbody', 'punch');
   place(d, 7, 5); place(j, 10, 5);
   let acts = listActions(b, d);
-  assert.ok(!acts.find((a) => a.id === 'punch').ok, 'trop loin pour un coup de poing');
+  // Trois cases : même avec son pas d'une case, le coup de poing n'y va pas.
+  assert.ok(!acts.find((a) => a.id === 'punch').ok, 'trop loin pour un coup de poing, même en entrant dedans');
   assert.ok(!acts.find((a) => a.id === 'moonsault').ok, 'moonsault exige un coin');
   place(d, 5, 3); place(j, 6, 4);
   acts = listActions(b, d);
@@ -111,12 +114,12 @@ test('portée et prérequis des mouvements filtrent les cibles', () => {
 test('échelle de momentum : un mouvement coûte son palier et en rapporte s’il touche', () => {
   const b = mk('singles', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina'), j = findE(b, 'jobber_1');
-  enMain(s, 'bodyslam', 'kneestrike');
+  enMain(s, 'bodyslam', 'kneestrike', 'taunt');
   place(s, 7, 5); place(j, 8, 5);
   s.momentum = 30;
   assert.ok(listActions(b, s).find((a) => a.id === 'bodyslam').ok, 'classe débloquée à 25');
   assert.ok(!listActions(b, s).find((a) => a.id === 'kneestrike').ok, 'spécialité verrouillée à 30');
-  assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer toujours disponible');
+  assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer, quand on l’a en main');
   const r = executeAction(b, s, 'bodyslam', { unit: j });
   assert.ok(r.ok);
   if (r.hit) assert.ok(s.momentum >= 30 + MOVES.bodyslam.momentum, 'un mouvement de classe ne coûte rien et rapporte');
@@ -132,6 +135,7 @@ test('un lutteur à 0 PV est au sol, peut être couvert, puis se relève', () =>
   const b = mk('singles', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina'), j = findE(b, 'jobber_1');
   place(s, 7, 5); place(j, 8, 5);
+  s.hand = ['punch'];
   j.hp = 1;
   const r = executeAction(b, s, 'punch', { unit: j });
   assert.ok(r.ok && r.hit);
@@ -196,9 +200,12 @@ test('match d’échelle : trois échelons sans dégâts pour décrocher la cein
   const b = mk('ladder', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina');
   place(s, 9, 7);                         // sur l'échelle, au centre du ring
-  // Trois tours et non deux : à deux, le premier arrivé gagnait sans être
-  // inquiété et un match d'échelle durait sept tours pour cinq coups.
-  assert.equal(climbNeeded(b), 3);
+  // DEUX échelons du côté de l'échelle, trois du côté de la cage. L'échelle se
+  // DISPUTE — personne ne monte avec un adversaire debout à côté — donc trois
+  // tours tranquilles d'affilée ne se trouvent jamais : les matchs finissaient
+  // au chrono au lieu de décrocher la ceinture. La cage, elle, se fuit sans
+  // que personne ne vous bloque : là, la longueur est la difficulté.
+  assert.equal(climbNeeded(b), 2);
   executeAction(b, s, 'climb');
   assert.equal(s.climb, 1);
   s.acted = false;

@@ -118,7 +118,11 @@ test('un renversement retourne le coup contre son auteur', () => {
 test('un match dure une trentaine de tours ET reste dense', () => {
   const ids = ['jean_sina', 'gunter', 'rey_mysterioso', 'ronan_rains'];
   let tours = 0, coups = 0, chutes = 0, finis = 0;
-  const n = 16;
+  // QUARANTE GRAINES, PAS SEIZE. Les chutes par match sont une statistique de
+  // population : sur seize tirages elle oscille de 2,7 à 3,2 d'un changement
+  // anodin à l'autre, et le test devient un détecteur de hasard. Sur quarante,
+  // elle tient au centième.
+  const n = 40;
   for (let seed = 1; seed <= n; seed++) {
     const b = mk([ids[seed % 2]], [ids[2 + seed % 2]], seed);
     autoPlay(b, 999);

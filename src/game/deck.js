@@ -19,7 +19,7 @@
 import { MOVES } from '../data/moves.js';
 import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { movesFor } from '../engine/units.js';
-import { isCard } from '../engine/hand.js';
+import { isCard, copiesOf } from '../engine/hand.js';
 import { createRng } from '../engine/rng.js';
 
 // COMBIEN DE CHOIX. Trois : deux, ce n'est pas un choix, c'est un tirage à
@@ -61,12 +61,12 @@ export function cardOffer(state, wrestlerId, tirage = 0) {
 // mouvement OBLIGE à en oublier un autre : c'est là que le choix commence à
 // coûter quelque chose. En dessous, on ajoute et c'est tout.
 //
-// Vingt-deux, mesuré : un lutteur commence la saison avec 13 à 19 cartes
-// piochables (médiane 17) et la saison compte huit épisodes. Le plafond tombe
-// donc vers le cinquième — les trois premières cartes sont un cadeau, les
-// dernières sont un arbitrage. C'est le bon endroit pour le mettre : assez
-// tard pour qu'on ait eu le temps de s'attacher à un deck, assez tôt pour
-// qu'il faille le trancher avant le PPV.
+// Trente-deux, mesuré. Depuis que TOUT est une carte — fondamentaux compris,
+// en plusieurs exemplaires — un lutteur commence avec 24 à 28 cartes réelles
+// (médiane 26) au lieu des 13 à 19 d'avant. Le plafond suit : à 32, on peut en
+// apprendre cinq ou six avant que ça coince, donc il tombe vers le cinquième
+// épisode comme avant. Assez tard pour s'être attaché à un deck, assez tôt
+// pour qu'il faille le trancher avant le PPV.
 //
 // CE QUE COÛTE UNE CARTE DE PLUS, mesuré sur 400 matchs simulés — le nombre
 // de tours avant de repiocher une carte précise, avec une main de quatre :
@@ -79,18 +79,21 @@ export function cardOffer(state, wrestlerId, tirage = 0) {
 // soixante matchs, un deck de 22 sort même plus de coups différents qu'un deck
 // de 18 (10,0 contre 8,8). Ce qu'on perd, c'est de pouvoir compter sur une
 // carte au moment où on en a besoin.
-export const DECK_MAX = 22;
+export const DECK_MAX = 32;
 
 // ET UN PLANCHER. On peut tailler son deck dans le hub, et c'est une vraie
-// stratégie — moins de cartes, chacune revient plus vite. Mais un deck vide
-// rendrait la main inutile : il ne resterait que les fondamentaux, c'est-à-dire
-// le menu d'avant. Huit cartes, c'est deux mains pleines.
-export const DECK_MIN = 8;
+// stratégie — moins de cartes, chacune revient plus vite. Mais depuis que les
+// fondamentaux sont DANS le talon, un deck trop maigre ne veut plus dire
+// « resserré », il veut dire « je ne peux plus rien faire » : il n'y a plus de
+// coup de poing gratuit en dehors. Douze cartes, c'est trois mains pleines.
+export const DECK_MIN = 12;
 
-// Combien de cartes se piochent réellement pour ce lutteur (son deck de
-// match), pour que l'écran puisse dire « 18 / 22 ».
+// Combien de cartes se piochent réellement pour ce lutteur, COPIES COMPRISES —
+// c'est ce nombre-là qui décide du temps d'attente avant de revoir une carte,
+// donc c'est celui qu'on affiche et qu'on plafonne. Compter les mouvements
+// distincts dirait « 21 cartes » pour un talon qui en contient 26.
 export function deckSize(entry) {
-  return [...knownMoves(entry)].filter(isCard).length;
+  return [...knownMoves(entry)].filter(isCard).reduce((a, id) => a + copiesOf(id), 0);
 }
 
 // Apprendre une carte. `oublie` est l'identifiant du mouvement qu'on laisse
@@ -105,7 +108,7 @@ export function learnCard(state, wrestlerId, moveId, oublie = null) {
   if (knownMoves(entry).has(moveId)) return { ok: false, reason: 'Déjà au répertoire' };
   if (deckSize(entry) >= DECK_MAX) {
     if (!oublie) return { ok: false, reason: 'Deck plein : il faut oublier un mouvement', mustForget: true };
-    if (!isCard(oublie) || !knownMoves(entry).has(oublie)) return { ok: false, reason: 'Ce mouvement ne s’oublie pas' };
+    if (!oubliable(oublie) || !knownMoves(entry).has(oublie)) return { ok: false, reason: 'Ce mouvement ne s’oublie pas' };
     forgetCard(entry, oublie);
   }
   entry.cards.push(moveId);
@@ -116,11 +119,18 @@ export function learnCard(state, wrestlerId, moveId, oublie = null) {
 // d'origine sur la liste noire. Les deux reviennent au même à l'usage, mais
 // il faut les distinguer — on ne peut pas retirer de `cards` ce qui n'y a
 // jamais été.
+// ON N'OUBLIE PAS UN FONDAMENTAL. Ils sont dans le talon en plusieurs
+// exemplaires : en « oublier » un retirerait trois cartes d'un coup, et
+// l'échange « une apprise, une oubliée » ne voudrait plus rien dire. Ce sont
+// aussi les seules cartes qui entrent au corps à corps toutes seules — les
+// retirer ne resserre pas un deck, il le casse.
+export const oubliable = (id) => isCard(id) && copiesOf(id) === 1;
+
 export function forgetCard(entry, moveId, plancher = false) {
   entry.cards = entry.cards || [];
   entry.forgotten = entry.forgotten || [];
   if (plancher && deckSize(entry) <= DECK_MIN) return { ok: false, reason: `Un deck ne descend pas sous ${DECK_MIN} cartes` };
-  if (!knownMoves(entry).has(moveId) || !isCard(moveId)) return { ok: false, reason: 'Ce mouvement ne s’oublie pas' };
+  if (!knownMoves(entry).has(moveId) || !oubliable(moveId)) return { ok: false, reason: 'Ce mouvement ne s’oublie pas' };
   const i = entry.cards.indexOf(moveId);
   if (i >= 0) entry.cards.splice(i, 1);
   else if (!entry.forgotten.includes(moveId)) entry.forgotten.push(moveId);

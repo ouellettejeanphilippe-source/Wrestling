@@ -123,6 +123,13 @@ test('l’arbitre avertit avant de disqualifier', () => {
   const b = mk('singles', ['jean_sina'], ['gunter']);
   const g = b.units.find((u) => u.team === 'enemy');
   b.ref = { ...b.ref, oeil: 99, patience: 3, maxPatience: 3, vus: 0 };   // il voit tout
+  // ON TESTE L'ARBITRE, PAS LE HASARD. Sans ça, il suffit qu'un des trois
+  // coups soit renversé — donc jamais porté, donc jamais vu — pour que le test
+  // échoue, et il ne tient alors que par la graine : le moindre changement
+  // ailleurs dans le moteur décale le tirage et le casse. On étourdit donc la
+  // cible, ce qui met la chance de renversement à zéro sans toucher au reste
+  // des tirages (dont celui de l'œil de l'arbitre).
+  g.statuses.dazed = 99;
   const illegal = { name: 'coup bas', type: 'strike', power: 5, stat: 'str', acc: 100, range: [1, 1], effects: { illegal: true } };
   g.x = b.units[0].x + 1; g.y = b.units[0].y;
   for (let i = 0; i < 2; i++) {

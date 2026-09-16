@@ -136,11 +136,43 @@ test('le ring se coupe : un lutteur à bout ne passe pas toujours le relais', ()
   assert.ok(tagChance(b, u) < abime, 'et étourdi, encore moins');
 });
 
-test('trois échelons partout : le premier arrivé ne gagne plus tout seul', () => {
-  for (const type of ['ladder', 'tlc', 'cage']) {
+test('grimper : deux échelons quand ça se dispute, trois quand ça se fuit', () => {
+  // L'ÉCHELLE SE DISPUTE. Personne ne monte avec un adversaire debout à côté
+  // de lui — mesuré, trois tours tranquilles d'affilée ne se trouvent alors
+  // jamais : 60 % des matchs finissaient au chrono au lieu de décrocher la
+  // ceinture. À deux, on retrouve 48 à 55 % de fins par la ceinture.
+  for (const type of ['ladder', 'tlc']) {
     const b = createBattle({ match: exhibitionMatch(type, ['jean_sina'], ['gunter']), playerTeam: [W.jean_sina], seed: 5 });
-    assert.equal(climbNeeded(b), 3, `${type} : trois tours d’escalade`);
+    assert.equal(climbNeeded(b), 2, `${type} : deux tours d’escalade, mais il faut faire de la place`);
   }
+  // LA CAGE SE FUIT, et personne ne vous y bloque : là, la longueur EST la
+  // difficulté. À deux, l'évasion passait de 70 à 88 % et le match tombait de
+  // 22 à 15 tours.
+  const cage = createBattle({ match: exhibitionMatch('cage', ['jean_sina'], ['gunter']), playerTeam: [W.jean_sina], seed: 5 });
+  assert.equal(climbNeeded(cage), 3, 'cage : trois tours d’escalade');
+});
+
+test('on ne grimpe pas avec quelqu’un debout sur le dos', () => {
+  // La seule chose qui interrompait une escalade, c'était d'encaisser des
+  // dégâts — ce qui supposait que l'adversaire ait toujours un coup sous la
+  // main. Depuis que TOUT est une carte, il lui arrive de n'avoir rien à
+  // jouer, et l'échelle devenait une autoroute : 98 % de ceintures en 14 tours.
+  const b = createBattle({ match: exhibitionMatch('ladder', ['jean_sina'], ['gunter']), playerTeam: [W.jean_sina], seed: 5 });
+  const moi = b.units.find((u) => u.team === 'player'), lui = b.units.find((u) => u.team === 'enemy');
+  moi.x = 9; moi.y = 7;                         // sur l'échelle
+  lui.x = 20; lui.y = 0; lui.eliminated = true; // personne à côté
+  const libre = listActions(b, moi).find((a) => a.id === 'climb');
+  assert.ok(libre && libre.ok, 'seul, on monte');
+  lui.eliminated = false; lui.x = moi.x + 1; lui.y = moi.y;
+  const gene = listActions(b, moi).find((a) => a.id === 'climb');
+  assert.equal(gene.ok, false, 'avec quelqu’un debout à côté, non');
+  assert.match(gene.reason, /à côté/);
+  // Mais un homme sonné ne retient personne : c'est ce qui redonne leur raison
+  // d'être aux effets d'étourdissement.
+  lui.statuses.dazed = 2;
+  assert.ok(listActions(b, moi).find((a) => a.id === 'climb').ok, 'sonné, il ne retient plus');
+  lui.statuses.dazed = 0; lui.down = true;
+  assert.ok(listActions(b, moi).find((a) => a.id === 'climb').ok, 'au sol non plus');
 });
 
 test('chaque stipulation garde la limite de temps qui lui va', () => {

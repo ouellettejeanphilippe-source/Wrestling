@@ -294,6 +294,38 @@ export function moveUnit(battle, unit, x, y) {
   }
   return true;
 }
+// LE PAS D'UNE CARTE — `step`
+//
+// Depuis que TOUTES les actions sont des cartes, un tour où la main ne contient
+// que des coups au corps à corps et où l'adversaire est à deux cases se passe à
+// marcher. Mesuré : 69 % des tours demandaient de se déplacer avant d'agir, et
+// les matchs finissaient 25 % du temps à la limite de chrono au lieu de 15 %.
+//
+// Une carte avec `step: N` emmène donc son lutteur : on avance jusqu'à N cases
+// vers la cible, puis le coup part. C'est le même geste — on ne frappe pas de
+// loin, on entre dedans.
+//
+// Ce n'est PAS le déplacement libre du tour : le pas s'ajoute, il compte comme
+// de la course (donc pour l'élan et les combos), il coûte le souffle d'une
+// course, et il ne consomme pas le droit de se déplacer.
+export function stepTo(battle, unit, x, y) {
+  if (unit.x === x && unit.y === y) return true;
+  const chemin = pathIn(reachable(battle.grid, battle.units, unit, STEP_MAX), x, y);
+  if (!chemin || chemin.length < 2) return false;
+  const cases = chemin.length - 1;
+  unit.movedTiles = (unit.movedTiles || 0) + cases;
+  unit.movePath = [...(unit.movePath || []).slice(0, -1), ...chemin];
+  addMomentum(battle, unit, Math.min(MOVE_MOMENTUM_CAP, cases));
+  spendStamina(battle, unit, cases * STAMINA_MOVE);
+  unit.facing = facingTo(unit, { x, y });
+  unit.x = x; unit.y = y; unit.climb = 0;
+  emit(battle, { type: 'move', uid: unit.uid, x, y });
+  return true;
+}
+// Un pas ne traverse pas l'aréna : au-delà, ce n'est plus un geste, c'est un
+// déplacement — et le déplacement a déjà ses règles.
+export const STEP_MAX = 4;
+
 export function undoMove(battle, unit) {
   if (!unit.prev || unit.acted) return false;
   unit.x = unit.prev.x; unit.y = unit.prev.y; unit.facing = unit.prev.facing || unit.facing;
@@ -386,6 +418,33 @@ export function listActions(battle, unit, pos = null) {
   // Un coin est une jonction de cordes : les mouvements « depuis les cordes » y fonctionnent aussi.
   const onTb = tile === 'turnbuckle', onRope = tile === 'rope' || tile === 'turnbuckle';
   const inRange = (t, [lo, hi]) => { const d = manhattan(p, t); return d >= lo && d <= hi; };
+  // LE PAS D'UNE CARTE. Une carte `step: N` peut atteindre ce qui est jusqu'à N
+  // cases plus loin — à condition qu'un chemin y mène vraiment. On retient la
+  // case d'où le coup partira (`via`), pour que l'exécution refasse
+  // exactement le trajet que l'affichage a promis.
+  const paliers = new Map();
+  const stepCases = (n) => {
+    if (!paliers.has(n)) {
+      paliers.set(n, [...reachable(g, battle.units, unit, Math.min(n, STEP_MAX), p).values()].filter((v) => !v.blocked));
+    }
+    return paliers.get(n);
+  };
+  // Depuis où peut-on frapper cette cible, en comptant le pas ? La case
+  // actuelle d'abord : on ne bouge que s'il le faut.
+  const viaPour = (m, t) => {
+    const [lo, hi] = m.range;
+    const d0 = manhattan(p, t);
+    if (d0 >= lo && d0 <= hi) return { x: p.x, y: p.y };
+    if (!m.step) return null;
+    let best = null;
+    for (const v of stepCases(m.step)) {
+      const d = manhattan(v, t);
+      if (d < lo || d > hi) continue;
+      const cout = manhattan(p, v);
+      if (!best || cout < best.cout) best = { x: v.x, y: v.y, cout };
+    }
+    return best;
+  };
   const wait = { id: 'wait', name: 'Attendre', tier: 'base', type: 'wait', desc: 'Termine le tour de ce lutteur. Récupère 4 PV.', targets: [{ self: true }], ok: true };
 
   if (unit.onlyPin) {
@@ -430,12 +489,16 @@ export function listActions(battle, unit, pos = null) {
     }
     if (m.type === 'taunt') a.targets = [{ self: true }];
     else if (mid === 'whip') {
-      a.targets = enemies.filter((e) => manhattan(p, e) === 1 && !e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
+      a.targets = enemies.map((e) => ({ e, via: (!e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))) ? viaPour(m, e) : null }))
+        .filter((x) => x.via)
+        .map(({ e, via }) => ({ unit: e, via, hit: hitChance(battle, unit, e, m, { pos: via }) }));
       if (a.ok && !a.targets.length) { a.ok = false; a.reason = 'Aucune cible debout adjacente'; }
     } else if (m.type === 'special') {
-      a.targets = enemies.filter((e) => inRange(e, m.range)).map((e) => ({ unit: e }));
+      a.targets = enemies.map((e) => ({ e, via: viaPour(m, e) })).filter((x) => x.via).map(({ e, via }) => ({ unit: e, via }));
     } else {
-      a.targets = enemies.filter((e) => inRange(e, m.range) && targetOk(battle, m, e, p)).map((e) => ({ unit: e, hit: hitChance(battle, unit, e, m, { pos: p }) }));
+      a.targets = enemies.map((e) => ({ e, via: targetOk(battle, m, e, p) ? viaPour(m, e) : null }))
+        .filter((x) => x.via)
+        .map(({ e, via }) => ({ unit: e, via, hit: hitChance(battle, unit, e, m, { pos: via }) }));
     }
     if (a.ok && !a.targets.length) {
       a.ok = false;
@@ -544,7 +607,25 @@ export function listActions(battle, unit, pos = null) {
   // description, et 60 % de ses matchs se terminaient pourtant par une
   // évasion : seule `fall_or_escape` ouvre cette porte.
   if (rules.cage && rules.victory === 'fall_or_escape' && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
-  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: `${climbNeeded(battle)} tours consécutifs sans subir de dégâts pour décrocher la ceinture. Chaque échelon coûte du souffle.`, targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
+  // ON NE GRIMPE PAS AVEC QUELQU'UN SUR LE DOS.
+  //
+  // La seule chose qui interrompait une escalade, c'était d'encaisser des
+  // dégâts. Tant que les fondamentaux étaient hors du talon, l'adversaire avait
+  // toujours un coup de poing sous la main et punissait le grimpeur sans y
+  // penser. Depuis que tout est une carte, il lui arrive de n'avoir rien de
+  // jouable — et l'échelle devenait une autoroute : les matchs d'échelle
+  // tombaient de 27 à 14 tours, gagnés à 98 % par la ceinture.
+  //
+  // La règle manquante n'était pas dans l'IA, elle était dans le ring. Un
+  // homme debout à côté de vous vous empêche de monter, qu'il ait ou non de
+  // quoi frapper. C'est aussi ce qu'on voit dans un vrai match d'échelle.
+  // Mais un homme ÉTOURDI ne retient personne. Bloquer sur la seule adjacence
+  // était l'excès inverse : il suffisait de se planter au pied de l'échelle
+  // pour que plus personne ne monte — 65 % des matchs finissaient au chrono et
+  // la ceinture n'était décrochée que 10 fois sur 100. Il faut donc le
+  // sonner d'abord, ce qui redonne leur raison d'être aux effets `daze`.
+  const colle = enemies.some((e) => !e.down && !e.eliminated && !(e.statuses && e.statuses.dazed) && manhattan(p, e) <= 1);
+  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: `${climbNeeded(battle)} tours consécutifs sans subir de dégâts pour décrocher la ceinture. Personne ne doit être debout à côté de vous. Chaque échelon coûte du souffle.`, targets: [{ self: true }], ok: !jambeHs && !colle, reason: jambeHs ? '🦵 Jambe hors service — impossible de grimper' : 'Quelqu’un est debout juste à côté : dégagez-le d’abord' });
   if (battle.mode === 'scenario' && unit.team === 'player') {
     actions.push({ id: 'sell', name: '🎭 Vendre (prendre un bump)', tier: 'script', type: 'sell', desc: 'Spot coopératif : perd 8 % PV, +12 chaleur, +10 momentum aux ennemis adjacents. Compte pour le script.', targets: [{ self: true }], ok: hpRatio(unit) > 0.12, reason: 'Trop amoché pour vendre' });
     const fin = (battle.script && battle.script.finish) || {};
@@ -601,6 +682,13 @@ export function executeAction(battle, unit, actionId, target = null) {
     if (!a.targets.some((t) => t.unit === tgt)) return { ok: false, reason: 'Cible invalide' };
   } else if (a.targets.length && a.targets[0].unit) {
     return { ok: false, reason: 'Cible requise' };
+  }
+  // LE PAS DE LA CARTE, avant que le coup parte. On refait exactement le
+  // trajet que `listActions` a promis à l'affichage : la prévision de combat
+  // a été calculée depuis cette case-là.
+  const cible = tgt ? a.targets.find((t) => t.unit === tgt) : null;
+  if (cible && cible.via && (cible.via.x !== unit.x || cible.via.y !== unit.y)) {
+    stepTo(battle, unit, cible.via.x, cible.via.y);
   }
   // On se tourne vers sa cible avant d'agir : le sprite suit le regard.
   if (tgt) unit.facing = facingTo(unit, tgt);
@@ -1536,7 +1624,16 @@ function tagPartner(battle, unit, partner) {
 // cage sur trois se jouaient avant que l'adversaire ait traversé le ring.
 // Trois tours, c'est le temps qu'il faut à l'autre pour venir vous faire
 // tomber — donc le temps qu'il faut pour que ce soit une décision.
-export const climbNeeded = () => 3;
+// COMBIEN D'ÉCHELONS. Ce n'est pas le même geste des deux côtés :
+//
+//  · L'ÉCHELLE (2) se dispute — depuis qu'un adversaire debout à côté de vous
+//    empêche de monter, il faut d'abord faire de la place, et trois tours
+//    tranquilles d'affilée ne se trouvent jamais : les matchs finissaient à
+//    60 % au chrono au lieu de décrocher la ceinture.
+//  · LA CAGE (3) se fuit. Personne ne vous y bloque, alors la longueur EST la
+//    difficulté : à deux, l'évasion passait de 70 à 88 % et le match tombait
+//    de 22 à 15 tours.
+export const climbNeeded = (battle) => ((battle && battle.rules && battle.rules.victory === 'belt') ? 2 : 3);
 
 function doClimb(battle, unit) {
   unit.climb += 1;
