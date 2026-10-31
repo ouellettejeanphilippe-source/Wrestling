@@ -200,6 +200,48 @@ coûtait de l'argent et ne rapportait rien**. La fatigue est ce qui donne un sen
 solo en retour (−15 % de PV de moyenne en match pour qui fait toujours lutter la même). Aucune des deux manières
 n'écrase l'autre, ce qui est le but.
 
+## Octobre 2026 — un robot qui joue par l'interface
+
+Le roster va être refait avant la v1 ; avant de créer des dizaines de lutteurs et de mouvements, il fallait que
+le jeu *marche* avec ceux qu'on a. Les tests de moteur mesurent le jeu mais ne cliquent sur rien : un écran qui
+ne défile pas ou un bouton qui ne démarre rien leur échappe. D'où `scripts/robot/` : un robot Playwright qui
+joue avec de vrais clics (carte, puis cible, déplacement, fin de tour), une carrière complète de huit soirs en
+Kayfabe ou en Scénarios, et chacune des douze stipulations en exhibition, en 1 contre 1 et en 2 contre 2, sur
+ordinateur, téléphone en portrait et téléphone en paysage. Il note tout ce qui ressemble à un blocage (match qui
+ne finit pas, geste sans effet, tour adverse qui ne rend pas la main, clic impossible) et garde une capture. Il
+tire ses coups au hasard (graine fixe) et gagne de temps en accélérant les attentes : c'est un joueur médiocre,
+exprès — il perd presque tous ses matchs, et `--win=0.8` lui fait « gagner » d'un coup pour voir les écrans de
+victoire, de ceinture et de déblocage.
+
+**Ce qu'il a trouvé** (aucun n'était visible aux tests) :
+
+| constat | cause | correction |
+| --- | --- | --- |
+| « Continuer » hors de l'écran après un match | l'overlay de résultat ne défilait pas ; récit en trois actes + cartes proposées dépassent 900 px | `.overlay` défile, `margin: auto` centre quand ça tient |
+| la carte levée n'est jamais surlignée ; recliquer dessus ne la repose pas | `listActions` recrée ses objets à chaque rendu, `ui.card === a` était toujours faux | comparaison par identifiant (`isRaised`), carte rafraîchie à chaque rendu |
+| aucune action du menu « Le ring » ne montre qu'elle est armée | même cause, et le style manquait | classe `raised` aussi sur ces boutons |
+| l'exhibition en bataille royale ne démarre jamais | le bouton lisait le sélecteur de format (verrouillé sur 1 contre 1) au lieu du format imposé 3 contre 4 | `tailleVoulue()` |
+| « Fin du tour » inaccessible en portrait téléphone | le conseil « tournez votre appareil » le recouvrait ; les clics attendaient quatre secondes | le conseil laisse passer les clics et se retire après six secondes |
+| l'échelle et le TLC annoncent trois échelons | le code en demande deux depuis le réglage de l'énergie | descriptions corrigées |
+
+Le robot a aussi fait remonter deux choses du moteur, mesurées ensuite sur 120 matchs (IA contre IA) :
+
+- **Le match par équipes était trop long** : médiane de 43 tours, 84 coups portés (30 pour un simple), 17 % de
+  fins au chrono ; le robot en a joué un de 24 tours et 80 gestes. Le soin du coin avait déjà été réglé trois fois
+  (voir `TAG_REST_HEAL`) : le levier est ailleurs, dans le poids d'un coup (`TAG_DAMAGE`). Essais, médiane / fins
+  au chrono : ×1,0 → 43 / 17 % ; ×1,25 → 30 / 3 % ; ×1,4 → 29 / 2 % ; ×1,6 → 23 / 0 %. Retenu : **×1,5, médiane
+  25 tours, 2 % au chrono** (tag : 5 relais par match au lieu de 11).
+- **La soumission uniquement finissait parfois au premier tour**, sur un seul geste, l'adversaire à 90 % de ses PV
+  (9 matchs sur 500 au tour 1, 23 sur 500 avant le tour 3). Un facteur proportionnel au travail déjà fait n'a
+  presque rien changé : la prise use le membre *avant* le jet d'abandon, on ne lit donc pas l'usure d'avant. Il a
+  fallu un plancher dur : pas d'abandon avant le tour 3, ni sur un adversaire au-dessus de 90 % de ses PV.
+  Résultat : 0 sur 500 avant le tour 3, la médiane (29 tours) et les fins au chrono (5 sur 60) ne bougent pas.
+
+**Ce qui reste, mesuré mais volontairement laissé** : l'échelle et le TLC vont au chrono 20 % du temps (80 %
+finissent par la ceinture, chiffre déjà accepté plus haut), la soumission uniquement (29 tours) et le Last Man
+Standing (27) restent des formes longues. Aucun ne plante ni ne bloque ; ce sont des réglages de contenu, à refaire
+avec les personnages originaux plutôt qu'avec ceux qu'on va jeter.
+
 ---
 
 # Parodie Pro Wrestling Tactics

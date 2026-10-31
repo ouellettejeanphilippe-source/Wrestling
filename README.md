@@ -21,10 +21,26 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 239 tests du moteur (node:test), ~50 s
+npm test           # 241 tests du moteur (node:test), ~50 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
+
+### Tester par l'interface
+
+Les tests mesurent le moteur ; ils ne cliquent sur rien. Le **robot** (`scripts/robot/`, Playwright, hors
+`npm test`) joue par de vrais clics : une carrière de huit soirs ou l'une des douze stipulations, sur ordinateur ou
+téléphone. Il faut le serveur lancé (`npm start`) et Playwright (préinstallé dans les sessions cloud).
+
+```bash
+node scripts/robot/run.cjs --scenario=career:kayfabe --seed=1          # une carrière
+node scripts/robot/run.cjs --scenario=exhibition --sizes --seed=1      # les douze stipulations, 1v1 puis 2v2
+node scripts/robot/run.cjs --scenario=career:scenario --view=phone     # en portrait téléphone (aussi : landscape)
+node scripts/robot/run.cjs --scenario=career:kayfabe --win=0.8         # « gagne » d'un coup : écrans de victoire et de ceinture
+```
+
+Il signale pages en erreur, matchs sans fin, gestes sans effet, clics impossibles, et garde une capture par constat
+dans `local/robot/`. Détail des options en tête de `scripts/robot/bot.cjs`.
 
 **En ligne** : chaque push sur `main` lance les tests puis redéploie le jeu sur GitHub Pages
 (`.github/workflows/pages.yml`). Les pull requests font tourner `npm test` (`.github/workflows/test.yml`).
@@ -63,14 +79,20 @@ Ce qui reste à faire, par ordre d'importance :
 
 1. **Des personnages originaux.** Le roster parodie de vrais lutteurs et sera remplacé avant la v1 (voir
    « Visages de référence »). C'est le plus gros chantier restant : sprites, gimmicks, cartes signatures.
-2. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
-   soigne, le partenaire illégal qui attend. À resserrer.
+2. **Les formes longues.** Le match par équipes est passé de 43 à 25 tours en médiane (voir le journal) ; la
+   soumission uniquement (29 tours) et le Last Man Standing (27) restent longs, et l'échelle va au chrono une fois
+   sur cinq. À régler avec les personnages originaux, pas avec ceux qu'on va jeter.
 3. **Le reste du retour visuel.** Un coup a maintenant du poids (élan, recul, onomatopée, carte qui file), mais
    une chute, une couverture et une table qui casse n'ont toujours que leur texte flottant et leur pose. Les
    déplacements se font par téléportation d'une case à l'autre.
 4. **Une difficulté qui monte entre les carrières** (l'Ascension de *Slay the Spire*), maintenant que l'écurie
    donne au joueur de quoi s'adapter.
 
+
+**Un robot joue le jeu par l'interface** (`scripts/robot/`, voir « Tester » plus bas) : carrières complètes,
+douze stipulations, ordinateur et téléphone. Il a trouvé six défauts d'écran que les tests de moteur ne voyaient
+pas (un bouton hors de la fenêtre, une carte levée jamais surlignée, une stipulation qui ne démarrait pas…), tous
+corrigés ; le récit est dans `docs/journal-de-conception.md`.
 
 Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'elles donnent une fois assemblées.
 
@@ -414,7 +436,8 @@ src/ui/      title.js         écran titre, vestiaire
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        24 fichiers node:test, 239 tests
+tests/                        24 fichiers node:test, 241 tests
+scripts/robot/                le robot Playwright qui joue par l'interface (hors npm test)
 docs/                         le journal de conception
 ```
 

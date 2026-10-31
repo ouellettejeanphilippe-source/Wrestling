@@ -958,6 +958,15 @@ export function hitChance(battle, attacker, target, move, opts = {}) {
 // foulée.
 export const DAMAGE_SCALE = 0.5;
 
+// LE POIDS D'UN COUP, PAR ÉQUIPES. Quatre corps à user, un seul légal par
+// camp, et un partenaire qui se remet au coin : à échelle égale, un match par
+// équipes durait 44 tours en médiane, encaissait 84 coups (contre 30 pour un
+// simple) et finissait au chrono une fois sur cinq. Le robot de test en a
+// joué un de 24 tours et 80 gestes dans une carrière de huit soirs. Le levier
+// est ici, pas dans le soin du coin (voir TAG_REST_HEAL) qui a déjà été réglé
+// trois fois.
+export const TAG_DAMAGE = 1.5;
+
 export function computeDamage(battle, attacker, target, move, opts = {}) {
   const A = getStats(battle, attacker), D = getStats(battle, target);
   const eff = move.effects || {};
@@ -996,7 +1005,7 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
     if (battle.rng.chance(0.04 + A.tec * 0.007)) { crit = true; dmg *= 1.5; }
     dmg *= 0.9 + battle.rng.next() * 0.2;
   }
-  return { dmg: Math.max(1, Math.round(dmg * DAMAGE_SCALE)), crit };
+  return { dmg: Math.max(1, Math.round(dmg * DAMAGE_SCALE * (battle.rules.tag ? TAG_DAMAGE : 1))), crit };
 }
 
 // LE RENVERSEMENT
@@ -1481,6 +1490,22 @@ export function tapChance(battle, attacker, target, move) {
   const seuleRoute = subIsTheRoute(battle);
   const poidsCoeur = seuleRoute ? 0.05 : 0.10;
   let c = worn * 0.25 + cible + A.tec * 0.008 - target.grit * poidsCoeur + ((move.effects || {}).tapBonus || 0) + (target.down ? 0.12 : 0);
+  // UN ADVERSAIRE FRAIS NE TAPE PAS. Ouvrir le poids du cœur à 5 % faisait
+  // finir des matchs à soumission uniquement en un ou deux tours, sur le premier
+  // verrou venu, l'adversaire à 90 % de ses PV (mesuré sur 200 matchs : 4,5 %
+  // finis en deux tours ou moins, 10 % en quatre, 20 % en huit). Le robot de
+  // test a vu un match de ce genre durer un tour et un geste. La chance reste
+  // donc proportionnelle au travail déjà fait : PV perdus ou membre usé.
+  if (seuleRoute) {
+    // Un facteur ne suffit pas : à 4 % par prise, 2 % des matchs (9 sur 500)
+    // finissaient quand même sur la première, car la prise use elle-même le
+    // membre AVANT le jet — on ne peut donc pas distinguer « travaillé avant »
+    // de « travaillé par cette prise ». D'où un plancher dur : les deux
+    // premiers tours se passent à se tâter, et personne ne tape sur un
+    // adversaire encore au-dessus de 90 % de ses PV.
+    if (battle.turn <= 2 || hpRatio(target) > 0.9) return 0;
+    c *= 0.1 + 0.9 * Math.min(1, Math.pow(Math.max(0, (1 - hpRatio(target)) / 0.45), 1.5) + cible * 4);
+  }
   // IL CONNAÎT LA PRISE. Une soumission ratée ne coûtait rien : l'IA reprenait
   // la même à chaque tour et le chinlock représentait 30 % de tous les coups du
   // jeu. Ce n'est pas du catch, c'est une boucle.

@@ -110,6 +110,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   const rotate = h('div', { class: 'rotate-hint' },
     h('span', {}, '📱↻ Tournez votre appareil : le plateau a besoin de largeur.'),
     h('button', { class: 'btn small', onclick: () => rotate.remove() }, 'OK'));
+  // Il se retire tout seul : en portrait il recouvrait « Fin du tour », le
+  // bouton le plus important de l'écran (trouvé par le robot de test, dont les
+  // clics restaient bloqués quatre secondes à chaque fin de tour).
+  setTimeout(() => rotate.remove(), 6000);
   root.append(h('div', { class: `match fits ${TOUCH ? 'touch' : ''}` }, el.top, mid, el.hand, el.banner, rotate));
   document.addEventListener('keydown', onKey);
   document.body.classList.add('in-match');
@@ -211,9 +215,23 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   // ------------------------------------------------------------ rendu global
   function render() {
     ensureSel();
+    refreshCard();
     renderTop(); renderBoard(); renderSides(); renderHand(); renderTicker(); renderPanel(); flushEvents(); fitBoard();
     setCrowd(battle.heat);
     if (battle.result && !ui.resultShown) { ui.resultShown = true; setTimeout(showResult, 1100); }
+  }
+  // LA CARTE LEVÉE SURVIT AU RENDU. `listActions` fabrique de nouveaux objets à
+  // chaque appel : comparer `ui.card === a` était toujours faux, donc la carte
+  // levée n'était jamais surlignée et un second clic dessus ne la reposait pas
+  // (trouvé par le robot de test : cibles allumées, aucune carte « levée » dans
+  // le DOM). On compare par identifiant et on reprend l'action fraîche, dont
+  // les cibles reflètent l'état du ring à cet instant.
+  const isRaised = (a) => !!ui.card && !!a && ui.card.id === a.id;
+  function refreshCard() {
+    if (!ui.card) return;
+    const fresh = ui.sel && battle.phase === 'player' && !battle.result ? listActions(battle, ui.sel).find((x) => x.id === ui.card.id) : null;
+    if (fresh && fresh.ok) ui.card = fresh;
+    else { ui.card = null; ui.pending = null; }
   }
   function canSelect(u) { return u.team === 'player' && !u.acted && !u.down && !u.eliminated && battle.phase === 'player'; }
   // Le lutteur actif se choisit tout seul : le premier qui peut encore jouer.
@@ -599,14 +617,14 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       endBtn);
     el.hand.append(who, main, strip);
     if (ui.ringOpen && autres.length) {
-      el.hand.append(h('div', { class: 'ring-menu' }, autres.map((a) => h('button', { class: `btn small${a.ok ? '' : ' off'}`, disabled: !a.ok, title: a.ok ? a.desc : a.reason, onclick: () => raise(a) }, `${TYPE_ICON[a.type] || '•'} ${a.name}`, h('small', {}, a.ok ? '' : a.reason)))));
+      el.hand.append(h('div', { class: 'ring-menu' }, autres.map((a) => h('button', { class: `btn small${a.ok ? '' : ' off'}${isRaised(a) ? ' raised' : ''}`, disabled: !a.ok, title: a.ok ? a.desc : a.reason, onclick: () => raise(a) }, `${TYPE_ICON[a.type] || '•'} ${a.name}`, h('small', {}, a.ok ? '' : a.reason)))));
     }
   }
   function stripBtn(a, icon, label) {
     if (!a) return null;
     const best = a.targets && a.targets.length && a.targets[0].unit ? a.targets.reduce((x, y) => ((y.chance ?? 0) > (x.chance ?? 0) ? y : x)) : null;
     const pct = best && best.chance != null ? ` ${Math.round(best.chance * 100)} %` : '';
-    return h('button', { class: `btn small strip-btn${a.ok ? '' : ' off'}${ui.card === a ? ' raised' : ''}`, disabled: !a.ok || ui.busy, title: a.ok ? a.desc : a.reason, onclick: () => raise(a) }, `${icon} ${label}${pct}`);
+    return h('button', { class: `btn small strip-btn${a.ok ? '' : ' off'}${isRaised(a) ? ' raised' : ''}`, disabled: !a.ok || ui.busy, title: a.ok ? a.desc : a.reason, onclick: () => raise(a) }, `${icon} ${label}${pct}`);
   }
   // UNE CARTE. Le coût en haut à gauche, le pictogramme du type, le nom, une
   // ligne de chiffres, la condition s'il y en a une, et la précision sur la
@@ -622,7 +640,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (m && m.range && m.range[1] > 1) stats.push(`↔${m.range[1]}`);
     if (m && m.part && PARTS[m.part]) stats.push(`${PARTS[m.part].icon}`);
     if (a.cost) stats.push(`⚡−${a.cost}`);
-    const raised = ui.card === a;
+    const raised = isRaised(a);
     const eff = (m && m.effects) || {};
     const tags = [];
     if (eff.daze) tags.push('😵 étourdit');
@@ -748,7 +766,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function raise(a) {
     if (!a || !a.ok || ui.busy) return;
     if (!aCible(a)) { doAction(a, null); return; }
-    ui.card = ui.card === a ? null : a;
+    ui.card = isRaised(a) ? null : a;
     ui.pending = null;
     // Une seule cible et pas de tactile : on montre la prévision, on ne joue
     // pas tout seul — c'est au joueur de confirmer d'un clic sur la cible.
