@@ -80,6 +80,9 @@ export function createUnit(def, team, x, y, opts = {}) {
     // coûte. C'est ce qui fait d'un tour une suite de décisions plutôt qu'un
     // seul coup (voir `hand.js`).
     energy: ENERGY_PER_TURN, maxEnergy: ENERGY_PER_TURN,
+    // Les cartes tactiques : une garde qui absorbe le prochain coup, et des
+    // cases de déplacement en plus pour le prochain déplacement (voir `doTactic`).
+    guard: false, bonusMov: 0,
     // En double équipe : il a donné son tour pour enchaîner sur les coups de
     // ses partenaires (voir `battle.js`, doubleEquipe).
     teamwork: false,

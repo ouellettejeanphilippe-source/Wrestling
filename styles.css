@@ -201,6 +201,11 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--gold);
 .wcard.pickable:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
 .wcard.picked { background: var(--panel2); border-color: var(--gold); box-shadow: 6px 6px 0 var(--gold); }
 .wcard-head { display: flex; gap: 12px; align-items: center; }
+/* La photo de référence (réglage facultatif de l'écran titre). */
+.ref-photo { margin: 0; flex: 0 0 auto; width: 74px; display: flex; flex-direction: column; gap: 3px; }
+.ref-photo img { width: 74px; height: 92px; object-fit: cover; border: 2px solid var(--ink); background: var(--ink); }
+.ref-photo figcaption { font-size: 0.6rem; line-height: 1.15; display: flex; flex-direction: column; color: var(--gold); }
+.ref-photo figcaption small { color: var(--muted); font-size: 0.54rem; overflow-wrap: anywhere; }
 .wname { font-family: var(--display); font-size: 0.72rem; line-height: 1.4; color: #fff; }
 .wnick { color: var(--gold); font-size: 0.82rem; font-style: italic; }
 .wink { color: var(--muted); font-size: 0.73rem; }

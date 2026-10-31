@@ -9,7 +9,7 @@
 // depuis /Wrestling/, pas depuis la racine. Un chemin absolu marcherait en
 // local et mettrait l'installation en 404 en ligne.
 // ---------------------------------------------------------------------------
-const VERSION = 'ppw-2026-10-31c';
+const VERSION = 'ppw-2026-10-31d';
 const ASSETS = [
   './',
   './index.html',
@@ -22,6 +22,7 @@ const ASSETS = [
   './src/data/campaign.js',
   './src/data/classes.js',
   './src/data/combos.js',
+  './src/data/references.js',
   './src/data/directives.js',
   './src/data/gimmicks.js',
   './src/data/matchTypes.js',
@@ -58,6 +59,7 @@ const ASSETS = [
   './src/ui/spriteart.js',
   './src/ui/spritepixel.js',
   './src/ui/title.js',
+  './src/ui/visages.js',
   './src/ui/tutorial.js',
 ];
 
@@ -70,7 +72,9 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== VERSION) await caches.delete(k);
+    // `ppw-visages` n'est PAS à nous : ce sont les photos de référence que
+    // l'application a téléchargées sur l'appareil (voir `ui/visages.js`).
+    for (const k of await caches.keys()) if (k !== VERSION && k !== 'ppw-visages') await caches.delete(k);
     await self.clients.claim();
   })());
 });

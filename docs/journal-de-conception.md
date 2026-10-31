@@ -131,6 +131,33 @@ momentum (5) ne débloque ni les cartes de classe (25) ni celles de spécialité
 en main devrait se jouer pour son énergie. À mesurer avant de toucher — le momentum ouvre aujourd'hui des paliers
 qui existaient quand on choisissait dans un menu.
 
+## Octobre 2026 — le momentum se détend, trois cartes qui ne frappent pas, des visages sur l'appareil
+
+**Le momentum ne verrouille plus la main.** L'écran de match refait a rendu visible ce que les chiffres cachaient :
+au tour 1, trois cartes sur cinq étaient grisées (classe à 25, spécialité à 45, momentum à 5). Dans un deck-builder,
+c'est l'énergie qui limite ce qu'on joue. Mesuré sur 80 matchs IA contre IA avant/après : 12 tours contre 12, 29
+coups contre 30, note 3,4 contre 3,3, adversaire à 41 victoires sur 80 contre 38 — l'IA trouvait déjà quoi jouer,
+c'était le joueur qui voyait les cartes grises. Seules la signature et le finisher restent derrière la jauge.
+Effet de bord, et une bonne surprise : les cartes lourdes (powerbomb, body slam…) n'ont pas de pas d'approche, donc
+un pas de côté les envoie dans le vide quand l'adversaire arrive au bout de son déplacement (une fois sur quatre).
+Avant, seuls les coups de base existaient à ce stade, et ils rattrapaient toujours.
+
+**Trois cartes qui ne frappent personne.** Un deck de coups est un menu : on joue le meilleur. Dans Slay the Spire,
+un tiers du paquet ne fait pas de dégâts, et c'est ce tiers qui fait les décisions. 🛡️ *Se couvrir* (le prochain
+coup reçu fait moitié moins), 🏃 *Reprendre sa course* (redonne le déplacement, +2 cases) et 🧠 *Plan de match*
+(pioche deux cartes), à ⚡1 chacune, une par classe, offertes aussi après un match. Sans score d'IA elles seraient
+tombées dans la branche « presque rien » et restées mortes dans la main adverse : l'IA les joue (1,6 couverture,
+0,5 reprise de course et 0,2 plan de match par match), sans changer l'équilibre (13 tours, 30 coups, 39 victoires
+sur 80).
+
+**Des visages, sur l'appareil.** Le roster parodie de vrais lutteurs et sera remplacé par des personnages originaux
+avant la v1 ; en attendant, pour les reconnaître, un réglage de l'écran titre (éteint par défaut) télécharge leur
+photo **sur l'appareil**, depuis l'API publique de Wikipédia et de Commons, en ne gardant que les images sous
+licence libre, avec leur auteur. Rien dans le dépôt ni sur GitHub Pages. Un premier jet en script local a été
+abandonné après avoir épuisé le quota de l'API en boucle (trente appels un par un ; l'API groupée en demande
+deux) ; la version de l'application fait deux appels groupés et une image par lutteur. Le service worker purgeait
+tous les caches sauf le sien à chaque activation : il épargne maintenant celui des visages.
+
 ---
 
 # Parodie Pro Wrestling Tactics

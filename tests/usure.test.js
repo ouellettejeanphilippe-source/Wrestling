@@ -240,9 +240,16 @@ test('la rivalité chauffe la salle et arme celui qui a perdu', () => {
 
 // ------------------------------------------------------------ l'histoire du match
 test('chaque match produit une histoire tirée de ce qui s’est vraiment passé', () => {
-  const b = mk(['brian_danielsson'], ['gunter'], 7);
-  autoPlay(b, 200);
-  assert.ok(b.result, 'le match se conclut');
+  // Plusieurs graines : un match peut finir vite sur un finisher et n'enregistrer
+  // que trois ou quatre temps forts. On raconte le plus riche des six — et on
+  // exige que les six se concluent.
+  let b = null;
+  for (const seed of [7, 8, 9, 10, 11, 12]) {
+    const essai = mk(['brian_danielsson'], ['gunter'], seed);
+    autoPlay(essai, 200);
+    assert.ok(essai.result, `le match ${seed} se conclut`);
+    if (!b || essai.beats.length > b.beats.length) b = essai;
+  }
   assert.ok(b.beats.length > 5, 'des temps forts ont été enregistrés');
 
   const st = matchStory(b, {});

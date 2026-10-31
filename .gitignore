@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.log
+
+# Références locales (photos de vrais lutteurs, page de comparaison) : jamais dans le dépôt
+local/

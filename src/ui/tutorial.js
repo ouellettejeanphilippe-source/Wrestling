@@ -22,15 +22,15 @@ const PAGES = [
     ],
   },
   {
-    title: 'Le momentum ouvre vos options',
+    title: 'Le momentum ouvre vos gros coups',
     icon: '⚡',
     body: () => [
-      h('p', {}, 'Chaque lutteur a une jauge de momentum de 0 à 100. Elle monte quand vous frappez, quand vous encaissez, quand vous provoquez, et elle ouvre des paliers de mouvements de plus en plus forts.'),
+      h('p', {}, 'Chaque lutteur a une jauge de momentum de 0 à 100. Elle monte quand vous frappez, quand vous encaissez, quand vous provoquez. Elle n’ouvre plus que vos deux plus gros coups : la signature et le finisher. Tout ce que vous piochez se joue pour son énergie, jamais pour sa jauge.'),
       h('table', { class: 'tut-table' },
         h('tr', {}, ['Palier', 'Ouvert à', 'Coût'].map((x) => h('th', {}, x))),
-        [['Base : coup de poing, prise, Irish Whip, provoquer', 'base'], ['Mouvements de classe', 'class'], ['Mouvements de spécialité', 'specialty'], ['Signature', 'signature'], ['Finisher', 'finisher']]
+        [['Ce qu’on pioche : fondamentaux, classe, spécialité, cartes tactiques', 'base'], ['Signature', 'signature'], ['Finisher', 'finisher']]
           .map(([label, key]) => h('tr', {}, h('td', {}, label), h('td', {}, MOVE_TIERS[key].unlock ? `⚡ ${MOVE_TIERS[key].unlock}` : '—'), h('td', {}, MOVE_TIERS[key].cost ? `-${MOVE_TIERS[key].cost}` : 'gratuit')))),
-      h('p', {}, 'Les paliers donnent l’', h('b', {}, 'accès'), ' ; seuls le signature et le finisher ', h('b', {}, 'consomment'), ' la jauge. Provoquer est toujours gratuit et rapporte 30 : c’est un vrai choix tactique quand vous êtes à 80.'),
+      h('p', {}, 'Les paliers donnent l’', h('b', {}, 'accès'), ' ; seuls le signature et le finisher ', h('b', {}, 'consomment'), ' la jauge. Provoquer rapporte 30 : c’est un vrai choix tactique quand vous êtes à 80.'),
     ],
   },
   {
@@ -162,6 +162,7 @@ const PAGES = [
          ['Tombé, projection par-dessus la corde, arme, relais', '⚡1'],
          ['Souffler, double équipe, manager, rentrer dans le ring', 'ferme le tour']]
           .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, h('b', {}, 'Des cartes qui ne frappent pas.'), ' ', h('b', {}, '🛡️ Se couvrir'), ' : le prochain coup reçu fait moitié moins. ', h('b', {}, '🏃 Reprendre sa course'), ' : un nouveau déplacement, deux cases de plus — avant ou après un coup. ', h('b', {}, '🧠 Plan de match'), ' : pioche deux cartes. Chacune coûte ⚡1, et chaque classe en a une dans son kit.'),
       h('p', {}, h('b', {}, 'Le tour est le plan.'), ' Se déplacer, placer un coup qui étourdit, enchaîner avec la prise qui demande une cible étourdie : ça tient dans un seul tour. Ce qui n’est pas joué part à la défausse, et on revoit tout son deck tous les cinq tours — une carte apprise en carrière revient vite.'),
       h('p', {}, 'La ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
       h('p', {}, h('b', {}, 'Pour jouer : un clic sur la carte, un clic sur la cible.'), ' La main est en bas, toujours visible ; cliquer une carte allume ses cibles, la prévision s’affiche à droite, cliquer la cible joue. Pour vous déplacer, cliquez une case bleue quand aucune carte n’est levée. Les touches ', h('b', {}, '1 à 7'), ' lèvent une carte, ', h('b', {}, 'Échap'), ' la baisse, ', h('b', {}, 'E'), ' finit le tour.'),

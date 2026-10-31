@@ -264,6 +264,7 @@ export function moveRange(battle, unit) {
   // C'est l'autre moitié du système de Chroma Squad — on se rapproche de ses
   // coéquipiers pour aller plus loin, pas seulement pour frapper plus fort.
   if (teamworkPartners(battle, unit).some((al) => manhattan(al, unit) === 1)) mov += 1;
+  mov += unit.bonusMov || 0;                 // « Reprendre sa course »
   return Math.max(1, mov);
 }
 
@@ -300,6 +301,7 @@ export function moveUnit(battle, unit, x, y) {
   spendStamina(battle, unit, unit.moveStamina);
   unit.facing = facingTo(unit, { x, y });          // on regarde là où on va
   unit.x = x; unit.y = y; unit.moved = true; unit.climb = 0;
+  unit.bonusMov = 0;
   emit(battle, { type: 'move', uid: unit.uid, x, y });
   if (battle.rules.tag && !unit.legal && !isOutside(battle.grid, x, y) && !isOnRope(battle.grid, x, y) && !isOnTurnbuckle(battle.grid, x, y)) {
     log(battle, `⚠️ ${unit.name} entre dans le ring sans être légal. L’arbitre n’aime pas ça.`);
@@ -500,7 +502,11 @@ export function listActions(battle, unit, pos = null) {
       a.ok = false; a.reason = '🦵 Jambe hors service — plus question de voler';
     }
     if (m.type === 'taunt') a.targets = [{ self: true }];
-    else if (mid === 'whip') {
+    else if (m.type === 'tactic') {
+      a.targets = [{ self: true }];
+      if (m.tactic === 'guard' && unit.guard) { a.ok = false; a.reason = 'Déjà couvert'; }
+      if (m.tactic === 'draw' && !(unit.deck || []).length && !(unit.discard || []).length) { a.ok = false; a.reason = 'Plus rien à piocher'; }
+    } else if (mid === 'whip') {
       a.targets = enemies.map((e) => ({ e, via: (!e.down && (!gim(e).canBeWhipped || gim(e).canBeWhipped(battle, e))) ? viaPour(m, e) : null }))
         .filter((x) => x.via)
         .map(({ e, via }) => ({ unit: e, via, hit: hitChance(battle, unit, e, m, { pos: via }) }));
@@ -734,6 +740,7 @@ export function executeAction(battle, unit, actionId, target = null) {
   let result = {};
   switch (a.type) {
     case 'taunt': result = doTaunt(battle, unit, a.move); break;
+    case 'tactic': result = doTactic(battle, unit, a.move); break;
     case 'special': result = a.id === 'whip' ? irishWhip(battle, unit, tgt, a.move) : doSpecial(battle, unit, tgt, a.move); break;
     case 'pin': result = attemptPin(battle, unit, tgt); break;
     case 'toss': result = attemptToss(battle, unit, tgt); break;
@@ -851,6 +858,38 @@ function doTaunt(battle, unit, move) {
   log(battle, `📣 ${unit.name} : ${move.name} ! (+${move.momentum} momentum)`);
   if (gim(unit).onTaunt) gim(unit).onTaunt(battle, unit);
   emit(battle, { type: 'taunt', x: unit.x, y: unit.y });
+  return {};
+}
+
+// LES CARTES TACTIQUES. Elles ne frappent personne : elles changent le tour.
+//   guard    le prochain coup reçu avant son prochain tour fait moitié moins
+//   regroup  redonne le droit de se déplacer, avec des cases de plus — avant
+//            ou après un coup, c'est ce qui permet de frapper, de sortir de la
+//            ligne, puis de revenir
+//   draw     pioche des cartes de plus (la carte jouée compte encore dans la
+//            main à cet instant : on pioche donc de quoi la remplacer, plus
+//            le gain annoncé)
+function doTactic(battle, unit, move) {
+  switch (move.tactic) {
+    case 'guard':
+      unit.guard = true;
+      addHeat(battle, 2);
+      log(battle, `🛡️ ${unit.name} se couvre : le prochain coup fera moitié moins.`);
+      break;
+    case 'regroup':
+      unit.moved = false; unit.prev = null;
+      unit.bonusMov = move.bonusMov || 2;
+      log(battle, `🏃 ${unit.name} reprend sa course : un nouveau déplacement, +${unit.bonusMov} cases.`);
+      break;
+    case 'draw': {
+      const avant = unit.hand.length;
+      refill(battle, unit, avant + (move.draw || 2));
+      log(battle, `🧠 ${unit.name} repense son tour : ${unit.hand.length - avant} carte(s) de plus.`);
+      break;
+    }
+    default: break;
+  }
+  if (unit.team === 'player') battle.stats.playerTactics = (battle.stats.playerTactics || 0) + 1;
   return {};
 }
 
@@ -1162,6 +1201,14 @@ function spreadHit(battle, attacker, target, move, dmg) {
 export function applyDamage(battle, target, amount, source, opts = {}) {
   if (target.eliminated) return 0;
   amount = Math.max(0, Math.round(amount));
+  // LA GARDE : une seule fois, et seulement contre ce qui vient de quelqu'un.
+  if (target.guard && source && source !== target && !opts.self && amount > 0) {
+    amount = Math.max(1, Math.round(amount * 0.5));
+    target.guard = false;
+    log(battle, `🛡️ ${target.name} encaisse en se couvrant : ${amount} dégâts seulement.`);
+    emit(battle, { type: 'guard', x: target.x, y: target.y });
+    battle.stats.guards = (battle.stats.guards || 0) + 1;
+  }
   target.hp = Math.max(0, target.hp - amount);
   // UN COUP NE FAIT PLUS REDESCENDRE DE L'ÉCHELLE — une chute, oui (voir
   // `downUnit`), un déplacement aussi. Avec trois cartes par tour, « le
@@ -1872,6 +1919,7 @@ export function startPhase(battle, team) {
     }
     u.teamwork = false;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
+    u.guard = false; u.bonusMov = 0;      // une garde ne vaut que jusqu'à son prochain tour
     if (u.down) {
       if (u.downTurns === 0) {
         u.downTurns = 1; u.acted = true;
@@ -1944,7 +1992,7 @@ function spawnReinforcements(battle) {
 // Pour annoncer sa carte, il faut qu'il l'ait en main : sa main du tour
 // suivant est tirée à la fin de sa phase (voir `endEnemyPhase`), pas au
 // début de la suivante.
-export const INTENT_ICONS = { strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', pin: '🤝', toss: '🚀', taunt: '📣', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️' };
+export const INTENT_ICONS = { tactic: '🛡️', strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', pin: '🤝', toss: '🚀', taunt: '📣', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️' };
 export function planIntents(battle) {
   for (const u of living(battle, 'enemy')) {
     u.intent = null;

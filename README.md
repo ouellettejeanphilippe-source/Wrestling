@@ -21,7 +21,7 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 203 tests du moteur (node:test), ~45 s
+npm test           # 216 tests du moteur (node:test), ~45 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
@@ -64,9 +64,9 @@ Ce qui reste à faire, par ordre d'importance :
 1. **Du retour à l'écran, encore.** Le sprite clignote et l'écran tremble, mais un coup n'a toujours pas
    d'animation : pas de carte qui file vers la cible, pas de bump, pas de couverture à l'image. Et les props
    méritent plus : une table qui se voit casser, des marches qui font mal.
-2. **Le momentum verrouille la main.** Au tour 1, trois cartes sur cinq sont grisées (classe à 25, spécialité à
-   45) alors que le momentum n'est qu'à 5. Dans un deck-builder, une carte en main doit se jouer pour son énergie ;
-   le momentum devrait ouvrir autre chose. À mesurer avant de toucher.
+2. **Le momentum n'ouvre plus que la signature et le finisher.** Il ne fait donc plus grand-chose entre les deux :
+   une jauge qui monte toute seule, sans rien de plus à décider. Des cartes qui *dépensent* du momentum pour un
+   effet (un coup amélioré, une pioche, un tombé plus facile) lui rendraient un rôle.
 3. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
    lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
    logique de *Chroma Squad*.
@@ -180,8 +180,13 @@ carte apprise en carrière revient vite. **Tout est une carte**, coup de poing c
 plusieurs exemplaires. **Le tour est le plan** : une carte qui demande une cible étourdie se joue juste après le
 coup qui étourdit, dans le même tour.
 
+**Trois cartes ne frappent personne** : 🛡️ *Se couvrir* (le prochain coup reçu fait moitié moins), 🏃 *Reprendre sa
+course* (un nouveau déplacement, deux cases de plus, avant ou après un coup) et 🧠 *Plan de match* (pioche deux
+cartes). Chacune coûte ⚡1 ; chaque classe en a une dans son kit, et elles s'offrent aussi après un match de
+carrière. L'IA les joue.
+
 Seuls la **signature** et le **finisher** ne se piochent pas : ils s'ouvrent au momentum (60 et 100) et le
-consomment. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
+consomment. Tout le reste se joue pour son énergie, jamais pour sa jauge. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
 une carte **allume sur le plateau** les cases qui la débloqueraient.
 
 ### L'adversaire annonce son coup — le puzzle de *Fights in Tight Spaces*
@@ -213,7 +218,7 @@ plancher (−7 % par tour) **et refroidit la salle** ; une seule case parcourue 
 | | momentum ⚡ | souffle 😮‍💨 |
 | --- | --- | --- |
 | sens | monte quand on frappe, encaisse, provoque | descend quand on frappe (4 à 22 selon le palier, +3 en courant) |
-| rôle | ouvre les paliers (classe 25, spécialité 45, signature 60, finisher 100) ; signature et finisher le dépensent | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
+| rôle | ouvre la signature (60) et le finisher (100), qui le dépensent ; tout le reste se joue pour son énergie | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
 | se refait | en frappant | +5 par tour, +14 si on a soufflé (attendre, provoquer) |
 
 ### Le sol, le cœur et le tombé
@@ -301,7 +306,7 @@ Deck de départ = fondamentaux (en plusieurs exemplaires) + classe + spécialit�
 | --- | --- |
 | 💪 Force, 🪽 Voltigeur, 🧠 Technicien, 🥊 Bagarreur, 🎤 Vedette | 🦅 Aérien, 🔗 Soumission, 🪑 Hardcore, 🦵 Frappeur, 😈 Tricheur, 🗿 Colosse, ⚡ Vitesse, 📣 Micro |
 
-Le catalogue compte **131 mouvements** (11 de base, 23 de classe, 28 de spécialité, 37 signatures, 32 finishers).
+Le catalogue compte **134 mouvements** (11 de base, 26 de classe dont 3 cartes tactiques, 28 de spécialité, 37 signatures, 32 finishers).
 Une partie du vocabulaire n'existe pas à l'arrêt : `requires: { ran: n }` exige n cases de course, `crossedRope`
 d'avoir traversé les cordes, `turnbuckle` d'être monté dans un coin, `targetDown` une cible au sol.
 
@@ -354,7 +359,8 @@ src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Di
              rules.js         conditions de victoire, limite de temps
              rng.js, util.js  RNG à seed, helpers
 src/data/    wrestlers.js     les 33 fiches (30 jouables + 3 PNJ), dont le `look` des sprites
-             moves.js         les 131 mouvements
+             moves.js         les 134 mouvements
+             references.js    qui parodie qui (temporaire, voir « Visages de référence »)
              classes.js       classes et spécialités
              gimmicks.js      les passifs (hooks appelés par le moteur)
              matchTypes.js    les 13 stipulations, armes
@@ -382,7 +388,7 @@ src/ui/      title.js         écran titre, vestiaire
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        20 fichiers node:test, 203 tests
+tests/                        22 fichiers node:test, 216 tests
 docs/                         le journal de conception
 ```
 
@@ -396,6 +402,24 @@ des fins par soumission, taux de ceinture sur cent carrières…).
 2. Son gimmick dans `src/data/gimmicks.js` (n'importe quel sous-ensemble de hooks).
 3. Sa fiche dans `src/data/wrestlers.js`, avec son `look`. Base, classe et spécialité sont automatiques.
 4. Sa condition de déblocage dans `src/game/unlocks.js`, sinon il n'apparaît qu'en exhibition.
+
+## Visages de référence (temporaire)
+
+Le roster actuel parodie de vrais lutteurs, et **les personnages originaux de la v1 le remplaceront**. En attendant,
+pour reconnaître qui est qui, un réglage de l'écran titre — *Visages de référence*, éteint par défaut — fait
+télécharger **sur l'appareil** la photo de chaque lutteur parodié :
+
+- l'**API publique de Wikipédia** donne l'image de chaque page (un seul appel groupé), et celle de **Wikimedia
+  Commons** l'auteur et la licence (un second) ;
+- seules les images **sous licence libre** sont gardées (celles de Commons) ; une image téléversée sur Wikipédia
+  même, en usage loyal, est écartée ;
+- elles sont mises en cache dans le navigateur, donc visibles **hors ligne**, avec leur **auteur et leur licence**
+  affichés sous la photo, dans la fiche d'un lutteur (exhibition, nouvelle saison) ;
+- éteindre le réglage **efface tout**.
+
+**Rien n'est dans le dépôt ni sur GitHub Pages** : chaque appareil va chercher ce qu'il affiche, et un test
+(`tests/visages.test.js`) interdit toute photo dans git. Un lutteur dont l'image n'est pas libre n'a simplement pas
+de photo. À retirer avec le roster : `src/data/references.js`, `src/ui/visages.js`, le réglage de `title.js`.
 
 ## Idées pour la suite
 

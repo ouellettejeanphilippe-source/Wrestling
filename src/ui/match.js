@@ -34,7 +34,8 @@ import { showTutorial, tutorialSeen } from './tutorial.js';
 import { matchStory } from '../game/story.js';
 
 const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weapon']);
-const TYPE_ICON = { strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', taunt: '📣', pin: '🤝', toss: '🚀', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️', sell: '🎭', job: '📜' };
+const TACTIC_ICON = { guard: '🛡️', regroup: '🏃', draw: '🧠' };
+const TYPE_ICON = { tactic: '🛡️', strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', taunt: '📣', pin: '🤝', toss: '🚀', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️', sell: '🎭', job: '📜' };
 const TILE_HELP = {
   floor: 'Plancher : hors du ring. Compte de l’arbitre dans les matchs avec règles.',
   ring: 'Tapis du ring.',
@@ -622,6 +623,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (eff.splash) tags.push('💥 zone');
     if (eff.illegal) tags.push('⚠️ illégal');
     if (m && m.type === 'submission') tags.push('🔗 soumission');
+    if (m && m.blurb) tags.push(m.blurb);
     const cost = a.energy === 'all' ? '⏳' : a.energy === 0 ? '0' : String(a.energy);
     return h('button', {
       class: `card tier-${m ? m.tier : 'base'} type-${a.type}${a.ok ? '' : ' off'}${raised ? ' raised' : ''}${merite ? ' merite' : ''}`,
@@ -632,7 +634,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       onpointerleave: () => { if (ui.setupFor !== m) return; ui.setupFor = null; renderBoard(); },
     },
       h('span', { class: 'c-cost' }, cost),
-      h('span', { class: 'c-icon' }, TYPE_ICON[a.type] || '•'),
+      h('span', { class: 'c-icon' }, (m && TACTIC_ICON[m.tactic]) || TYPE_ICON[a.type] || '•'),
       merite ? h('span', { class: 'c-tier' }, MOVE_TIER_LABEL[m.tier] || m.tier) : null,
       h('span', { class: 'c-name' }, a.name.replace(/^[^\w\p{L}]+\s*/u, '')),
       h('span', { class: 'c-stats' }, stats.join(' ')),
@@ -767,6 +769,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (MOVES[a.id] && MOVES[a.id].tier === 'finisher') { play('finisher'); crowdPop(1.2); shake(); }
     if (r.countered) toast('CONTRÉ !', 'warn');
     ui.card = null; ui.pending = null; ui.setupFor = null;
+    // « Reprendre sa course » redonne un déplacement : on recalcule la portée.
+    ui.reach = !u.acted && !u.moved ? getReachable(battle, u) : null;
     if (u.onlyPin && !battle.result) { render(); const pin = listActions(battle, u).find((x) => x.id === 'pin'); if (pin && pin.ok) { ui.card = pin; render(); } return; }
     if (u.acted || u.down || u.eliminated) ui.sel = null;
     render();

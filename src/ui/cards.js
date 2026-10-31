@@ -7,6 +7,7 @@ import { GIMMICKS } from '../data/gimmicks.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { movesFor } from '../engine/units.js';
 import { getStats, moveRange } from '../engine/battle.js';
+import { visageDe } from './visages.js';
 
 export const STAT_LABELS = { str: 'FOR', agi: 'AGI', tec: 'TEC', cha: 'CHA', def: 'DEF', mov: 'MOV' };
 const ALIGN = { face: 'Face (gentil)', heel: 'Heel (méchant)', tweener: 'Tweener' };
@@ -16,6 +17,16 @@ export function chip(def, size = '') {
   const d = def.look ? def : WRESTLERS_BY_ID[def.id] || def;
   if (size === 'big') return avatar(d, 62, { class: 'chip big', view: 'full' });
   return avatar(d, 34, { class: `chip ${size}` });
+}
+
+// La photo de référence, quand le réglage de l'écran titre est allumé : celle
+// que l'appareil a téléchargée, avec son auteur et sa licence.
+function refPhoto(def) {
+  const v = visageDe(def.id);
+  if (!v) return null;
+  return h('figure', { class: 'ref-photo' },
+    h('img', { src: v.url, alt: v.titre, loading: 'lazy', referrerpolicy: 'no-referrer' }),
+    h('figcaption', {}, h('b', {}, `= ${v.titre}`), h('small', {}, `${v.auteur} · ${v.licence}`)));
 }
 
 export function wrestlerCard(def, opts = {}) {
@@ -37,7 +48,7 @@ export function wrestlerCard(def, opts = {}) {
     return h('div', { class: `movetier tier-${t}` }, h('span', { class: 'tier-label' }, MOVE_TIER_LABEL[t] + (t === 'class' ? ` (${cls.name})` : t === 'specialty' ? ` (${spec.name})` : '') + (MOVE_TIERS[t].unlock ? ` ⚡${MOVE_TIERS[t].unlock}+` : '')), h('span', {}, ms.map((m) => MOVES[m].name).join(' · ')));
   }));
   return h('div', { class: `wcard ${opts.class || ''}` },
-    h('div', { class: 'wcard-head' }, chip(def, 'big'), h('div', {}, h('div', { class: 'wname' }, def.name), h('div', { class: 'wnick' }, `« ${def.nick} »`), h('div', { class: 'wink' }, `Clin d’œil : ${def.wink}`))),
+    h('div', { class: 'wcard-head' }, chip(def, 'big'), refPhoto(def), h('div', {}, h('div', { class: 'wname' }, def.name), h('div', { class: 'wnick' }, `« ${def.nick} »`), h('div', { class: 'wink' }, `Clin d’œil : ${def.wink}`))),
     h('div', { class: 'badges' }, h('span', { class: 'badge-cls' }, `${cls.icon} ${cls.name}`), h('span', { class: 'badge-spec' }, `${spec.icon} ${spec.name}`), h('span', { class: `badge-align ${def.alignment}` }, ALIGN[def.alignment] || def.alignment), def.weight === 'super' ? h('span', { class: 'badge-w' }, '🗿 Super-lourd') : def.weight === 'light' ? h('span', { class: 'badge-w' }, '🪶 Léger') : null),
     h('div', { class: 'gimmick' }, h('b', {}, `Gimmick (passif) : ${g ? g.name : def.gimmick}`), h('div', {}, g ? g.desc : '')),
     h('p', { class: 'bio' }, def.bio),
