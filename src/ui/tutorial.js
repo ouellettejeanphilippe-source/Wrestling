@@ -164,7 +164,8 @@ const PAGES = [
           .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
       h('p', {}, h('b', {}, 'Le tour est le plan.'), ' Se déplacer, placer un coup qui étourdit, enchaîner avec la prise qui demande une cible étourdie : ça tient dans un seul tour. Ce qui n’est pas joué part à la défausse, et on revoit tout son deck tous les cinq tours — une carte apprise en carrière revient vite.'),
       h('p', {}, 'La ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
-      h('p', { class: 'muted' }, 'Après chaque carte, le menu se rouvre sur le même lutteur tant qu’il lui reste de l’énergie. ', h('b', {}, '⏳ Souffler'), ' ferme le tour et rend du souffle.'),
+      h('p', {}, h('b', {}, 'Pour jouer : un clic sur la carte, un clic sur la cible.'), ' La main est en bas, toujours visible ; cliquer une carte allume ses cibles, la prévision s’affiche à droite, cliquer la cible joue. Pour vous déplacer, cliquez une case bleue quand aucune carte n’est levée. Les touches ', h('b', {}, '1 à 7'), ' lèvent une carte, ', h('b', {}, 'Échap'), ' la baisse, ', h('b', {}, 'E'), ' finit le tour.'),
+      h('p', { class: 'muted' }, h('b', {}, '⏳ Souffler'), ' ferme le tour et rend du souffle. Une carte grisée dit pourquoi elle ne se joue pas.'),
     ],
   },
   {

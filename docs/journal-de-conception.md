@@ -97,6 +97,40 @@ les lit, ce qui est le but.
 Le coup dans le vide coûte la carte, son énergie et la moitié de son souffle ; celui qui l'a vu venir gagne 6 de
 momentum, la salle chauffe.
 
+## Octobre 2026 — l'écran de match, reconstruit autour de la main
+
+Le constat, fait sur captures : l'écran était un *Fire Emblem* — sélectionner un lutteur, le déplacer, un menu
+contextuel, une catégorie, une liste, une cible, une confirmation : **six couches pour jouer une carte**, dans un
+jeu devenu un deck-builder. Les cartes étaient des boutons gris dans un panneau, cachées derrière « Votre main »,
+elle-même cachée derrière un clic sur le lutteur. Le plateau était un petit losange perdu dans du violet, avec
+dix boutons en haut, les fiches répétées, les objectifs, les routes, le journal : tout à la même taille.
+
+La réponse, dans la direction *Fights in Tight Spaces* :
+
+- **La main est en bas, toujours visible**, en vraies cartes : coût en pastille, pictogramme de type, nom, chiffres,
+  effets, condition, précision sur la meilleure cible. Grisées avec leur raison quand elles ne se jouent pas.
+- **Un clic sur la carte, un clic sur la cible.** Plus de menu, de catégorie ni de confirmation. Le lutteur actif se
+  choisit tout seul (le premier qui peut encore jouer) ; se déplacer, c'est cliquer une case bleue quand aucune
+  carte n'est levée. La prévision s'affiche sous la fiche de la cible.
+- **Le plateau est cadré sur l'action**, pas sur l'aréna entière : le ring et les lutteurs debout, recentré quand
+  la boîte change (pas à chaque rendu, pour ne pas voler la vue).
+- **Deux fiches compactes** (vous à gauche, eux à droite avec leur annonce) au lieu de quatre panneaux ; le gimmick
+  et les stats se déplient d'un clic. Un bandeau d'icônes ; objectifs, routes et journal en panneaux à la demande ;
+  le journal en une ligne sous le plateau.
+- **Du retour** : le sprite touché clignote, l'écran tremble sur un critique, une chute ou un finisher.
+- **Une seule interface** : sur un écran bas ou étroit, les fiches passent par-dessus le plateau et se réduisent à
+  l'essentiel ; en portrait, le bandeau passe sur deux lignes.
+
+Trois pièges de la réécriture, tous trouvés au premier rendu : des constantes locales lues avant d'être déclarées
+(le démarrage vit maintenant en fin de fonction) ; `Element.append` qui écrit « [object HTMLDivElement] » pour un
+tableau et « null » pour une branche vide (d'où l'aide `put`) ; et une pastille de coût rognée par un conteneur à
+défilement. Vérifié à 1280×800, 1024×640, 844×390 et 390×844, et en deux contre deux.
+
+**Ce que l'écran a rendu visible, sans le corriger** : au tour 1, trois cartes sur cinq sont grisées, parce que le
+momentum (5) ne débloque ni les cartes de classe (25) ni celles de spécialité (45). Dans un deck-builder, une carte
+en main devrait se jouer pour son énergie. À mesurer avant de toucher — le momentum ouvre aujourd'hui des paliers
+qui existaient quand on choisissait dans un menu.
+
 ---
 
 # Parodie Pro Wrestling Tactics

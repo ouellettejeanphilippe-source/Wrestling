@@ -61,16 +61,18 @@ annonce. Tout l'avantage va à qui les lit.
 
 Ce qui reste à faire, par ordre d'importance :
 
-1. **Du retour à l'écran** : le coup, le bump, la chute, la couverture, le compte. Aujourd'hui une ligne de journal
-   et un nombre qui flotte. Et les props méritent plus : une table qui se voit casser, des marches qui font mal à
-   l'image.
-2. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
+1. **Du retour à l'écran, encore.** Le sprite clignote et l'écran tremble, mais un coup n'a toujours pas
+   d'animation : pas de carte qui file vers la cible, pas de bump, pas de couverture à l'image. Et les props
+   méritent plus : une table qui se voit casser, des marches qui font mal.
+2. **Le momentum verrouille la main.** Au tour 1, trois cartes sur cinq sont grisées (classe à 25, spécialité à
+   45) alors que le momentum n'est qu'à 5. Dans un deck-builder, une carte en main doit se jouer pour son énergie ;
+   le momentum devrait ouvrir autre chose. À mesurer avant de toucher.
+3. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
    lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
    logique de *Chroma Squad*.
-3. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
+4. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
    soigne, le partenaire illégal qui attend. À resserrer.
-4. **Le momentum verrouille encore** les cartes de spécialité (45) au premier tour : un tour sur dix commence avec
-   une seule carte jouable.
+
 
 Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'elles donnent une fois assemblées.
 
@@ -153,12 +155,13 @@ nom, hors vestiaire.
 ### Le tour — trois points d'énergie
 
 Chaque lutteur **se déplace une fois**, puis joue **autant de cartes que son énergie le permet** : trois points
-par tour. On sélectionne, on voit la portée de déplacement (bleu) et d'attaque (rouge), on se place, et un menu
-s'ouvre : **Votre main**, **Mérité** (signature et finisher), **Tombé**, **Provoquer**, **Le ring** (projeter
-par-dessus la corde, grimper, tag, armes, manager, vendre/faire le job), **Double équipe**, **Souffler**. Après
-chaque carte, le menu se rouvre sur le même lutteur tant qu'il lui reste de l'énergie ; le tour se ferme à zéro, ou
-en soufflant. Avant de confirmer une cible, la **prévision** donne précision, dégâts, critique, risque de
-renversement, usure infligée, combos actifs, enchaînement de double équipe et risque de DQ.
+par tour. **Un clic sur la carte, un clic sur la cible.** La main est en bas, toujours visible ; lever une carte
+allume ses cibles et affiche la **prévision** sous la fiche adverse (précision, dégâts, renversement, usure
+infligée, combos, enchaînement de double équipe, risque de DQ) ; cliquer la cible joue. Pour se déplacer, on clique
+une case bleue quand aucune carte n'est levée. Tombé, double équipe, souffler et fin du tour sont des boutons fixes
+à côté de la main ; *le ring* (projeter par-dessus la corde, grimper, tag, armes, manager, vendre/faire le job)
+s'ouvre au besoin. Le tour se ferme à zéro énergie, ou en soufflant. Au clavier : **1 à 7** lèvent une carte,
+**Échap** la baisse, **E** finit le tour.
 
 | carte | coût |
 | --- | --- |
@@ -311,10 +314,20 @@ comprises.
 
 ## Interface et direction artistique
 
-- Plateau en **caméra isométrique** (rotation par quarts de tour, touche R) ou en **vue de dessus** ; zoom à la
-  molette ou au pincement, glisser pour déplacer la vue. Le HUD flotte dans les coins pour laisser la place aux
-  sprites. Pensé pour le **paysage** sur téléphone ; en portrait, un rappel s'affiche. L'énergie du tour se lit
-  en tête du menu, sur la fiche et dans la barre d'équipe ; chaque carte affiche son coût ⚡.
+- **L'écran de match est construit autour de la main** (`src/ui/match.js`) : un bandeau minimal en haut (tour, acte,
+  chaleur, et des boutons-icônes pour les objectifs, les routes de victoire, le journal, la caméra), **une fiche
+  compacte de chaque côté** (PV, momentum, souffle, cœur, énergie, deux ou trois statuts ; l'annonce de l'adversaire
+  sous la sienne ; un clic déplie les stats et le gimmick), le **plateau au centre**, et **la main en bas** : de
+  vraies cartes avec leur coût en pastille, un pictogramme de type, le nom, les chiffres, les effets (étourdit,
+  recul, ligne, zone), la condition s'il y en a une, la précision sur la meilleure cible — grisées avec leur raison
+  quand elles ne se jouent pas. Le journal tient en une ligne sous le plateau.
+- **La caméra suit l'action** : elle cadre le ring et les lutteurs debout au lieu de l'aréna entière, et se recentre
+  quand ça change (pas à chaque rendu, pour ne pas voler la vue). Caméra **isométrique** (rotation par quarts de
+  tour, touche R) ou **vue de dessus** ; molette ou pincement pour zoomer, glisser pour déplacer la vue.
+- **Du retour** : le sprite touché clignote, l'écran tremble sur un critique, une chute ou un finisher.
+- Une seule interface, qui se replie : sur un écran étroit ou bas, les fiches passent par-dessus le plateau et se
+  réduisent à l'essentiel ; en portrait, le bandeau passe sur deux lignes et la main prend toute la largeur. Le
+  jeu se joue mieux en **paysage** ; un rappel s'affiche en portrait.
 - Le jeu se présente comme une **émission de catch du samedi soir filmée en pixel** : contours d'encre, ombres dures,
   aplats saturés, lignes de balayage, voyant « ON AIR ».
 - **Sprites 24×32 en SVG**, personne n'est dessiné à la main : un lutteur est *composé* depuis sa description `look`
@@ -360,7 +373,7 @@ src/game/    state.js         la carrière : argent, fans, entraînement, exploi
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js         écran titre, vestiaire
              hub.js           la carte, l'entraînement, le deck, l'historique
-             match.js         l'écran de match
+             match.js         l'écran de match : la main, les fiches, le plateau cadré sur l'action
              cards.js, dom.js fiches de lutteur, helpers DOM
              tutorial.js      les 17 pages
              sound.js         tout l'audio

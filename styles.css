@@ -1182,3 +1182,208 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 @media (max-width: 720px) {
   .locker-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
 }
+
+/* ===========================================================================
+   ÉCRAN DE MATCH — construit autour de la main (Fights in Tight Spaces)
+   Bandeau minimal en haut · fiches de chaque côté · plateau au centre · main
+   de vraies cartes en bas. Remplace le HUD flottant de la version Fire Emblem.
+   =========================================================================== */
+body.in-match #app { padding: 6px 8px 6px; }
+.match.fits { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; }
+
+/* ---- bandeau */
+.mt {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
+  background: color-mix(in srgb, var(--panel) 90%, transparent); border: 3px solid var(--ink); box-shadow: var(--pop-sm);
+  padding: 4px 8px; min-height: 40px;
+}
+.mt-turn { display: flex; flex-direction: column; line-height: 1.1; padding: 2px 10px; background: var(--ink); border: 2px solid var(--blue); min-width: 96px; }
+.mt-turn b { font-family: var(--display); font-size: 0.78rem; }
+.mt-turn span { font-size: 0.66rem; color: var(--muted); white-space: nowrap; }
+.mt-turn.player { border-color: var(--green); } .mt-turn.enemy { border-color: var(--red); }
+.mt-act { padding: 3px 9px; font-size: 0.74rem; font-weight: 700; background: var(--ink); border-left: 4px solid var(--teal); white-space: nowrap; }
+.mt-act.act-mid { border-left-color: var(--gold); } .mt-act.act-late { border-left-color: var(--red); }
+.mt-heat { display: flex; align-items: center; gap: 6px; min-width: 150px; max-width: 220px; flex: 0 1 200px; }
+.mt-heat .bar { flex: 1; } .mt-heat .moy { font-size: 0.64rem; color: var(--muted); white-space: nowrap; }
+.mt-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; }
+.mt-title b { font-family: var(--display); font-size: 0.66rem; overflow: hidden; text-overflow: ellipsis; }
+.mt-title > span { font-size: 0.72rem; color: var(--muted); }
+.chip { font-size: 0.66rem; font-weight: 700; padding: 1px 6px; border: 2px solid var(--ink); background: var(--panel3); white-space: nowrap; }
+.chip.ref.danger { background: var(--red); } .chip.ref.blind { background: var(--teal); color: var(--ink); }
+.chip.mgr.team-player { border-color: var(--blue); } .chip.mgr.team-enemy { border-color: var(--red); }
+.mt-btns { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+.mt-btns .btn.small { padding: 3px 8px; font-size: 0.78rem; min-width: 28px; }
+.mt-btns .btn.on { background: var(--gold); color: var(--ink); }
+.mt-btns .zoom-val { min-width: 48px; font-variant-numeric: tabular-nums; }
+.mt-sep { width: 1px; height: 18px; background: #ffffff22; margin: 0 3px; }
+
+/* ---- milieu : fiche · plateau · fiche */
+.m-mid { flex: 1; min-height: 0; display: flex; gap: 8px; }
+.m-side { flex: 0 0 196px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; scrollbar-width: thin; padding: 2px 2px 6px; }
+.m-right { flex-basis: 232px; }
+.m-scene { position: relative; flex: 1; min-width: 0; min-height: 0; background: radial-gradient(ellipse at 50% 55%, #3a2b52 0%, #231a33 65%, #1b1526 100%); border: 3px solid var(--ink); box-shadow: inset 0 0 40px #0008; overflow: hidden; }
+.m-scene.shake { animation: shake 0.34s steps(6); }
+@keyframes shake { 0% { transform: translate(0, 0); } 17% { transform: translate(-4px, 2px); } 34% { transform: translate(4px, -3px); } 51% { transform: translate(-3px, -2px); } 68% { transform: translate(3px, 3px); } 85% { transform: translate(-1px, 1px); } 100% { transform: none; } }
+.m-scene .board-wrap { position: absolute; inset: 0; }
+.board-wrap.zoomed { overflow: auto; justify-content: safe center; cursor: grab; scrollbar-width: none; }
+.board-wrap.zoomed::-webkit-scrollbar { display: none; }
+.view-top .board-stage { margin: 16px auto; }
+
+/* le journal en une ligne, la bulle de case, le panneau d'info */
+.ticker { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 14; max-width: 78%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.tk { background: color-mix(in srgb, var(--ink) 88%, transparent); border: 2px solid var(--panel3); padding: 2px 10px; font-size: 0.74rem; text-align: center; pointer-events: auto; cursor: pointer; max-width: 100%; }
+.tk.old { opacity: 0.55; font-size: 0.68rem; }
+.tk.big, .tk.combo, .tk.crit { color: var(--gold); border-color: var(--gold); } .tk.miss { color: var(--muted); }
+.tile-tip { position: absolute; left: 8px; bottom: 8px; z-index: 14; max-width: min(340px, 40%); background: var(--ink); border: 2px solid var(--panel3); padding: 5px 9px; font-size: 0.7rem; color: var(--cream); pointer-events: none; }
+.m-panel { position: absolute; top: 8px; right: 8px; z-index: 20; width: min(400px, 80%); max-height: 78%; overflow-y: auto; background: var(--panel); border: 3px solid var(--ink); box-shadow: var(--pop); padding: 10px 12px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px; }
+.m-panel[hidden] { display: none; }
+.m-panel h3 { margin: 0 24px 4px 0; }
+.m-panel .close { position: absolute; top: 6px; right: 6px; }
+.m-panel .log-list { display: flex; flex-direction: column; gap: 2px; font-size: 0.74rem; }
+.m-panel .le .lt { color: var(--gold); font-weight: 700; }
+.m-panel .le.big, .m-panel .le.combo { color: var(--gold); }
+.m-panel .route { display: flex; flex-direction: column; padding: 4px 0; border-bottom: 1px solid #ffffff14; }
+.m-panel .route.ready b { color: var(--green); } .route-how { font-size: 0.72rem; color: var(--muted); } .route-state { font-size: 0.72rem; color: var(--gold); }
+
+/* ---- fiches compactes */
+.fiche { position: relative; background: var(--panel); border: 3px solid var(--ink); border-left-width: 6px; box-shadow: var(--pop-sm); padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; flex: 0 0 auto; }
+.fiche.team-player { border-left-color: var(--blue); } .fiche.team-enemy { border-left-color: var(--red); }
+.fiche.sel { outline: 3px solid var(--gold); outline-offset: -3px; background: var(--panel2); }
+.fiche.acted { opacity: 0.6; } .fiche.out { opacity: 0.35; filter: grayscale(1); }
+.fiche.danger { animation: ficheDanger 1.2s steps(2) infinite; }
+@keyframes ficheDanger { 50% { border-color: var(--red); } }
+.fiche-head { display: flex; align-items: center; gap: 7px; }
+.fiche-name { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.fiche-name b { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fiche-name span { font-size: 0.62rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fiche-bars { display: flex; flex-direction: column; gap: 3px; }
+.fb { display: flex; align-items: center; gap: 4px; }
+.fb i { font-style: normal; font-size: 0.7rem; width: 18px; text-align: center; color: var(--gold); font-weight: 700; }
+.fb .bar { flex: 1; height: 12px; }
+.fb .bar-label { line-height: 10px; font-size: 0.6rem; }
+.fiche-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.74rem; }
+.energy-pips i, .energy-pips.big i { font-style: normal; opacity: 0.22; filter: grayscale(1); }
+.energy-pips i.on { opacity: 1; filter: none; }
+.fiche-st { display: flex; flex-wrap: wrap; gap: 3px; }
+.fiche-st span { font-size: 0.64rem; background: var(--ink); border: 1px solid var(--panel3); padding: 0 5px; white-space: nowrap; }
+.fiche-intent { font-size: 0.7rem; font-weight: 700; background: var(--red); color: #fff; border: 2px solid var(--ink); padding: 3px 6px; line-height: 1.25; }
+.fiche-more { display: flex; flex-direction: column; gap: 5px; border-top: 1px dashed #ffffff22; padding-top: 5px; }
+.fiche-more .ustats { display: flex; flex-wrap: wrap; gap: 3px 8px; font-size: 0.7rem; }
+.fiche-more .gimmick { font-size: 0.68rem; color: var(--muted); } .fiche-more .gimmick b { color: var(--gold); display: block; }
+.fiche-toggle { position: absolute; right: 6px; top: 4px; font-size: 0.6rem; color: var(--muted); }
+.m-side .hint { font-size: 0.72rem; color: var(--muted); padding: 4px 6px; }
+
+/* ---- prévision (sous la fiche de la cible) */
+.m-right .forecast { display: flex; flex-direction: column; gap: 3px; background: var(--ink); border: 2px solid var(--gold); padding: 7px 9px; font-size: 0.72rem; }
+.forecast .fc-name { font-weight: 700; color: var(--gold); font-size: 0.78rem; margin-bottom: 2px; }
+.forecast .fc-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid #ffffff10; padding: 1px 0; }
+.forecast .fc-row span { color: var(--muted); } .forecast .fc-row b { text-align: right; }
+.forecast .fc-row.hp b { color: var(--green); }
+.forecast .hint.center { text-align: center; padding-top: 4px; color: var(--gold); }
+.forecast .btn.wide { margin-top: 4px; }
+
+/* ---- la main */
+.m-hand {
+  flex: 0 0 auto; position: relative; display: flex; align-items: flex-end; gap: 10px;
+  padding: 6px 10px 8px; min-height: 170px;
+  background: linear-gradient(180deg, #0000, #140f1ecc 22%, var(--ink)); border-top: 3px solid var(--ink);
+}
+.hand-who { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; align-self: center; min-width: 120px; }
+.hand-who > div { display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; }
+.energy-pips.big { font-size: 1.2rem; letter-spacing: 1px; line-height: 1; }
+.deck-counts { font-size: 0.68rem; color: var(--muted); }
+.hand-hint { font-size: 0.64rem; color: var(--blue); max-width: 90px; line-height: 1.2; }
+.hand-msg { align-self: center; flex: 1; text-align: center; color: var(--muted); font-size: 0.9rem; }
+.cards { flex: 1; min-width: 0; display: flex; justify-content: safe center; align-items: flex-end; gap: 8px; overflow-x: auto; overflow-y: visible; padding: 22px 14px 4px 16px; scrollbar-width: thin; }
+.card {
+  position: relative; flex: 0 1 118px; min-width: 92px; height: 148px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 24px 6px 6px; text-align: center; color: var(--text); font: inherit; cursor: pointer;
+  background: linear-gradient(180deg, var(--panel3), var(--panel2) 55%, var(--panel)); border: 3px solid var(--ink); box-shadow: var(--pop-sm);
+  transition: transform 0.12s steps(3), box-shadow 0.12s steps(3);
+}
+.card:hover:not(:disabled) { transform: translateY(-8px); }
+.card.raised { transform: translateY(-18px); box-shadow: 0 0 0 3px var(--gold), var(--pop); background: linear-gradient(180deg, #6b5320, var(--panel2) 60%); }
+.card.off { opacity: 0.5; filter: saturate(0.4); }
+.card.off:hover { transform: none; }
+.card.tier-class { border-top-color: var(--teal); } .card.tier-specialty { border-top-color: var(--pink); }
+.card.merite { border-color: var(--gold); flex-basis: 124px; } .card.tier-finisher.merite { border-top-color: var(--red); }
+.c-cost { position: absolute; top: -9px; left: -9px; width: 28px; height: 28px; display: grid; place-items: center; background: var(--gold); color: var(--ink); border: 3px solid var(--ink); border-radius: 50%; font-weight: 700; font-size: 0.9rem; box-shadow: 2px 2px 0 var(--ink); }
+.c-icon { font-size: 1.5rem; line-height: 1; margin-top: -2px; }
+.c-tier { font-size: 0.56rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold); }
+.c-name { font-weight: 700; font-size: 0.82rem; line-height: 1.12; min-height: 2.2em; display: flex; align-items: center; justify-content: center; }
+.c-stats { font-size: 0.68rem; color: var(--cream); white-space: nowrap; }
+.c-tags { font-size: 0.58rem; color: var(--muted); line-height: 1.2; }
+.c-prep { font-size: 0.6rem; color: #ffab91; line-height: 1.15; } .c-prep.done { color: #a5d6a7; }
+.c-combo { position: absolute; top: 3px; right: 5px; font-size: 0.72rem; }
+.c-hit { margin-top: auto; font-size: 0.74rem; font-weight: 700; background: var(--gold); color: var(--ink); border: 2px solid var(--ink); padding: 0 8px; }
+.c-why { margin-top: auto; font-size: 0.6rem; color: #ff9a8a; line-height: 1.15; }
+.strip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 5px; align-self: center; min-width: 138px; }
+.strip .btn.small { justify-content: center; text-align: center; padding: 5px 9px; font-size: 0.78rem; white-space: nowrap; }
+.strip .btn.off { opacity: 0.45; } .strip .btn.raised, .strip .btn.on { background: var(--gold); color: var(--ink); }
+.strip .btn.end { padding: 9px 12px; font-size: 0.92rem; } .strip .btn.end.hot { animation: pulse 0.9s steps(2) infinite; }
+.ring-menu { position: absolute; right: 10px; bottom: calc(100% + 4px); z-index: 25; display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 3px solid var(--ink); box-shadow: var(--pop); padding: 8px; max-width: 320px; }
+.ring-menu .btn { text-align: left; display: flex; flex-direction: column; align-items: flex-start; }
+.ring-menu .btn small { font-size: 0.62rem; color: #ff9a8a; font-weight: 400; } .ring-menu .btn.off { opacity: 0.5; }
+
+/* ---- retour : un sprite touché clignote */
+.unit.hit .avatar-wrap { animation: hitflash 0.32s steps(4); }
+@keyframes hitflash { 0%, 50% { filter: brightness(3) saturate(0) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff); } 100% { filter: none; } }
+.cell.via::after { box-shadow: inset 0 0 0 3px #7cc6ff; background: #3fa9f533; }
+.cell.target.pending::after { box-shadow: inset 0 0 0 5px #fff, inset 0 0 0 8px var(--gold); }
+
+/* ---- plus étroit : les fiches passent par-dessus la scène, compactes */
+@media (max-width: 1000px), (max-height: 640px) {
+  .m-mid { position: relative; }
+  .m-side { position: absolute; top: 4px; z-index: 16; width: 150px; flex: none; max-height: calc(100% - 8px); pointer-events: none; background: none; padding: 0; gap: 4px; }
+  .m-side > * { pointer-events: auto; }
+  .m-left { left: 4px; } .m-right { right: 4px; width: 168px; }
+  .fiche { padding: 4px 6px 5px; gap: 3px; } .fiche-head .avatar-wrap { width: 28px !important; height: 28px !important; }
+  .fiche-name span, .fiche-toggle { display: none; } .fb .bar { height: 9px; } .fb .bar-label { display: none; }
+  .m-scene { position: absolute; inset: 0; }
+  .ticker { max-width: 56%; } .tile-tip { display: none; }
+  .m-hand { min-height: 138px; gap: 6px; padding: 4px 6px 6px; }
+  .hand-who { min-width: 0; } .hand-who .avatar-wrap, .hand-hint { display: none; }
+  .card { width: 98px; height: 124px; padding-top: 20px; } .card.merite { width: 102px; }
+  .c-name { font-size: 0.72rem; } .c-tags, .c-tier { display: none; } .c-icon { font-size: 1.2rem; }
+  .strip { min-width: 110px; } .strip .btn.small { padding: 4px 6px; font-size: 0.7rem; }
+  .mt-title > span, .mt-heat .moy, .mt-act { display: none; } .mt-heat { min-width: 90px; }
+}
+@media (max-height: 520px) {
+  .mt { min-height: 32px; padding: 2px 6px; } .mt-turn { padding: 0 8px; }
+  .m-hand { min-height: 112px; } .card { width: 86px; height: 104px; padding-top: 18px; } .c-stats { font-size: 0.6rem; }
+}
+@media (prefers-reduced-motion: reduce) { .m-scene.shake, .unit.hit .avatar-wrap, .fiche.danger { animation: none; } .card { transition: none; } }
+
+/* ---- téléphone en paysage : le plateau d'abord, les fiches se réduisent à l'essentiel */
+@media (max-height: 520px) {
+  .m-side { width: 128px; } .m-right { width: 142px; }
+  .fiche { padding: 3px 5px 4px; } .fiche-name span { display: none; }
+  .fb:nth-child(n+2) { display: none; }                 /* PV seuls : momentum et souffle sont dans la fiche dépliée */
+  .fiche-row { font-size: 0.66rem; gap: 5px; }
+  .fiche-intent { font-size: 0.6rem; padding: 2px 4px; }
+  .fiche-st { display: none; }
+  .m-hand { min-height: 0; height: 112px; padding: 2px 6px 4px; }
+  .card { width: 84px; height: 98px; padding: 16px 3px 3px; } .card.merite { width: 88px; }
+  .c-name { font-size: 0.66rem; min-height: 2em; } .c-icon { font-size: 1rem; } .c-prep, .c-why, .c-hit { font-size: 0.56rem; }
+  .c-prep, .c-why { display: none; }                    /* la raison reste dans l'infobulle et dans le toast */
+  .c-cost { width: 22px; height: 22px; font-size: 0.74rem; top: -7px; left: -7px; }
+  .cards { padding-top: 14px; }
+  .strip { gap: 3px; min-width: 100px; } .strip .btn.small { padding: 3px 5px; font-size: 0.64rem; } .strip .btn.end { padding: 6px 8px; font-size: 0.74rem; }
+  .energy-pips.big { font-size: 0.9rem; } .hand-who b { font-size: 0.7rem; }
+}
+
+/* ---- téléphone en portrait : le bandeau passe sur deux lignes, la main sur toute la largeur */
+@media (max-width: 700px) {
+  .mt { flex-wrap: wrap; row-gap: 4px; }
+  .mt-title { display: none; } .mt-heat { flex: 1 1 90px; min-width: 70px; }
+  .mt-btns { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .mt-btns .btn.small { padding: 3px 6px; min-width: 24px; }
+  .mt-btns .zoom-val, .mt-sep { display: none; }
+  .m-hand { flex-wrap: wrap; height: auto; min-height: 0; padding-bottom: 10px; }
+  .cards { order: 1; flex: 1 1 100%; }
+  .hand-who { order: 2; min-width: 0; } .hand-who > div { flex-direction: row; align-items: center; gap: 8px; }
+  .strip { order: 3; flex: 1 1 0; min-width: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
+  .strip .btn.small { flex: 0 0 auto; }
+  .m-side { width: 138px; } .m-right { width: 152px; }
+  .fb:nth-child(n+2) { display: none; } .fiche-st { display: none; }
+}

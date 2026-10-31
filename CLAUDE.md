@@ -26,8 +26,10 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
   coup dans le vide (`whiff`). La direction du jeu : *Fights in Tight Spaces*, en grand espace et avec les props.
 - `src/data/` — tout le contenu : lutteurs, mouvements, gimmicks, stipulations, combos, managers, campagne.
 - `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match.
-- `src/ui/` — les écrans. `match.js` est l'écran de match ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
-  les sprites.
+- `src/ui/` — les écrans. `match.js` est l'écran de match, construit autour de la main (un clic sur la carte, un
+  clic sur la cible ; le plateau est cadré sur l'action) ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
+  les sprites. Attention : `Element.append` écrit « [object …] » pour un tableau et « null » pour une branche vide ;
+  dans `match.js`, passer par `put(parent, …)` ou par `h()`.
 - `tests/` — la plupart mesurent le **jeu** (longueur des matchs, taux de ceinture sur cent carrières) et pas des
   fonctions. Un test qui casse après un réglage d'équilibrage dit souvent quelque chose de vrai.
 - `docs/journal-de-conception.md` — l'historique des décisions, avec les mesures qui les ont justifiées. À lire
@@ -59,7 +61,8 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
 
 Le README a une section **« Où en est le jeu — honnêtement »** avec les mesures avant/après le tour à énergie :
 match simple de 40 à 12-16 tours en médiane, phases adverses sans dégâts de 50 à 30 %, fins au chrono de 23 à 0 %.
-Les priorités restantes y sont listées dans l'ordre (retour visuel, carrière en équipe, match à relais trop long).
+Les priorités restantes y sont listées dans l'ordre (retour visuel d'un coup, momentum qui verrouille la main,
+carrière en équipe, match à relais trop long).
 Toute session qui touche au match devrait faire bouger au moins un de ces chiffres, et le dire. Les scripts de
 mesure sont faciles à refaire : `createBattle` + `autoPlay` sur soixante graines, voir `tests/energie.test.js` et
 `tests/rythme.test.js`.

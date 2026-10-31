@@ -9,7 +9,7 @@
 // depuis /Wrestling/, pas depuis la racine. Un chemin absolu marcherait en
 // local et mettrait l'installation en 404 en ligne.
 // ---------------------------------------------------------------------------
-const VERSION = 'ppw-2026-10-31b';
+const VERSION = 'ppw-2026-10-31c';
 const ASSETS = [
   './',
   './index.html',
