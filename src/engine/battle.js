@@ -1033,6 +1033,10 @@ export function reverseChance(battle, attacker, target, move) {
 
 export function resolveAttack(battle, attacker, target, move) {
   spendStamina(battle, attacker, staminaCost(move));
+  // QUI FRAPPE QUI, pour l'écran : l'attaquant s'élance, la cible recule, et
+  // l'onomatopée dépend du coup. L'événement part avant le jet (un coup raté
+  // ou renversé s'élance aussi) ; les dégâts, eux, arrivent ensuite.
+  emit(battle, { type: 'attack', x: target.x, y: target.y, from: { x: attacker.x, y: attacker.y }, uid: attacker.uid, tuid: target.uid, kind: move.type, tier: move.tier, name: move.name });
   // Le renversement se joue AVANT le jet de précision : ce n'est pas un coup
   // raté, c'est un coup retourné.
   const rev = reverseChance(battle, attacker, target, move);
@@ -2072,7 +2076,7 @@ function whiff(battle, unit, a, target) {
   battle.stats.dodges = (battle.stats.dodges || 0) + 1;
   if (target.team === 'player') battle.stats.playerDodges = (battle.stats.playerDodges || 0) + 1;
   log(battle, `💨 ${unit.name} lance ${a.name} dans le vide — ${target.name} l’a vu venir !`, 'miss');
-  emit(battle, { type: 'whiff', x: unit.x, y: unit.y });
+  emit(battle, { type: 'whiff', x: unit.x, y: unit.y, to: { x: target.x, y: target.y }, uid: unit.uid, tuid: target.uid });
   beat(battle, 'dodge', { who: target.name, uid: target.uid, on: unit.name, move: a.name });
 }
 

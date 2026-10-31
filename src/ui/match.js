@@ -33,6 +33,12 @@ import { winRoutes } from '../engine/rules.js';
 import { showTutorial, tutorialSeen } from './tutorial.js';
 import { matchStory } from '../game/story.js';
 
+// Les animations de coup passent par l'API Web Animations, sur la propriété
+// `translate` : elle s'applique AVANT la contre-rotation isométrique du pion,
+// donc on peut animer un pion sans toucher à son `transform`. Elles sont
+// coupées pour qui a demandé moins de mouvement.
+const REDUCED = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ONOMATOPEE = { strike: 'POW !', grapple: 'SLAM !', aerial: 'BOOM !', submission: 'CRAC !', weapon: 'CLANG !', special: 'WHAM !' };
 const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weapon']);
 const TACTIC_ICON = { guard: '🛡️', regroup: '🏃', draw: '🧠', heal: '🩹', hype: '🔥', feint: '🎭' };
 const TYPE_ICON = { tactic: '🛡️', strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', taunt: '📣', pin: '🤝', toss: '🚀', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️', sell: '🎭', job: '📜' };
@@ -82,7 +88,7 @@ const put = (parent, ...kids) => { for (const k of kids.flat(Infinity)) if (k !=
 const aCible = (a) => !!(a.targets && a.targets.length && a.targets[0].unit);
 
 export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQuit, onLearn, deckOf }) {
-  const ui = { sel: null, card: null, pending: null, hover: null, hoverXY: null, hoverTile: null, reach: null, busy: false, resultShown: false, acting: null, setupFor: null, panel: null, ringOpen: false, expanded: new Set(), focusKey: '' };
+  const ui = { sel: null, card: null, pending: null, hover: null, hoverXY: null, hoverTile: null, reach: null, busy: false, resultShown: false, acting: null, setupFor: null, animUntil: 0, panel: null, ringOpen: false, expanded: new Set(), focusKey: '' };
   const g = battle.grid;
   clear(root);
   const el = {
@@ -629,6 +635,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (m && m.blurb) tags.push(m.blurb);
     const cost = a.energy === 'all' ? '⏳' : a.energy === 0 ? '0' : String(a.energy);
     return h('button', {
+      'data-id': a.id,
       class: `card tier-${m ? m.tier : 'base'} type-${a.type}${a.ok ? '' : ' off'}${raised ? ' raised' : ''}${merite ? ' merite' : ''}`,
       disabled: ui.busy,
       title: a.ok ? (m && m.desc) || a.desc : a.reason,
@@ -766,8 +773,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   }
   function doAction(a, target) {
     const u = ui.sel;
+    const vol = captureCard(a);
     const r = executeAction(battle, u, a.id, target ? { unit: target } : null);
     if (!r.ok) { toast(r.reason, 'warn'); lower(); return; }
+    ui.pendingFlight = vol ? { ...vol, to: target ? { x: target.x, y: target.y } : { x: u.x, y: u.y } } : null;
     if (isCard(a.id)) play('card');
     if (MOVES[a.id] && MOVES[a.id].tier === 'finisher') { play('finisher'); crowdPop(1.2); shake(); }
     if (r.countered) toast('CONTRÉ !', 'warn');
@@ -788,6 +797,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     }
     const moved = !ui.hoverXY || x !== ui.hoverXY.x || y !== ui.hoverXY.y;
     ui.hoverXY = x == null ? null : { x, y };
+    if (performance.now() < ui.animUntil) { ui.hover = u; return; }       // pas pendant un coup : le rendu couperait l'animation
     if (u !== ui.hover) { ui.hover = u; renderBoard(); if (ui.card) renderSides(); }
     else if (moved && ui.sel && !ui.card && !ui.sel.moved) renderBoard();
   }
@@ -828,15 +838,97 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       default: break;
     }
   }
+  const cellAt = (x, y) => el.board.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+  const centre = (c) => { const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  // Un vecteur d'ÉCRAN, ramené dans le repère du plateau (celui où `translate`
+  // s'applique) : l'inverse de « aplatir par deux puis tourner de 45° ».
+  function toBoard(sx, sy) {
+    if (!boardWrap.classList.contains('view-iso')) return [sx, sy];
+    const th = ((45 + boardRot() * 90) * Math.PI) / 180, x = sx, y = sy * 2;
+    return [x * Math.cos(th) + y * Math.sin(th), -x * Math.sin(th) + y * Math.cos(th)];
+  }
+  const cellPx = () => parseFloat(getComputedStyle(boardWrap).getPropertyValue('--cell')) || 48;
+  // Faire bouger un pion le long d'un vecteur d'écran, puis le ramener.
+  function pousse(tok, sx, sy, ms, aller = 0.4) {
+    if (!tok || REDUCED) return;
+    const [bx, by] = toBoard(sx, sy);
+    tok.animate([{ translate: '0 0' }, { translate: `${bx}px ${by}px`, offset: aller }, { translate: '0 0' }], { duration: ms, easing: 'steps(4, end)' });
+    ui.animUntil = Math.max(ui.animUntil, performance.now() + ms + 40);
+  }
+  // L'ÉLAN : l'attaquant part vers sa cible, au pas de pixel.
+  function elan(ev, de, vers) {
+    const a = cellAt(de.x, de.y), t = vers;
+    if (!a || !t) return null;
+    const [ax, ay] = centre(a), [tx, ty] = centre(t);
+    const dx = tx - ax, dy = ty - ay, len = Math.hypot(dx, dy) || 1;
+    const lunge = Math.min(len * 0.6, cellPx() * 1.1);
+    const vx = (dx / len) * lunge, vy = (dy / len) * lunge;
+    const finisher = ev.tier === 'finisher';
+    pousse(a.querySelector('.unit'), vx, vy, finisher ? 520 : 300, 0.38);
+    return { vx, vy, len };
+  }
+  // L'IMPACT : une onomatopée en étoile sur la case touchée.
+  function impact(cell, texte, cls = '') {
+    if (!cell) return;
+    const i = h('span', { class: `impact ${cls}` }, texte);
+    cell.append(i);
+    setTimeout(() => i.remove(), 600);
+  }
+  // LA CARTE FILE VERS SA CIBLE. On garde un double de la carte avant que la
+  // main soit redessinée, puis on le lance de sa place jusqu'à la case visée.
+  function captureCard(a) {
+    if (REDUCED || !a.move) return null;
+    const c = el.hand.querySelector(`.card.raised`) || el.hand.querySelector(`.card[data-id="${a.id}"]`);
+    if (!c) return null;
+    const r = c.getBoundingClientRect();
+    const ghost = c.cloneNode(true);
+    ghost.classList.remove('raised'); ghost.removeAttribute('title');
+    return { ghost, rect: r };
+  }
+  function volCarte(vol) {
+    const cible = cellAt(vol.to.x, vol.to.y);
+    if (!vol || !cible) return;
+    const [tx, ty] = centre(cible);
+    const g = vol.ghost;
+    Object.assign(g.style, { position: 'fixed', left: `${vol.rect.left}px`, top: `${vol.rect.top}px`, width: `${vol.rect.width}px`, height: `${vol.rect.height}px`, margin: '0', zIndex: 80, pointerEvents: 'none', transform: 'none' });
+    document.body.append(g);
+    const dx = tx - (vol.rect.left + vol.rect.width / 2), dy = ty - (vol.rect.top + vol.rect.height / 2);
+    const fin = g.animate([
+      { translate: '0 0', scale: '1', rotate: '0deg', opacity: 1 },
+      { translate: `${dx * 0.55}px ${dy * 0.55 - 30}px`, scale: '0.7', rotate: '-6deg', opacity: 1, offset: 0.55 },
+      { translate: `${dx}px ${dy}px`, scale: '0.28', rotate: '10deg', opacity: 0.1 },
+    ], { duration: 340, easing: 'ease-in' });
+    fin.onfinish = () => g.remove();
+    setTimeout(() => g.remove(), 600);
+  }
+
   function flushEvents() {
     const evs = battle.events.splice(0, battle.events.length);
     for (const ev of evs) sonner(ev);
+    if (ui.pendingFlight) { const v = ui.pendingFlight; ui.pendingFlight = null; volCarte(v); }
+    let dernier = null;                        // le dernier élan de ce lot : le recul le prolonge
     for (const ev of evs) {
       const cell = el.board.querySelector(`.cell[data-x="${ev.x}"][data-y="${ev.y}"]`);
       if (!cell) continue;
       let text = '', cls = '';
       switch (ev.type) {
-        case 'damage': text = `-${ev.amount}`; cls = ev.crit ? 'crit' : 'dmg'; flash(cell); break;
+        case 'attack': dernier = { ...(elan(ev, ev.from, cell) || {}), kind: ev.kind, tier: ev.tier }; continue;
+        case 'whiff': {
+          const cible = ev.to && cellAt(ev.to.x, ev.to.y);
+          const v = elan(ev, { x: ev.x, y: ev.y }, cible);
+          // celui qui a vu venir le coup fait un saut de côté
+          if (v && cible) pousse(cible.querySelector('.unit'), -v.vy * 0.8, v.vx * 0.8, 360, 0.45);
+          continue;
+        }
+        case 'damage': {
+          text = `-${ev.amount}`; cls = ev.crit ? 'crit' : 'dmg'; flash(cell);
+          const tok = cell.querySelector('.unit');
+          if (dernier && dernier.vx !== undefined) pousse(tok, dernier.vx * (ev.crit ? 0.7 : 0.4), dernier.vy * (ev.crit ? 0.7 : 0.4), ev.crit ? 380 : 260, 0.3);
+          else pousse(tok, 5, 0, 200, 0.5);
+          impact(cell, ev.crit ? 'WHAM !!' : (dernier && ONOMATOPEE[dernier.kind]) || 'BAM !', ev.crit || (dernier && dernier.tier === 'finisher') ? 'big' : '');
+          if (dernier && dernier.tier === 'finisher') { scene.classList.remove('flashed'); void scene.offsetWidth; scene.classList.add('flashed'); setTimeout(() => scene.classList.remove('flashed'), 300); }
+          break;
+        }
         case 'heal': text = `+${ev.amount}`; cls = 'heal'; break;
         case 'miss': text = 'RATÉ'; cls = 'miss'; break;
         case 'down': text = 'AU SOL !'; cls = 'down'; break;
