@@ -455,6 +455,13 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .tile-mark.team-enemy { --team: var(--red); }
 .tile-mark.sel { --team: var(--gold); box-shadow: inset 0 0 0 4px var(--gold); }
 .tile-mark.acted { opacity: 0.4; }
+.tile-mark.teamwork { box-shadow: inset 0 0 0 3px var(--gold), 0 0 0 2px var(--ink); }
+/* L'énergie du tour : trois éclairs, allumés tant qu'il en reste. */
+.pop-energy { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 0.78rem; color: var(--cream); border-bottom: 2px solid var(--ink); }
+.pop-energy .pips i, .pm-energy i, .energy-pips i { font-style: normal; opacity: 0.22; filter: grayscale(1); }
+.pop-energy .pips i.on, .pm-energy i.on, .energy-pips i.on { opacity: 1; filter: none; }
+.pm-energy { display: block; font-size: 0.72rem; line-height: 1; letter-spacing: -1px; }
+.energy-pips { font-size: 0.9rem; }
 .unit.team-player .avatar-wrap { filter: drop-shadow(2px 0 0 var(--blue)) drop-shadow(-2px 0 0 var(--blue)) drop-shadow(0 -2px 0 var(--blue)); }
 .unit.team-enemy .avatar-wrap { filter: drop-shadow(2px 0 0 var(--red)) drop-shadow(-2px 0 0 var(--red)) drop-shadow(0 -2px 0 var(--red)); }
 .unit.selected { transform: scale(1.1); z-index: 6; }

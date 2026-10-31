@@ -7,7 +7,7 @@ français** : code, commentaires, commits, tests, documentation. On garde ça.
 
 ```bash
 npm start     # serveur statique sur :8080 (scripts/serve.js)
-npm test      # node --test tests/*.test.js — 183 tests, ~30 s, à lancer avant tout commit
+npm test      # node --test tests/*.test.js — 196 tests, ~40 s, à lancer avant tout commit
 node .claude/skills/pixel-art/scripts/measure.mjs [id]   # mesure les palettes des sprites
 ```
 
@@ -18,7 +18,9 @@ Pas de linter ni de formateur configuré. Node ≥ 18 (la CI tourne en 22).
 Lire la section **Code** du `README.md` pour la carte complète. En bref :
 
 - `src/engine/` — le moteur de match, **sans DOM, déterministe à la seed**. `battle.js` est le gros fichier ;
-  `hand.js` (la main), `wear.js` (l'usure), `ai.js` (l'adversaire), `rules.js` (les fins).
+  `hand.js` (la main, l'énergie, le coût des cartes), `wear.js` (l'usure), `ai.js` (l'adversaire), `rules.js`
+  (les fins). Le tour est celui d'un deck-builder : main neuve de 5 à chaque tour, 3 points d'énergie, plusieurs
+  cartes à la suite ; `acted` ne passe à vrai que quand l'énergie est à zéro ou qu'une action ferme le tour.
 - `src/data/` — tout le contenu : lutteurs, mouvements, gimmicks, stipulations, combos, managers, campagne.
 - `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match.
 - `src/ui/` — les écrans. `match.js` est l'écran de match ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
@@ -52,10 +54,12 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
 
 ## État du jeu (octobre 2026)
 
-Le README a une section **« Où en est le jeu — honnêtement »** avec les mesures : match simple à 40 tours en
-médiane, 8 % des PV par coup, une phase adverse sur deux sans dégâts, 23 % des matchs finis aux points. Le moteur
-est complet, l'expérience de jeu ne l'est pas. Les priorités y sont listées dans l'ordre. Toute session qui
-touche au match devrait faire bouger au moins un de ces chiffres, et le dire.
+Le README a une section **« Où en est le jeu — honnêtement »** avec les mesures avant/après le tour à énergie :
+match simple de 40 à 12-16 tours en médiane, phases adverses sans dégâts de 50 à 30 %, fins au chrono de 23 à 0 %.
+Les priorités restantes y sont listées dans l'ordre (retour visuel, carrière en équipe, match à relais trop long).
+Toute session qui touche au match devrait faire bouger au moins un de ces chiffres, et le dire. Les scripts de
+mesure sont faciles à refaire : `createBattle` + `autoPlay` sur soixante graines, voir `tests/energie.test.js` et
+`tests/rythme.test.js`.
 
 ## Vérifier dans le navigateur
 

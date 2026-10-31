@@ -2,10 +2,11 @@
 
 ### ▶️ [Jouer maintenant](https://ouellettejeanphilippe-source.github.io/Wrestling/)
 
-Un jeu tactique sur grille à la **Fire Emblem × Chroma Squad**, avec des parodies de lutteurs WWE/AEW. Chaque
-lutteur a un **gimmick** (passif unique), une **classe**, une **spécialité**, un **signature** et un **finisher**.
-Les matchs se gagnent par tombé, soumission, compte à l'extérieur, DQ, par-dessus la troisième corde, échelle,
-évasion de cage, survie…
+Un jeu tactique sur grille à la **Chroma Squad**, avec un **tour de deck-builder** : chaque lutteur pioche cinq
+cartes par tour et a trois points d'énergie pour les jouer. Des parodies de lutteurs WWE/AEU, chacun avec un
+**gimmick** (passif unique), une **classe**, une **spécialité**, un **signature** et un **finisher**. Les matchs se
+gagnent par tombé, soumission, compte à l'extérieur, DQ, par-dessus la troisième corde, échelle, évasion de cage,
+survie…
 
 Aucune dépendance, aucun build : du JavaScript (modules ES) servi statiquement. Tout est en **français**, code
 et commentaires compris.
@@ -18,7 +19,7 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 183 tests du moteur (node:test), ~30 s
+npm test           # 196 tests du moteur (node:test), ~40 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
@@ -33,33 +34,36 @@ les chemins sont **relatifs** : en ligne, le jeu est servi depuis `/Wrestling/`,
 
 ## Où en est le jeu — honnêtement
 
-Le moteur est riche, mesuré et testé. **Le match, lui, n'est pas encore agréable à jouer.** Mesuré sur 60 matchs
-simples joués par l'IA contre l'IA (`autoPlay`), et confirmé à la main dans le navigateur :
+Le match se jouait **une carte par tour**, main gardée d'un tour à l'autre : quarante tours de six clics, trois
+cartes sur cinq jouables, un adversaire qui marchait la moitié du temps, un match sur quatre fini au chrono. Le
+**tour à énergie** (trois cartes par tour, main neuve à chaque tour) et la **double équipe** ont remplacé ça.
+Mesuré sur 60 matchs simples joués par l'IA contre l'IA (`autoPlay`), avant et après :
 
-| ce qu'on constate | mesure |
-| --- | --- |
-| longueur d'un match simple | médiane **40 tours** (limite à 60) |
-| ce qu'un coup qui touche enlève | **8 %** des PV adverses |
-| cartes de la main jouables à un tour donné | **3 sur 5** en médiane ; au tour 1, souvent **1** (les autres sont verrouillées par le momentum ou une condition) |
-| phases adverses où l'IA ne fait **aucun** dégât | **50 %** (elle se replace) |
-| matchs finis à la **limite de temps**, « aux points » | **23 %** |
-| tours où le meilleur choix de l'IA est *Attendre* | 14 % |
+| ce qu'on constate | avant | **après** |
+| --- | --- | --- |
+| longueur d'un match simple (médiane) | 40 tours | **12 à 16 tours** selon l'échantillon |
+| coups qui touchent par match | 30 | **30** — la densité est la même, en trois fois moins de tours |
+| cartes de la main jouables à un tour donné | 3 sur 5 | **4 sur 5** en médiane, et le tour 1 en joue trois |
+| phases adverses où l'IA ne fait **aucun** dégât | 50 % | **30 %** |
+| matchs finis à la **limite de temps** | 23 % | **0 %** sur 60 |
+| tours où le meilleur choix de l'IA est *Attendre* | 14 % | **3 %** |
+| match d'échelle gagné par la ceinture | 4 sur 12 | **10 sur 12** |
 
-Autrement dit : quarante tours de cinq ou six clics chacun (sélectionner, déplacer, menu, catégorie, carte, cible),
-pour grignoter 8 % par coup, avec un adversaire qui marche la moitié du temps, et un match sur quatre qui se termine
-sans fin. Les systèmes (élan, usure, cœur, actes, chaleur, combos) sont tous là, mais ils ne se **ressentent** pas
-au tour par tour : un coup qui porte n'a ni animation ni poids à l'écran, et une décision de tour ressemble à la
-précédente.
+Un tour est maintenant une suite de décisions : se déplacer, poser un coup qui étourdit, enchaîner avec la prise
+qui demande une cible étourdie, et finir par un tombé — dans le même tour. À plusieurs, un lutteur peut donner son
+tour pour que ses partenaires frappent plus loin et qu'il enchaîne sur leurs coups.
 
-Ce que ça demande, par ordre d'importance :
+Ce qui reste à faire, par ordre d'importance :
 
-1. **Un match deux fois plus court** et des coups deux fois plus lourds, ou la même longueur avec des tours qui
-   coûtent un clic. Le rythme « beaucoup de petits tours » a été choisi contre « peu de gros tours », mais sans
-   retour visuel, beaucoup de petits tours est juste long.
-2. **Une IA qui attaque.** Une phase adverse sur deux sans dégâts, c'est un adversaire absent.
-3. **Supprimer la décision aux points**, ou la rendre rare (< 5 %) : un match de catch ne finit pas au chrono.
-4. **Du retour à l'écran** : le coup, le bump, la chute, la couverture, le compte. Aujourd'hui une ligne de journal.
-5. **Des cartes jouables dès le tour 1.** Une main dont quatre cartes sur cinq sont grises n'est pas une main.
+1. **Du retour à l'écran** : le coup, le bump, la chute, la couverture, le compte. Aujourd'hui une ligne de journal
+   et un nombre qui flotte.
+2. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
+   lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
+   logique de *Chroma Squad*.
+3. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
+   soigne, le partenaire illégal qui attend. À resserrer.
+4. **Le momentum verrouille encore** les cartes de spécialité (45) au premier tour : un tour sur dix commence avec
+   une seule carte jouable.
 
 Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'elles donnent une fois assemblées.
 
@@ -70,7 +74,7 @@ Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'
 | **🆕 Nouvelle saison** | choisir un lutteur parmi ceux du vestiaire, un mode (Kayfabe ou Scénarios), et partir en carrière |
 | **🥊 Match d'exhibition** | un match libre : stipulation, format (1c1, 2c2, 3c3), managers, n'importe lequel des 30 lutteurs ; les résultats 1c1 nourrissent les **rivalités** |
 | **🔒 Vestiaire** | les 29 portraits de la carrière, les verrouillés grisés avec leur condition de déblocage en clair |
-| **📖 Comment jouer** | le tutoriel (15 pages), aussi accessible en match via *Aide* |
+| **📖 Comment jouer** | le tutoriel (16 pages), aussi accessible en match via *Aide* |
 
 ### Les deux modes de campagne
 
@@ -139,24 +143,44 @@ nom, hors vestiaire.
 
 ## Un match
 
-### Le tour
+### Le tour — trois points d'énergie
 
-Chaque lutteur **se déplace une fois, puis agit une fois**. On sélectionne, on voit la portée de déplacement (bleu)
-et d'attaque (rouge), on se place, et un menu s'ouvre : **Votre main**, **Mérité** (signature et finisher),
-**Tombé**, **Provoquer**, **Le ring** (projeter par-dessus la corde, grimper, tag, armes, manager, vendre/faire le
-job), **Souffler**. Avant de confirmer une cible, la **prévision** donne précision, dégâts, critique, risque de
-renversement, usure infligée, combos actifs et risque de DQ.
+Chaque lutteur **se déplace une fois**, puis joue **autant de cartes que son énergie le permet** : trois points
+par tour. On sélectionne, on voit la portée de déplacement (bleu) et d'attaque (rouge), on se place, et un menu
+s'ouvre : **Votre main**, **Mérité** (signature et finisher), **Tombé**, **Provoquer**, **Le ring** (projeter
+par-dessus la corde, grimper, tag, armes, manager, vendre/faire le job), **Double équipe**, **Souffler**. Après
+chaque carte, le menu se rouvre sur le même lutteur tant qu'il lui reste de l'énergie ; le tour se ferme à zéro, ou
+en soufflant. Avant de confirmer une cible, la **prévision** donne précision, dégâts, critique, risque de
+renversement, usure infligée, combos actifs, enchaînement de double équipe et risque de DQ.
 
-### La main — on joue ce qu'on a
+| carte | coût |
+| --- | --- |
+| fondamentaux et mouvements de classe | ⚡1 |
+| spécialité, signature | ⚡2 |
+| finisher | ⚡3 — le tour entier |
+| tombé, projection par-dessus la corde, arme, relais | ⚡1 |
+| un échelon d'échelle ou de cage | ⚡2 |
+| souffler, double équipe, manager, rentrer dans le ring, jeter sa main | ferme le tour |
 
-Chaque lutteur a **5 cartes en main** tirées de son deck (24 à 28 cartes de fiche). **Tout est une carte**, coup
-de poing compris ; les fondamentaux y sont en plusieurs exemplaires. On joue une carte, on en repioche une ; ce
-qu'on ne joue pas, on le **garde** — tenir un Lariat lancé trois tours en cherchant ses quatre cases de course,
-c'est le plan. Rien qui passe ? **Jeter la main et repiocher** coûte le tour mais rend du souffle.
+### La main — neuve à chaque tour
+
+Chaque lutteur pioche **5 cartes** de son deck (24 à 28 cartes de fiche) **à chaque tour** ; ce qui n'est pas joué
+part à la défausse, et le talon se reconstitue avec elle. On revoit donc tout son deck tous les cinq tours, et une
+carte apprise en carrière revient vite. **Tout est une carte**, coup de poing compris ; les fondamentaux y sont en
+plusieurs exemplaires. **Le tour est le plan** : une carte qui demande une cible étourdie se joue juste après le
+coup qui étourdit, dans le même tour.
 
 Seuls la **signature** et le **finisher** ne se piochent pas : ils s'ouvrent au momentum (60 et 100) et le
 consomment. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
 une carte **allume sur le plateau** les cases qui la débloqueraient.
+
+### La double équipe — le système de *Chroma Squad*
+
+À plusieurs, un lutteur peut **donner son tour** pour se mettre en double équipe. Jusqu'à son prochain tour, ses
+partenaires qui partent d'à côté de lui vont **une case plus loin**, et chaque fois qu'un partenaire touche un
+adversaire adjacent à lui, il **enchaîne** un coup par-dessus (70 % d'un coup de poing, sans jet ni renversement).
+L'IA s'en sert aussi : 2,4 enchaînements par match à trois contre trois. En match à relais, seul le lutteur légal
+peut s'y mettre.
 
 ### L'élan et le statisme
 
@@ -229,7 +253,7 @@ la prévision.
 | 🥇 Match simple / 🤝 Par équipes | tombé, soumission, compte de 6 tours dehors, ou DQ adverse |
 | 🪑 Hardcore / 🥊 Street fight | idem sans DQ ni compte ; armes et tables partout, tombé n'importe où |
 | 👑 Bataille royale | par-dessus la troisième corde, après avoir usé l'adversaire |
-| 🪜 Échelle / TLC | décrocher la ceinture : 2 tours au centre sans être dérangé ; on ne grimpe pas avec quelqu'un debout à côté |
+| 🪜 Échelle / TLC | décrocher la ceinture : 2 échelons (⚡2 chacun, un par tour) ; on ne grimpe pas avec quelqu'un debout à côté, et seule une chute ou un déplacement fait redescendre — pas d'abandon dans ce match |
 | 🔒 Cage | tombé, soumission ou évasion (3 tours depuis un coin) |
 | 😈 Hell in a Cell | pas d'évasion ; les murs font mal |
 | 🔟 Last Man Standing | au sol et incapable de répondre au compte de dix |
@@ -237,8 +261,8 @@ la prévision.
 | ⏱️ Survie | tenir N tours face aux renforts (campagne seulement) |
 | ⚔️ Confrontation | éliminer tous les adversaires |
 
-Le panneau **Comment gagner** liste en permanence les routes ouvertes et leur état. Au-delà de **60 tours**, le
-match est donné aux points : c'est l'une des choses à corriger (voir plus haut).
+Le panneau **Comment gagner** liste en permanence les routes ouvertes et leur état. Au-delà de **40 tours** (55
+pour les formes longues), le match est donné aux points — mesuré à zéro fin au chrono sur soixante matchs simples.
 
 ### Après le match
 
@@ -272,7 +296,8 @@ comprises.
 
 - Plateau en **caméra isométrique** (rotation par quarts de tour, touche R) ou en **vue de dessus** ; zoom à la
   molette ou au pincement, glisser pour déplacer la vue. Le HUD flotte dans les coins pour laisser la place aux
-  sprites. Pensé pour le **paysage** sur téléphone ; en portrait, un rappel s'affiche.
+  sprites. Pensé pour le **paysage** sur téléphone ; en portrait, un rappel s'affiche. L'énergie du tour se lit
+  en tête du menu, sur la fiche et dans la barre d'équipe ; chaque carte affiche son coût ⚡.
 - Le jeu se présente comme une **émission de catch du samedi soir filmée en pixel** : contours d'encre, ombres dures,
   aplats saturés, lignes de balayage, voyant « ON AIR ».
 - **Sprites 24×32 en SVG**, personne n'est dessiné à la main : un lutteur est *composé* depuis sa description `look`
@@ -290,8 +315,8 @@ src/main.js                   navigation entre écrans
 src/pwa.js                    service worker, bouton d'installation
 src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Dijkstra)
              battle.js        état de match, actions, dégâts, tombés, soumissions, whip, armes/DQ, tag,
-                              escalade, managers, arbitre, phases (le gros fichier)
-             hand.js          la main, le talon, la défausse
+                              escalade, managers, arbitre, double équipe, phases (le gros fichier)
+             hand.js          la main, le talon, la défausse, l'énergie et le coût des cartes
              wear.js          l'usure par membre
              ai.js            IA : évalue chaque tuile atteignable × chaque action × chaque cible
              phases.js        les trois actes et leurs modificateurs
@@ -320,14 +345,14 @@ src/ui/      title.js         écran titre, vestiaire
              hub.js           la carte, l'entraînement, le deck, l'historique
              match.js         l'écran de match
              cards.js, dom.js fiches de lutteur, helpers DOM
-             tutorial.js      les 15 pages
+             tutorial.js      les 16 pages
              sound.js         tout l'audio
              spriteart.js     les planches de pixels (grilles de caractères)
              spritepixel.js   palette, postures, vêtements, rendu SVG
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        18 fichiers node:test, 183 tests
+tests/                        19 fichiers node:test, 196 tests
 docs/                         le journal de conception
 ```
 
@@ -344,7 +369,7 @@ des fins par soumission, taux de ceinture sur cent carrières…).
 
 ## Idées pour la suite
 
-- D'abord ce que dit la section « Où en est le jeu » : rythme, IA, fins au chrono, retour visuel.
+- D'abord ce que dit la section « Où en est le jeu » : retour visuel, carrière en équipe, match à relais.
 - Une difficulté montante entre les runs (l'Ascension de *Slay the Spire*).
 - Jouer un match entièrement au clavier, rôles et labels ARIA.
 - Des cartes qui ne sont pas que des mouvements : une carte qui change une règle du match pour un tour.

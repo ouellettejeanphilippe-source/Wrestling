@@ -1,43 +1,67 @@
-// LA MAIN — on ne choisit plus le meilleur coup, on joue ce qu'on a
+// LA MAIN ET L'ÉNERGIE — le tour d'un jeu de deck
 //
-// Le problème du menu : avec dix-huit mouvements par lutteur, la liste
-// s'allonge mais la décision, elle, ne devient jamais plus intéressante. Le
-// meilleur coup du tour est presque toujours le même que celui du tour
-// précédent, et on finit par dérouler une routine au lieu de lutter.
+// Première version : une main de cinq qu'on GARDAIT d'un tour à l'autre, une
+// seule carte jouée par tour. L'idée était de pouvoir tenir un plan (garder
+// son Lariat lancé en cherchant ses quatre cases de course). Mesuré sur
+// soixante matchs : quarante tours en médiane, trois cartes sur cinq
+// jouables, souvent une seule au premier tour — les autres grises, bloquées
+// par le momentum ou une condition. Un tour, c'était six clics pour une
+// ligne de journal. Le plan ne se jouait pas, il s'attendait.
 //
-// Une MAIN règle exactement ça : quatre ou cinq mouvements disponibles sur la
-// vingtaine que connaît le lutteur, et il faut faire avec. Le reste du moteur
-// était déjà taillé pour — les conditions existent (`ran`, `crossedRope`,
-// `turnbuckle`, cible au sol), le momentum verrouille déjà les paliers, l'usure
-// donne une raison de garder une carte, et la foule se lasse déjà des
-// répétitions.
+// Le tour d'un deck-builder règle ça, et c'est la réponse classique du genre
+// (Slay the Spire, Chroma Squad pour la grille) :
 //
-// LA RÈGLE IMPORTANTE : on ne défausse PAS sa main à chaque tour. On joue une
-// carte, on en repioche une. Ce qu'on garde, on le garde aussi longtemps qu'on
-// veut. C'est ce qui permet de POURSUIVRE UN PLAN : tenir son Lariat lancé
-// pendant trois tours en cherchant ses quatre cases de course, c'est du catch.
-// Une main rebattue chaque tour, ce serait du hasard.
+//   · chaque tour, on DÉFAUSSE sa main et on en pioche une neuve de cinq ;
+//   · chaque lutteur dispose de 3 points d'ÉNERGIE par tour ;
+//   · chaque carte coûte de l'énergie — un coup de poing 1, un finisher 3 —
+//     et on en joue autant que l'énergie le permet, dans l'ordre qu'on veut.
+//
+// LE TOUR EST LE PLAN. Se déplacer, poser un coup qui étourdit, enchaîner
+// avec la prise qui demande une cible étourdie : ça tient dans un seul tour,
+// donc ça se joue. On n'a plus besoin de garder une carte trois tours — on
+// revoit tout son deck tous les cinq tours.
+//
+// Ce qui ne bouge pas : la signature et le finisher ne se piochent pas (le
+// momentum les ouvre), et la défausse reconstitue le talon.
 import { MOVES } from '../data/moves.js';
 
 export const HAND_SIZE = 5;
+export const ENERGY_PER_TURN = 3;
+
+// Ce que coûte une carte, par palier. Un fondamental vaut un point, un
+// finisher vaut le tour entier : on ne lance pas un finisher ET deux coups.
+export const ENERGY_BY_TIER = { base: 1, class: 1, specialty: 2, signature: 2, finisher: 3 };
+// Les actions qui ne sont pas des cartes.
+// Grimper vaut deux points : un échelon par tour au plus, mais il reste de
+// quoi porter un coup avant de monter — c'est ce qui rend l'échelle jouable
+// face à un adversaire qui, lui, a trois cartes pour vous en faire tomber.
+export const ENERGY_BY_TYPE = { pin: 1, toss: 1, weapon: 1, tag: 1, scavenge: 1, pickup: 0, sell: 1, climb: 2 };
+// Celles qui FERMENT le tour, quoi qu'il reste d'énergie : souffler, jeter sa
+// main, grimper, rentrer, appeler son manager, faire le job, et se mettre en
+// double équipe. Ce sont des postures, pas des coups.
+export const ENDS_TURN = new Set(['wait', 'redraw', 'rollin', 'manager', 'job', 'teamwork']);
+
+export function energyCost(a) {
+  if (!a) return 0;
+  if (ENDS_TURN.has(a.type)) return 'all';
+  if (a.move && a.move.tier) return a.move.type === 'taunt' ? 1 : (a.move.energy ?? ENERGY_BY_TIER[a.move.tier] ?? 1);
+  return ENERGY_BY_TYPE[a.type] ?? 1;
+}
+export const energyLabel = (c) => (c === 'all' ? '⚡ ferme le tour' : c === 0 ? '⚡ gratuit' : `⚡${c}`);
 
 // TOUT EST UNE CARTE — Y COMPRIS LES FONDAMENTAUX
 //
 // Ils étaient hors du talon, toujours disponibles. C'était un filet : une
 // mauvaise main voulait dire « je n'ai que les bases », jamais « je ne peux
 // rien faire ». Mais ça voulait dire aussi que la moitié des tours se jouait
-// en dehors du système de cartes, et qu'un coup de poing ne coûtait jamais
-// rien. Une main de quatre qu'on peut ignorer n'est pas une main.
+// en dehors du système de cartes. Une main qu'on peut ignorer n'est pas une
+// main.
 //
-// LA CONTREPARTIE EST OBLIGATOIRE, et c'est la réponse classique du genre :
-// les fondamentaux entrent dans le talon EN PLUSIEURS EXEMPLAIRES, comme les
-// cinq Frappes du paquet de départ de Slay the Spire. On ne tire pas « le »
-// coup de poing, on en a plusieurs qui reviennent souvent — c'est ce qui rend
-// « tout est carte » jouable au lieu de bloquant.
-//
-// Le premier essai (fondamentaux au talon, un seul exemplaire chacun) donnait
-// 41 % de tours entièrement morts. Les copies et les cartes qui déplacent
-// (`step`) existent pour ça, et un test mesure le résultat.
+// LA CONTREPARTIE EST OBLIGATOIRE : les fondamentaux entrent dans le talon EN
+// PLUSIEURS EXEMPLAIRES, comme les cinq Frappes du paquet de départ de Slay
+// the Spire. On ne tire pas « le » coup de poing, on en a plusieurs qui
+// reviennent souvent — et avec trois points d'énergie, une main de deux coups
+// de poing et d'une prise est un tour complet, pas un tour mort.
 export const COPIES = { punch: 2, grapple: 2, whip: 2, taunt: 1 };
 
 // Ce qui ne se pioche toujours pas : la signature et le finisher. Le momentum
@@ -99,15 +123,24 @@ export function playCard(battle, unit, id) {
   return true;
 }
 
-// LA SOUPAPE. Cinq cartes injouables, ça arrive — c'est même la tension qu'on
-// cherche. Mais ça ne doit jamais être une impasse : on jette tout, on
-// repioche, et ça coûte le tour. C'est la prise de repos du système de cartes,
-// et elle rend du souffle comme une provocation.
-export function redraw(battle, unit) {
-  unit.discard.push(...unit.hand);
+// LA MAIN NEUVE DU TOUR. Ce qui n'a pas été joué part à la défausse, et on
+// repioche cinq cartes. C'est le cœur du deck-builder : on revoit tout son
+// deck tous les cinq tours, et chaque carte apprise en carrière revient
+// vite — au lieu des dix-sept tours d'attente mesurés quand on gardait sa
+// main.
+export function newHand(battle, unit) {
+  unit.discard = unit.discard || [];
+  unit.discard.push(...(unit.hand || []));
   unit.hand = [];
   refill(battle, unit);
   return unit.hand;
+}
+
+// LA SOUPAPE, gardée par prudence : jeter sa main en cours de tour, ce qui
+// coûte ce qu'il reste du tour et fait souffler. Depuis que la main est
+// rebattue à chaque tour, on y va rarement.
+export function redraw(battle, unit) {
+  return newHand(battle, unit);
 }
 
 // Ce que l'interface doit montrer : ce qu'il reste, et ce qui est déjà passé.
@@ -117,17 +150,11 @@ export const deckState = (unit) => ({
   defausse: unit.discard ? unit.discard.length : 0,
 });
 
-// Les mouvements jouables ce tour : la main, plus tout ce qui ne se pioche pas
-// (provocation toujours, signature et finisher quand la jauge le permet).
-// Les mouvements jouables ce tour : la main, plus tout ce qui ne se pioche pas.
-//
-// Les paliers mérités restent AFFICHÉS même quand la jauge est trop basse —
-// ils apparaissent verrouillés, avec ce qu'il manque. Les retirer de la liste
-// ferait disparaître l'objectif : on ne monte pas une jauge vers un finisher
-// qu'on ne voit pas.
 // Les mouvements jouables ce tour : LA MAIN, plus les paliers mérités qui ne
-// se piochent pas. Il n'y a plus rien d'autre — plus de coup de poing gratuit
-// à côté du système.
+// se piochent pas. Ils restent AFFICHÉS même quand la jauge est trop basse —
+// verrouillés, avec ce qu'il manque. Les retirer de la liste ferait
+// disparaître l'objectif : on ne monte pas une jauge vers un finisher qu'on
+// ne voit pas.
 export function availableMoves(unit) {
   return [...new Set([...(unit.hand || []), ...unit.moves.filter((id) => !isCard(id) && MOVES[id])])];
 }

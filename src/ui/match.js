@@ -7,7 +7,7 @@ import { WRESTLERS_BY_ID } from '../data/wrestlers.js';
 import { listActions, executeAction, moveUnit, undoMove, getReachable, endPlayerPhase, enemySteps, endEnemyPhase, hitChance, computeDamage, getStats, moveRange, elanLabel, refState, reverseChance, winded, tapChance, novelty, moveUses, STAMINA_LOW } from '../engine/battle.js';
 import { movePart, wearFrom, wearOf, wearLevel, wornParts, PARTS, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from '../engine/wear.js';
 import { TERRAIN, tileAt, key, manhattan, sizeOf, heightAt, pathIn } from '../engine/grid.js';
-import { deckState, isCard } from '../engine/hand.js';
+import { deckState, isCard, energyLabel } from '../engine/hand.js';
 import { unitAt, living, avgHeat } from '../engine/util.js';
 import { MOVES, MOVE_TIER_LABEL, MOVE_TIERS } from '../data/moves.js';
 import { SEASON } from '../data/campaign.js';
@@ -15,7 +15,7 @@ import { play, startCrowd, setCrowd, crowdPop, stopCrowd, soundOn, setSound } fr
 import { rankLabel, titleTerms } from '../game/rank.js';
 import { describeFinish, evaluateDirectives, evaluateScript, starsText } from '../game/script.js';
 import { matchPhase } from '../engine/phases.js';
-import { activeCombos } from '../engine/battle.js';
+import { activeCombos, teamworkPartners, TEAMWORK_RATIO } from '../engine/battle.js';
 import { winRoutes } from '../engine/rules.js';
 import { showTutorial, tutorialSeen } from './tutorial.js';
 import { matchStory } from '../game/story.js';
@@ -33,7 +33,7 @@ const TILE_HELP = {
   debris: 'Table brisée. Rien à voir ici, circulez.',
   barricade: 'Barricade : infranchissable. Y être projeté = 10 dégâts.',
   steps: 'Marches d’acier : coût 2. Y être projeté = 12 dégâts.',
-  ladder: 'Échelle : grimpez deux tours de suite sans subir de dégâts pour la ceinture.',
+  ladder: 'Échelle : deux échelons, un par tour, sans être mis au sol ni projeté, pour la ceinture.',
   cage: 'Mur de la cage : infranchissable. Y être projeté = 15 dégâts.',
   void: '',
 };
@@ -52,6 +52,7 @@ const CATS = [
   { id: 'pin', icon: '🤝', name: 'Tombé', match: (a) => a.type === 'pin' },
   { id: 'taunt', icon: '📣', name: 'Provoquer', match: (a) => a.type === 'taunt' },
   { id: 'ring', icon: '🔔', name: 'Le ring', match: (a) => ['toss', 'climb', 'tag', 'pickup', 'scavenge', 'rollin', 'manager', 'sell', 'job'].includes(a.type) },
+  { id: 'team', icon: '🤝', name: 'Double équipe', match: (a) => a.type === 'teamwork' },
   { id: 'wait', icon: '⏳', name: 'Souffler', match: (a) => ['wait', 'redraw'].includes(a.type) },
 ];
 
@@ -345,7 +346,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         if (u) {
           // marquage au sol aux couleurs de l'équipe : posé sur la case, donc
           // parfaitement aligné sur le losange (c'est le repère le plus lisible)
-          const mark = h('span', { class: `tile-mark team-${u.team}${ui.sel === u ? ' sel' : ''}${u.acted && u.team === 'player' ? ' acted' : ''}` });
+          const mark = h('span', { class: `tile-mark team-${u.team}${ui.sel === u ? ' sel' : ''}${u.acted && u.team === 'player' ? ' acted' : ''}${u.teamwork ? ' teamwork' : ''}` });
           cell.append(mark);
         }
         if (u && (u.x !== x || u.y !== y)) cell.classList.add('unit-body');   // reste du gabarit
@@ -500,6 +501,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (u.statuses.finished) icons.push('☠️');
     if (u.weapon) icons.push(u.weapon.icon);
     if (battle.rules.tag && u.legal) icons.push('⭐');
+    if (u.teamwork) icons.push('🤝');
     if (u.acted && u.team === 'player' && battle.phase === 'player') icons.push('✔');
     if (u.climb > 0) icons.push('🧗');
     if (u.outsideCount > 0 && battle.rules.countOut) icons.push(`⏱${u.outsideCount}`);
@@ -552,12 +554,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       pop.append(h('button', { class: 'pop-btn hot', disabled: !pin || !pin.ok, onclick: () => pin && chooseAction(pin) }, '🤝 COUVRIR !', h('small', {}, pin && pin.targets[0] ? `${Math.round(pin.targets[0].chance * 100)} %` : pin ? pin.reason : '')));
       pop.append(h('button', { class: 'pop-btn', onclick: () => doAction('wait', null) }, '⏳ Ne pas couvrir'));
     } else {
+      pop.append(energyRow(u));
       for (const c of CATS) {
         const list = actions.filter((a) => c.match(a, u));
         if (!list.length) continue;
         const okList = list.filter((a) => a.ok);
         const btn = h('button', { class: `pop-btn ${okList.length ? '' : 'off'}`, disabled: !okList.length, onclick: () => openCategory(c, list) },
-          `${c.icon} ${c.name}`, h('small', {}, c.id === 'wait' ? 'Récupère 4 PV' : c.id === 'pin' && okList[0] ? `${Math.round(okList[0].targets[0].chance * 100)} %` : okList.length ? `${okList.length} option${okList.length > 1 ? 's' : ''}` : list[0].reason));
+          `${c.icon} ${c.name}`, h('small', {}, c.id === 'wait' ? 'Termine le tour, récupère 4 PV' : c.id === 'team' ? 'Donne le tour : vos partenaires enchaînent' : c.id === 'pin' && okList[0] ? `${Math.round(okList[0].targets[0].chance * 100)} %` : okList.length ? `${okList.length} option${okList.length > 1 ? 's' : ''}` : list[0].reason));
         pop.append(btn);
       }
     }
@@ -578,9 +581,20 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     el.popover.style.top = `${Math.max(0, Math.min(top, b.height - el.popover.offsetHeight - 8))}px`;
   }
 
+  // L'ÉNERGIE DU TOUR, en tête du menu : trois points, et ce qu'il en reste.
+  // C'est la jauge qui dit « vous pouvez encore jouer » — sans elle, le joueur
+  // ne sait pas pourquoi le menu se rouvre après un coup.
+  function energyRow(u) {
+    const max = u.maxEnergy || 3, left = u.energy ?? max;
+    return h('div', { class: 'pop-energy', title: 'Énergie : chaque carte en coûte. Le tour se termine quand il n’en reste plus, ou quand vous soufflez.' },
+      h('span', { class: 'pips' }, Array.from({ length: max }, (_, i) => h('i', { class: i < left ? 'on' : '' }, '⚡'))),
+      h('span', {}, `${left}/${max} énergie · 🃏 ${deckState(u).main} en main`));
+  }
+
   function openCategory(c, list) {
     const ok = list.filter((a) => a.ok);
     if (c.id === 'wait') { doAction('wait', null); return; }
+    if (c.id === 'team') { doAction('teamwork', null); return; }
     if (c.id === 'pin') { chooseAction(ok[0]); return; }
     if (ok.length === 1 && c.id === 'taunt') { chooseAction(ok[0]); return; }
     ui.cat = c; ui.mode = 'list'; render();
@@ -614,7 +628,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       return;
     }
     if (u) {
-      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Se déplacer · 🟥 portée d’attaque · cliquez le lutteur pour agir sur place' : 'Choisissez une action dans le menu.'));
+      el.right.append(h('div', { class: 'hint' }, ui.mode === 'move' ? '🟦 Se déplacer · 🟥 portée d’attaque · cliquez le lutteur pour agir sur place' : `Choisissez une action — ⚡ ${u.energy ?? u.maxEnergy}/${u.maxEnergy} · le tour se ferme à zéro, ou en soufflant.`));
       el.right.append(unitCard(battle, u, { class: 'selected' }));
     }
     const insp = ui.hover && ui.hover !== u ? ui.hover : ui.inspect && ui.inspect !== u ? ui.inspect : null;
@@ -696,7 +710,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     for (const a of actions) {
       const m = a.move;
       const carte = !!(m && m.id && (u.hand || []).includes(m.id));
-      const meta = [];
+      const meta = [energyLabel(a.energy)];
       if (m && m.power != null) meta.push(`💥 ${m.power}`);
       if (m && m.acc != null) meta.push(`🎯 ${m.acc}`);
       if (m && m.range) meta.push(`↔ ${m.range[0] === m.range[1] ? m.range[0] : `${m.range[0]}-${m.range[1]}`}`);
@@ -828,6 +842,13 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       for (const row of spread) mid.push(row);
       const cbs = activeCombos(battle, u, tgt, a.move);
       for (const c of cbs) mid.push([`${c.icon} ${c.name}`, `+${Math.round((c.dmg - 1) * 100)} % dégâts`]);
+      // Les partenaires en double équipe qui enchaîneront si le coup touche.
+      for (const al of teamworkPartners(battle, u)) {
+        if (manhattan(al, tgt) !== 1) continue;
+        const d2 = Math.max(1, Math.round(computeDamage(battle, al, tgt, MOVES.punch, { noRng: true }).dmg * TEAMWORK_RATIO));
+        mid.push(['🤝 Double équipe', `${al.name} enchaîne : ~${d2}`]);
+        afterT = Math.max(0, afterT - d2);
+      }
       if (dmg >= tgt.hp && !tgt.down) mid.push(['Résultat', '💫 AU SOL']);
       if (a.type === 'submission') mid.push(['Abandon', 'possible si affaibli']);
       if (a.move.tier === 'finisher') mid.push(['Finisher', 'tombé immédiat +30 %']);
@@ -874,7 +895,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     clear(el.party);
     const mk = (u) => {
       const def = WRESTLERS_BY_ID[u.id];
-      const st = [u.down ? '💫' : '', u.statuses.dazed ? '😵' : '', u.statuses.finished ? '☠️' : '', u.weapon ? u.weapon.icon : '', battle.rules.tag && u.legal ? '⭐' : ''].join('');
+      const st = [u.down ? '💫' : '', u.statuses.dazed ? '😵' : '', u.statuses.finished ? '☠️' : '', u.weapon ? u.weapon.icon : '', battle.rules.tag && u.legal ? '⭐' : '', u.teamwork ? '🤝' : ''].join('');
       return h('div', { class: `pm team-${u.team}${u.acted && u.team === 'player' && battle.phase === 'player' ? ' acted' : ''}${u.eliminated ? ' out' : ''}${ui.sel === u ? ' sel' : ''}`, onclick: () => { if (u.eliminated) return; if (u.team === 'player' && canSelect(u)) select(u); else { ui.inspect = u; render(); } }, onpointerenter: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = u; renderRight(); renderBoard(); }, onpointerleave: (e) => { if (e.pointerType !== 'mouse') return; ui.hover = null; renderRight(); renderBoard(); } },
         avatar(def, 44), h('div', { class: 'pm-info' }, h('b', {}, u.name),
           bar(u.hp, u.maxHp, 'hpbar', `${u.hp}`),
@@ -884,6 +905,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           // comprendre d'où ça vient.
           bar(u.stamina, u.maxStamina, `stambar${winded(u) ? ' low' : ''}`, `${Math.round(u.stamina)}`),
           h('span', { class: 'pm-grit' }, '❤️'.repeat(u.grit) || '—'),
+          u.team === 'player' && battle.phase === 'player' && !u.eliminated ? h('span', { class: 'pm-energy' }, Array.from({ length: u.maxEnergy || 3 }, (_, i) => h('i', { class: i < (u.energy ?? 0) ? 'on' : '' }, '⚡'))) : null,
           wearStrip(u)),
         h('span', { class: 'pm-st' }, u.eliminated ? '❌' : st));
     };
@@ -1047,6 +1069,10 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (MOVES[id] && MOVES[id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
     if (r.countered) toast('CONTRÉ !', 'warn');
     if (u.onlyPin && !battle.result) { ui.mode = 'menu'; ui.action = null; ui.cat = null; render(); return; }
+    // IL RESTE DE L'ÉNERGIE : on reste sur le lutteur, menu rouvert. Le tour
+    // d'un deck-builder, c'est plusieurs cartes à la suite — pas sélectionner,
+    // jouer, désélectionner, resélectionner.
+    if (!u.acted && !u.down && !u.eliminated && !battle.result) { ui.mode = 'menu'; ui.action = null; ui.cat = null; ui.pending = null; render(); return; }
     deselect();
   }
   function onKey(e) {

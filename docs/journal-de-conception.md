@@ -11,6 +11,62 @@
 
 ---
 
+## Octobre 2026 — le tour à énergie et la double équipe
+
+Le constat, mesuré sur soixante matchs simples joués par l'IA contre l'IA et confirmé à la main dans le
+navigateur : **quarante tours** en médiane, trois cartes sur cinq jouables (souvent une seule au premier tour), une
+phase adverse sur deux **sans aucun dégât**, un match sur quatre fini **aux points**. Six clics par tour pour une
+ligne de journal. Le moteur était complet, le match ne l'était pas.
+
+La réponse est celle du genre : le tour d'un **deck-builder**, sur la grille de *Chroma Squad*.
+
+- **Trois points d'énergie par tour.** Un fondamental ou un mouvement de classe coûte 1, une spécialité ou une
+  signature 2, un finisher 3 — le tour entier. On joue autant de cartes que l'énergie le permet, dans l'ordre qu'on
+  veut ; le tour se ferme à zéro, ou en soufflant. Le tombé offert après un finisher reste gratuit.
+- **Main neuve à chaque tour.** Ce qui n'est pas joué part à la défausse. La main gardée devait permettre de
+  « tenir un plan » ; en pratique une carte précise mettait dix-sept tours à revenir, et les cartes à condition
+  restaient grises. Avec la main neuve, on revoit tout son deck tous les cinq tours, et le plan tient dans le tour :
+  étourdir, puis jouer la carte qui demande une cible étourdie.
+- **La double équipe.** À plusieurs, un lutteur donne son tour : ses partenaires qui partent d'à côté de lui vont
+  une case plus loin, et il enchaîne un coup (70 % d'un coup de poing, sans jet ni renversement) sur tout adversaire
+  adjacent qu'ils touchent. L'IA s'en sert dans le repli, quand elle est collée à un adversaire avec un partenaire
+  debout.
+
+| | avant | après |
+| --- | --- | --- |
+| tours par match simple (médiane) | 40 | **12 à 16** |
+| coups qui touchent par match | 30 | **30** |
+| cartes jouables à un tour donné | 3 sur 5 | **3 à 4 sur 5** |
+| phases adverses sans dégâts | 50 % | **30 %** |
+| fins à la limite de temps | 23 % | **0 %** |
+| l'IA choisit *Attendre* | 14 % des tours | **3 %** |
+| doubles équipes par match à 3 contre 3 | — | 2,4 |
+
+**Ce que le tour à énergie a cassé ailleurs**, trouvé en mesurant :
+
+- **Le partenaire illégal frappait trois fois plus.** Son veto vivait dans le score du coup, avant les bonus de
+  position ; depuis le tablier, « se rapprocher » et « rester près de son partenaire » le repassaient au-dessus du
+  seuil, et l'Irish Whip, noté à part, n'avait pas de veto. Un coup par tour, ça passait pour du catch ; trois, c'était
+  **73 % de disqualifications** en match par équipes. Le veto s'applique maintenant au score final. Le partenaire
+  illégal se replie vers son partenaire légal, plus vers l'adversaire.
+- **L'échelle ne se montait plus.** « Le moindre coup vous fait redescendre » : avec trois coups par tour en face,
+  personne ne montait, et un tiers des matchs d'échelle finissait par un **abandon** — sur un membre travaillé, en
+  trois cartes par tour, les prises faisaient taper. Désormais seule une chute ou un déplacement fait redescendre,
+  un échelon coûte deux points d'énergie (un par tour au plus), les deux camps partent à égale distance de l'échelle
+  (le joueur partait une case plus près et repartait avec la ceinture en quatre tours), et il n'y a pas d'abandon là
+  où la ceinture est au plafond. Trois échelons ont été essayés : neuf matchs sur douze au chrono. L'IA a aussi appris à ne pas quitter l'échelle à mi-hauteur pour aller chercher une chaise, et à grimper
+  quand l'adversaire est au sol : **10 matchs sur 12** finissent par la ceinture, contre 4.
+- **Les limites de temps** étaient taillées pour des matchs de 35 tours (60, 75, 85). Elles passent à 40 et 55.
+- **La première main** était rebattue au coup d'envoi : cinq cartes jetées sans avoir été vues.
+- **Tout ce qui comptait en tours** était taillé pour 35 tours : « Vite fait » (≤ 22) devenait gratuite et « Faites
+  durer » (≥ 40) impossible — elles passent à 9 et 15, les quartiles mesurés sur 80 matchs ; la note du match donnait
+  sa durée pleine à 32 tours (14 maintenant) ; l'IA en mode Scénarios ne faisait le job qu'après le tour 14 (6).
+
+Ce qui reste : le retour visuel d'un coup, la carrière en équipe (la double équipe n'existe qu'à plusieurs, et la
+carrière est celle d'un seul lutteur), et le match à relais, encore à 30 tours.
+
+---
+
 # Parodie Pro Wrestling Tactics
 
 ### ▶️ [Jouer maintenant](https://ouellettejeanphilippe-source.github.io/Wrestling/)

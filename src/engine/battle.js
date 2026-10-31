@@ -11,13 +11,15 @@ import { matchPhase, isFlashy } from './phases.js';
 import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
 import { planUnit } from './ai.js';
-import { initHand, refill, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE } from './hand.js';
+import { initHand, refill, newHand, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE, energyCost, ENERGY_PER_TURN } from './hand.js';
 import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
 import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, coolCrowd, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
 
 const SPAWNS = {
   standard: { player: [[7, 7], [7, 8], [6, 7], [6, 8], [8, 6], [8, 9]], enemy: [[12, 7], [12, 8], [13, 7], [13, 8], [11, 6], [11, 9]] },
-  ladder: { player: [[7, 6], [7, 9], [6, 7], [6, 8]], enemy: [[12, 6], [12, 9], [13, 7], [13, 8]] },
+  // À égale distance de l'échelle (9,7) : le joueur partait une case plus
+  // près, prenait l'échelon au tour 1 et la ceinture au tour 4.
+  ladder: { player: [[6, 7], [6, 8], [6, 6], [6, 9]], enemy: [[12, 7], [12, 8], [12, 6], [12, 9]] },
   tag: { player: [[7, 7], [5, 10], [5, 9]], enemy: [[12, 7], [14, 8], [14, 7]] },
   invasion: { enemy: [[1, 7], [1, 8], [1, 6], [1, 9], [0, 7]] },
 };
@@ -256,8 +258,17 @@ export function moveRange(battle, unit) {
   let mov = unit.stats.mov + wearStats(unit).mov;
   if (gim(unit).modMov) mov = gim(unit).modMov(battle, unit, mov);
   if (unit.statuses.dazed) mov -= 2;
+  // LA DOUBLE ÉQUIPE OUVRE LE TERRAIN (voir `doubleEquipe`) : partir d'à côté
+  // d'un partenaire qui s'est mis en double équipe donne une case de plus.
+  // C'est l'autre moitié du système de Chroma Squad — on se rapproche de ses
+  // coéquipiers pour aller plus loin, pas seulement pour frapper plus fort.
+  if (teamworkPartners(battle, unit).some((al) => manhattan(al, unit) === 1)) mov += 1;
   return Math.max(1, mov);
 }
+
+// Les partenaires en double équipe, debout.
+export const teamworkPartners = (battle, unit) => living(battle, unit.team)
+  .filter((al) => al !== unit && al.teamwork && !al.down && !al.eliminated);
 
 export function getReachable(battle, unit) {
   const r = reachable(battle.grid, battle.units, unit, moveRange(battle, unit));
@@ -449,8 +460,8 @@ export function listActions(battle, unit, pos = null) {
 
   if (unit.onlyPin) {
     const targets = enemies.filter((e) => manhattan(p, e) === 1 && canPin(battle, unit, e).ok).map((e) => ({ unit: e, chance: pinChance(battle, unit, e) }));
-    actions.push({ id: 'pin', name: 'COUVRIR !', tier: 'base', type: 'pin', desc: 'Tombé immédiat après le finisher.', targets, ok: targets.length > 0, reason: 'Personne à couvrir' });
-    actions.push(wait);
+    actions.push({ id: 'pin', name: 'COUVRIR !', tier: 'base', type: 'pin', desc: 'Tombé immédiat après le finisher.', targets, ok: targets.length > 0, reason: 'Personne à couvrir', energy: 0 });
+    actions.push({ ...wait, energy: 'all' });
     return actions;
   }
 
@@ -606,7 +617,7 @@ export function listActions(battle, unit, pos = null) {
   // Hell in a Cell annonce « Enfermés. Pas d'évasion » dans sa propre
   // description, et 60 % de ses matchs se terminaient pourtant par une
   // évasion : seule `fall_or_escape` ouvre cette porte.
-  if (rules.cage && rules.victory === 'fall_or_escape' && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: 'Deux tours consécutifs sans subir de dégâts pour s’évader.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
+  if (rules.cage && rules.victory === 'fall_or_escape' && onTb) actions.push({ id: 'climb', name: `🧗 Escalader la cage (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: 'Trois échelons, un par tour, depuis un coin. Seule une chute vous fait redescendre.', targets: [{ self: true }], ok: !jambeHs, reason: '🦵 Jambe hors service — impossible de grimper' });
   // ON NE GRIMPE PAS AVEC QUELQU'UN SUR LE DOS.
   //
   // La seule chose qui interrompait une escalade, c'était d'encaisser des
@@ -625,7 +636,7 @@ export function listActions(battle, unit, pos = null) {
   // la ceinture n'était décrochée que 10 fois sur 100. Il faut donc le
   // sonner d'abord, ce qui redonne leur raison d'être aux effets `daze`.
   const colle = enemies.some((e) => !e.down && !e.eliminated && !(e.statuses && e.statuses.dazed) && manhattan(p, e) <= 1);
-  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: `${climbNeeded(battle)} tours consécutifs sans subir de dégâts pour décrocher la ceinture. Personne ne doit être debout à côté de vous. Chaque échelon coûte du souffle.`, targets: [{ self: true }], ok: !jambeHs && !colle, reason: jambeHs ? '🦵 Jambe hors service — impossible de grimper' : 'Quelqu’un est debout juste à côté : dégagez-le d’abord' });
+  if (rules.victory === 'belt' && tile === 'ladder') actions.push({ id: 'climb', name: `🪜 Grimper l’échelle (${unit.climb}/${climbNeeded(battle)})`, tier: 'base', type: 'climb', desc: `${climbNeeded(battle)} échelons, un par tour, pour décrocher la ceinture. Personne ne doit être debout à côté de vous ; un coup ne vous fait pas redescendre, une chute ou une projection, oui. Chaque échelon coûte du souffle.`, targets: [{ self: true }], ok: !jambeHs && !colle, reason: jambeHs ? '🦵 Jambe hors service — impossible de grimper' : 'Quelqu’un est debout juste à côté : dégagez-le d’abord' });
   if (battle.mode === 'scenario' && unit.team === 'player') {
     actions.push({ id: 'sell', name: '🎭 Vendre (prendre un bump)', tier: 'script', type: 'sell', desc: 'Spot coopératif : perd 8 % PV, +12 chaleur, +10 momentum aux ennemis adjacents. Compte pour le script.', targets: [{ self: true }], ok: hpRatio(unit) > 0.12, reason: 'Trop amoché pour vendre' });
     const fin = (battle.script && battle.script.finish) || {};
@@ -640,7 +651,34 @@ export function listActions(battle, unit, pos = null) {
       actions.push({ id: 'job', name: `📜 ${label}`, tier: 'script', type: 'job', desc: 'Le finish prévu par le script : votre lutteur perd volontairement. Réalisez les spots avant !', targets: adj.map((e) => ({ unit: e })), ok, reason });
     }
   }
+  // DOUBLE ÉQUIPE — le système de Chroma Squad, en version catch.
+  //
+  // Un lutteur donne son tour pour se mettre en double équipe. Jusqu'à son
+  // prochain tour : ses partenaires qui partent d'à côté de lui vont une case
+  // plus loin, et chaque fois qu'un partenaire touche un adversaire qui lui
+  // est adjacent, il ENCHAÎNE un coup par-dessus. Deux hommes qui se
+  // relaient sur le même adversaire, c'est ce qu'on voit dans un match par
+  // équipes — et c'est ce qui rend un partenaire utile ailleurs que dans la
+  // barre de vie. En match à relais, seul le lutteur légal s'y met : le
+  // partenaire sur le tablier n'est pas dans le ring.
+  const partenaires = allies.filter((al) => !al.down && !al.eliminated);
+  if (partenaires.length && !unit.teamwork && (!rules.tag || unit.legal)) {
+    actions.push({
+      id: 'teamwork', name: '🤝 Double équipe', tier: 'base', type: 'teamwork',
+      desc: 'Donne le reste du tour. Jusqu’à votre prochain tour : vos partenaires qui partent d’à côté de vous vont une case plus loin, et vous enchaînez un coup sur tout adversaire adjacent qu’ils touchent. +6 momentum.',
+      targets: [{ self: true }], ok: true,
+    });
+  }
   actions.push(wait);
+  // L'ÉNERGIE, en dernier : chaque action porte son coût, et ce qui coûte
+  // plus qu'il ne reste se ferme — après les autres raisons, qui sont plus
+  // utiles à lire (« momentum 45 requis » dit quoi faire ; « pas d'énergie »
+  // dit seulement d'attendre le tour suivant).
+  const reste = unit.energy ?? ENERGY_PER_TURN;
+  for (const a of actions) {
+    if (a.energy === undefined) a.energy = energyCost(a);
+    if (a.ok && a.energy !== 'all' && a.energy > reste) { a.ok = false; a.reason = `⚡ Pas assez d’énergie (coût ${a.energy}, reste ${reste})`; }
+  }
   return actions;
 }
 
@@ -728,6 +766,14 @@ export function executeAction(battle, unit, actionId, target = null) {
       break;
     }
     case 'manager': result = managerSpot(battle, unit, tgt, a.manager); break;
+    case 'teamwork': {
+      unit.teamwork = true; unit.rested = true;
+      addMomentum(battle, unit, 6);
+      if (unit.team === 'player') battle.stats.playerTeamworks = (battle.stats.playerTeamworks || 0) + 1;
+      log(battle, `🤝 ${unit.name} se met en double équipe : ses partenaires vont plus loin, et il enchaîne sur tout ce qu’ils touchent à côté de lui.`);
+      emit(battle, { type: 'taunt', x: unit.x, y: unit.y });
+      break;
+    }
     case 'tag': result = tagPartner(battle, unit, tgt); break;
     case 'climb': result = doClimb(battle, unit); break;
     case 'wait': heal(battle, unit, 4); unit.rested = true; break;
@@ -778,8 +824,14 @@ export function executeAction(battle, unit, actionId, target = null) {
       && (subIsTheRoute(battle) || wearLevel(tgt || unit, movePart(a.move)) >= 1);
     if (!garde) playCard(battle, unit, a.move.id);
   }
+  // L'ÉNERGIE SE DÉPENSE, LE TOUR NE SE FERME QUE QUAND ELLE EST À ZÉRO. Un
+  // coup de poing laisse de quoi en porter deux autres ; un finisher prend
+  // tout. Le tombé offert après un finisher est gratuit (voir `onlyPin`).
+  const cout = a.energy ?? energyCost(a);
+  if (cout === 'all') unit.energy = 0;
+  else unit.energy = Math.max(0, (unit.energy ?? ENERGY_PER_TURN) - cout);
   if (result && result.freePin) { unit.acted = false; unit.onlyPin = true; }
-  else { unit.acted = true; unit.onlyPin = false; }
+  else { unit.acted = unit.energy <= 0; unit.onlyPin = false; }
   unit.prev = null;
   checkWin(battle);
   return { ok: true, ...result };
@@ -999,6 +1051,7 @@ export function resolveAttack(battle, attacker, target, move) {
   // question défensive : rester aligné ou agglutiné coûte cher, et pas
   // seulement pour celui qu'on visait.
   spreadHit(battle, attacker, target, move, dmg);
+  doubleEquipe(battle, attacker, target, move);
   if (eff.selfDamage) applyDamage(battle, attacker, eff.selfDamage, null, { self: true, silent: true });
   let freePin = false;
   if (move.tier === 'finisher' && !target.eliminated) {
@@ -1026,6 +1079,33 @@ export function resolveAttack(battle, attacker, target, move) {
   if (battle.rules.tag && !attacker.legal && !attacker.eliminated) checkDq(battle, attacker, 0.25, 'attaque sans être légal');
   checkWin(battle);
   return { hit: true, dmg, crit, chance, freePin: freePin && !battle.result && !attacker.eliminated };
+}
+
+// L'ENCHAÎNEMENT DE DOUBLE ÉQUIPE
+//
+// Quand un coup touche, chaque partenaire en double équipe ADJACENT à la
+// cible enchaîne par-dessus : un coup de poing à 70 %, sans renversement et
+// sans jet de précision — il a déjà donné son tour pour ça. Le partenaire y
+// gagne du momentum, l'attaquant un peu, et la salle aussi : deux hommes sur
+// le même, c'est un spot.
+export const TEAMWORK_RATIO = 0.7;
+function doubleEquipe(battle, attacker, target, move) {
+  if (target.eliminated || !move || move.type === 'taunt') return;
+  for (const al of teamworkPartners(battle, attacker)) {
+    if (manhattan(al, target) !== 1) continue;
+    const { dmg } = computeDamage(battle, al, target, MOVES.punch, { noRng: true });
+    const part = Math.max(1, Math.round(dmg * TEAMWORK_RATIO));
+    al.facing = facingTo(al, target);
+    log(battle, `🤝 DOUBLE ÉQUIPE ! ${al.name} enchaîne sur ${target.name} : ${part} dégâts.`, 'combo');
+    emit(battle, { type: 'combo', x: target.x, y: target.y, names: ['Double équipe'] });
+    applyDamage(battle, target, part, al, { move: MOVES.punch });
+    addMomentum(battle, al, 8);
+    addMomentum(battle, attacker, 4);
+    addHeat(battle, 6);
+    battle.stats.teamworks = (battle.stats.teamworks || 0) + 1;
+    beat(battle, 'teamwork', { who: al.name, uid: al.uid, with: attacker.name, on: target.name });
+    if (target.eliminated) break;
+  }
 }
 
 // PORTÉE ÉLARGIE : LIGNE, ZONE, RECUL
@@ -1082,7 +1162,10 @@ export function applyDamage(battle, target, amount, source, opts = {}) {
   if (target.eliminated) return 0;
   amount = Math.max(0, Math.round(amount));
   target.hp = Math.max(0, target.hp - amount);
-  target.climb = 0;
+  // UN COUP NE FAIT PLUS REDESCENDRE DE L'ÉCHELLE — une chute, oui (voir
+  // `downUnit`), un déplacement aussi. Avec trois cartes par tour, « le
+  // moindre coup vous fait redescendre » voulait dire que personne ne montait
+  // jamais : l'adversaire avait toujours un coup à placer entre deux échelons.
   emit(battle, { type: 'damage', x: target.x, y: target.y, amount, crit: !!opts.crit });
   // L'USURE S'ACCUMULE ICI, au seul endroit où passent tous les dégâts : les
   // coups, les éclaboussures, les collisions, les marches d'acier. Elle est
@@ -1298,6 +1381,12 @@ export const heartIsTheClock = (battle) =>
   !!battle.rules.noPin && !battle.rules.toss && battle.rules.victory !== 'belt';
 
 export function tapChance(battle, attacker, target, move) {
+  // PAS D'ABANDON LÀ OÙ LA CEINTURE EST AU PLAFOND. Un match d'échelle ne se
+  // gagne pas en faisant taper : la prise use le membre, fait mal, et c'est
+  // tout. Avec trois cartes par tour, les prises sur un membre travaillé
+  // faisaient abandonner un adversaire sur trois avant que quiconque ait
+  // touché l'échelle.
+  if (battle.rules.victory === 'belt') return 0;
   const A = getStats(battle, attacker);
   const worn = Math.max(0, 0.65 - hpRatio(target)) / 0.65;
   // LE PAIEMENT DE L'USURE CIBLÉE. Une clé de jambe sur une jambe fraîche ne
@@ -1633,6 +1722,11 @@ function tagPartner(battle, unit, partner) {
 //  · LA CAGE (3) se fuit. Personne ne vous y bloque, alors la longueur EST la
 //    difficulté : à deux, l'évasion passait de 70 à 88 % et le match tombait
 //    de 22 à 15 tours.
+// DEUX ÉCHELONS POUR LA CEINTURE, TROIS POUR LA CAGE. L'échelle se dispute :
+// personne ne monte avec un adversaire debout à côté, et une projection fait
+// redescendre. À trois échelons, avec trois cartes par tour en face pour
+// vous projeter, neuf matchs sur douze allaient au chrono. La cage, elle, se
+// fuit sans que personne ne vous bloque : là, la longueur est la difficulté.
 export const climbNeeded = (battle) => ((battle && battle.rules && battle.rules.victory === 'belt') ? 2 : 3);
 
 function doClimb(battle, unit) {
@@ -1733,6 +1827,9 @@ export function startPhase(battle, team) {
   if (battle.refDistracted > 0) battle.refDistracted--;
   if (team === 'player') spawnReinforcements(battle);
   for (const u of living(battle, team)) {
+    // Le tout premier tour d'un lutteur garde la main du coup d'envoi : la
+    // rebattre ici jetait cinq cartes que personne n'avait vues.
+    const premier = !u.hadTurn;
     // On lit le tour qui vient de s'écouler AVANT de le remettre à zéro. Deux
     // cas ne comptent pas : le tout premier tour d'un lutteur — il n'a encore
     // rien eu à décider, et createBattle ouvre déjà une phase — et un lutteur
@@ -1759,7 +1856,11 @@ export function startPhase(battle, team) {
     }
     u.rested = false;
     u.hadTurn = true;
-    refill(battle, u);
+    // Main neuve, énergie pleine, et la double équipe de la phase précédente
+    // s'arrête : elle ne vaut que jusqu'au tour suivant de celui qui l'a prise.
+    if (premier) refill(battle, u); else newHand(battle, u);
+    u.energy = u.maxEnergy ?? ENERGY_PER_TURN;
+    u.teamwork = false;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
       if (u.downTurns === 0) {
@@ -1826,7 +1927,7 @@ export function endPlayerPhase(battle) {
 export function* enemySteps(battle) {
   for (const u of [...living(battle, 'enemy')]) {
     let guard = 0;
-    while (!u.acted && !u.eliminated && !u.down && !battle.result && guard++ < 3) {
+    while (!u.acted && !u.eliminated && !u.down && !battle.result && guard++ < 6) {
       const plan = planUnit(battle, u);
       if (plan.moveTo && moveUnit(battle, u, plan.moveTo.x, plan.moveTo.y)) yield { type: 'move', unit: u, to: plan.moveTo };
       const r = executeAction(battle, u, plan.action.id, plan.action.target);
@@ -1856,7 +1957,7 @@ export function autoPlay(battle, maxTurns = 40) {
   while (!battle.result && battle.turn <= maxTurns) {
     for (const u of [...living(battle, 'player')]) {
       let guard = 0;
-      while (!u.acted && !u.eliminated && !u.down && !battle.result && guard++ < 3) {
+      while (!u.acted && !u.eliminated && !u.down && !battle.result && guard++ < 6) {
         const plan = planUnit(battle, u);
         if (plan.moveTo) moveUnit(battle, u, plan.moveTo.x, plan.moveTo.y);
         const r = executeAction(battle, u, plan.action.id, plan.action.target);

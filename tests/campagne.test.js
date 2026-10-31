@@ -76,14 +76,14 @@ test('aucune directive n’est impossible ni gratuite par construction', () => {
     assert.equal(typeof d.check(b), 'boolean', `« ${id} » doit répondre oui ou non`);
     assert.ok(d.desc && d.name, `« ${id} » doit se décrire`);
   }
-  // « Vite fait » doit rester atteignable : un match dure une trentaine de
-  // tours, pas huit. C'est le seuil qui était tombé à 0 % de réussite.
-  assert.ok(DIRECTIVES.fast.check({ turn: 20, stats: {}, units: [], beats: [] }));
-  assert.ok(!DIRECTIVES.fast.check({ turn: 40, stats: {}, units: [], beats: [] }));
-  // Et « faites durer » ne doit pas être gratuite : dix tours, c'est tous les
-  // matchs du jeu.
-  assert.ok(!DIRECTIVES.long.check({ turn: 20, stats: {}, units: [], beats: [] }));
-  assert.ok(DIRECTIVES.long.check({ turn: 45, stats: {}, units: [], beats: [] }));
+  // « Vite fait » doit rester atteignable sans être gratuite : avec le tour à
+  // énergie, un match simple dure 11 tours en médiane (quartiles 9 et 15).
+  // C'est le seuil qui était tombé à 0 % de réussite, puis monté à 100 %.
+  assert.ok(DIRECTIVES.fast.check({ turn: 8, stats: {}, units: [], beats: [] }));
+  assert.ok(!DIRECTIVES.fast.check({ turn: 12, stats: {}, units: [], beats: [] }));
+  // Et « faites durer » ne doit pas être gratuite : la médiane ne la remplit pas.
+  assert.ok(!DIRECTIVES.long.check({ turn: 11, stats: {}, units: [], beats: [] }));
+  assert.ok(DIRECTIVES.long.check({ turn: 16, stats: {}, units: [], beats: [] }));
   // « Foule en délire » se lit sur la MOYENNE, pas sur la chaleur finale : la
   // chaleur finit toujours haut, c'est la tenir tout le match qui coûte.
   assert.equal(DIRECTIVES.heat.check({ heat: 100, stats: { heatSum: 1200, heatTurns: 30 }, units: [], beats: [] }), false,
