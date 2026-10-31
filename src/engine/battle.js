@@ -10,7 +10,7 @@ import { createRng } from './rng.js';
 import { matchPhase, isFlashy } from './phases.js';
 import { COMBOS } from '../data/combos.js';
 import { checkWin } from './rules.js';
-import { planUnit } from './ai.js';
+import { planUnit, bestTileFor } from './ai.js';
 import { initHand, refill, newHand, playCard, redraw, availableMoves, deckState, isCard, HAND_SIZE, energyCost, ENERGY_PER_TURN } from './hand.js';
 import { movePart, wearFrom, addWear, wearStats, wearLevel, wearRatio, wearTapBonus, wearPinBonus, wearReversePenalty, staminaFactor, wornParts, PARTS } from './wear.js';
 import { log, emit, beat, living, alliesOf, enemiesOf, unitsWithin, unitAt, addMomentum, addHeat, coolCrowd, heal, addStatus, setStatus, hasStatus, hpRatio, clamp } from './util.js';
@@ -220,6 +220,7 @@ export function createBattle({ match, playerTeam, seed = Date.now(), playerBonus
   }
   for (const u of battle.units) if (gim(u).onMatchStart) gim(u).onMatchStart(battle, u);
   startPhase(battle, 'player');
+  planIntents(battle);
   return battle;
 }
 
@@ -1830,6 +1831,10 @@ export function startPhase(battle, team) {
     // Le tout premier tour d'un lutteur garde la main du coup d'envoi : la
     // rebattre ici jetait cinq cartes que personne n'avait vues.
     const premier = !u.hadTurn;
+    // Un adversaire déjà PRÉPARÉ à la fin de sa phase (main, énergie, souffle,
+    // momentum du tour — voir `endEnemyPhase`) ne les reprend pas ici : son
+    // annonce a été calculée avec, et elle doit dire vrai.
+    const prepare = !!u.handReady;
     // On lit le tour qui vient de s'écouler AVANT de le remettre à zéro. Deux
     // cas ne comptent pas : le tout premier tour d'un lutteur — il n'a encore
     // rien eu à décider, et createBattle ouvre déjà une phase — et un lutteur
@@ -1847,7 +1852,7 @@ export function startPhase(battle, team) {
     // On reprend son air à chaque tour. Celui qui a soufflé (attendre,
     // provoquer) en récupère bien plus : c'est la prise de repos du catch,
     // et c'est ce qui rend un long match jouable au lieu d'épuisant.
-    u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
+    if (!prepare) u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
     // Le partenaire qui attend son tour souffle et se remet — lentement, et
     // seulement s'il reste à son coin. C'est ce qui remplace le soin du relais.
     if (battle.rules.tag && !u.legal && !u.down) {
@@ -1858,8 +1863,13 @@ export function startPhase(battle, team) {
     u.hadTurn = true;
     // Main neuve, énergie pleine, et la double équipe de la phase précédente
     // s'arrête : elle ne vaut que jusqu'au tour suivant de celui qui l'a prise.
-    if (premier) refill(battle, u); else newHand(battle, u);
-    u.energy = u.maxEnergy ?? ENERGY_PER_TURN;
+    // Une main déjà préparée pour annoncer l'intention (voir `planIntents`)
+    // n'est pas rebattue : c'est celle qu'on a montrée au joueur.
+    if (u.handReady) u.handReady = false;
+    else {
+      if (premier) refill(battle, u); else newHand(battle, u);
+      u.energy = u.maxEnergy ?? ENERGY_PER_TURN;
+    }
     u.teamwork = false;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     if (u.down) {
@@ -1888,7 +1898,7 @@ export function startPhase(battle, team) {
         if (u.outsideCount >= battle.rules.countOut - 2) log(battle, `⚠️ L’arbitre compte ${u.outsideCount} sur ${u.name} ! (limite ${battle.rules.countOut})`);
       } else u.outsideCount = 0;
     }
-    if (!u.down) addMomentum(battle, u, 5);
+    if (!u.down && !prepare) addMomentum(battle, u, 5);
     if (gim(u).onTurnStart) gim(u).onTurnStart(battle, u);
   }
   checkWin(battle);
@@ -1917,6 +1927,81 @@ function spawnReinforcements(battle) {
   }
 }
 
+// L'INTENTION ANNONCÉE — Fights in Tight Spaces, Slay the Spire
+//
+// Un adversaire dont on ne sait rien n'est pas un adversaire, c'est un dé.
+// Au début de VOTRE tour, chaque adversaire debout annonce la première carte
+// qu'il jouera à son prochain tour, sur qui, et d'où : « Lariat lancé sur
+// John Sena, après avoir couru jusqu'ici ». Vous voyez la bulle, la case
+// d'arrivée et la cible. Sortir de sa portée fait partir le coup dans le
+// vide — et c'est ça, le puzzle : le placement contre un coup annoncé, avec
+// tout le décor (tables, marches, barricades) pour choisir où l'attirer.
+//
+// Il n'annonce que sa PREMIÈRE carte : le reste de son tour, il le joue
+// avec ce qu'il lui reste d'énergie, en réaction. Un adversaire entièrement
+// prévisible serait un casse-tête, pas un match.
+//
+// Pour annoncer sa carte, il faut qu'il l'ait en main : sa main du tour
+// suivant est tirée à la fin de sa phase (voir `endEnemyPhase`), pas au
+// début de la suivante.
+export const INTENT_ICONS = { strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', pin: '🤝', toss: '🚀', taunt: '📣', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️' };
+export function planIntents(battle) {
+  for (const u of living(battle, 'enemy')) {
+    u.intent = null;
+    if (u.down || u.eliminated || battle.result) continue;
+    // ON PLANIFIE LE TOUR QUI VIENT, PAS CELUI QUI FINIT. À cet instant,
+    // l'adversaire porte encore les drapeaux de la phase qu'il vient de
+    // jouer : `moved`, `acted`, les cases courues. Planifier avec, c'était
+    // planifier un lutteur qui ne peut plus bouger — la moitié des annonces
+    // disaient « il souffle » alors qu'il allait frapper, et un joueur passif
+    // tenait quatre tours de plus. On les remet à zéro le temps du calcul.
+    const garde = { moved: u.moved, movedTiles: u.movedTiles, movePath: u.movePath, moveMomentum: u.moveMomentum, acted: u.acted, onlyPin: u.onlyPin, prev: u.prev };
+    u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.acted = false; u.onlyPin = false; u.prev = null;
+    let plan = null, a = null, pos = null;
+    try {
+      plan = planUnit(battle, u);
+      if (plan && plan.action) {
+        pos = plan.moveTo ? { x: plan.moveTo.x, y: plan.moveTo.y, path: plan.moveTo.path, travel: plan.moveTo.travel } : null;
+        a = listActions(battle, u, pos).find((x) => x.id === plan.action.id);
+      }
+    } finally { Object.assign(u, garde); }
+    if (!plan || !plan.action || !a) continue;
+    const target = plan.action.target && plan.action.target.unit ? plan.action.target.unit : null;
+    const it = {
+      id: a.id, name: a.name, type: a.type, icon: INTENT_ICONS[a.type] || '❔',
+      moveTo: plan.moveTo ? { x: plan.moveTo.x, y: plan.moveTo.y } : null,
+      targetUid: target ? target.uid : null, targetName: target ? target.name : null,
+      dmg: null, hit: null,
+    };
+    if (target && a.move && ['strike', 'grapple', 'aerial', 'submission', 'weapon'].includes(a.type)) {
+      it.hit = hitChance(battle, u, target, a.move, { pos: pos || u });
+      it.dmg = computeDamage(battle, u, target, a.move, { noRng: true, pos: pos || u, travel: pos ? pos.travel : 0 }).dmg;
+    } else if (target && a.type === 'pin') it.hit = Math.round(((a.targets.find((t) => t.unit === target) || {}).chance || 0) * 100) || null;
+    u.intent = it;
+  }
+}
+
+// LE COUP DANS LE VIDE. La cible annoncée n'est plus à portée : la carte est
+// jouée quand même (elle part à la défausse, elle coûte son énergie et la
+// moitié de son souffle), personne n'est touché, et celui qui l'a vu venir
+// en sort avec de la jauge. C'est la récompense de l'esquive — et ce qui
+// fait que lire la bulle vaut un déplacement.
+function whiff(battle, unit, a, target) {
+  if (a.move && isCard(a.move.id)) playCard(battle, unit, a.move.id);
+  const cout = a.energy ?? energyCost(a);
+  unit.energy = cout === 'all' ? 0 : Math.max(0, (unit.energy ?? ENERGY_PER_TURN) - cout);
+  spendStamina(battle, unit, Math.round(staminaCost(a.move) / 2));
+  unit.acted = unit.energy <= 0;
+  unit.prev = null;
+  addMomentum(battle, target, 6);
+  addHeat(battle, 4);
+  battle.stats.dodges = (battle.stats.dodges || 0) + 1;
+  if (target.team === 'player') battle.stats.playerDodges = (battle.stats.playerDodges || 0) + 1;
+  log(battle, `💨 ${unit.name} lance ${a.name} dans le vide — ${target.name} l’a vu venir !`, 'miss');
+  emit(battle, { type: 'whiff', x: unit.x, y: unit.y });
+  beat(battle, 'dodge', { who: target.name, uid: target.uid, on: unit.name, move: a.name });
+}
+
 export function endPlayerPhase(battle) {
   if (battle.result) return;
   tickStatuses(battle, 'player');
@@ -1927,6 +2012,37 @@ export function endPlayerPhase(battle) {
 export function* enemySteps(battle) {
   for (const u of [...living(battle, 'enemy')]) {
     let guard = 0;
+    // D'abord ce qu'il a ANNONCÉ. Le déplacement promis, puis la carte sur la
+    // cible promise ; si la cible n'y est plus, le coup part dans le vide.
+    const it = u.intent;
+    u.intent = null;
+    if (it && !u.acted && !u.down && !u.eliminated && !battle.result) {
+      const target = it.targetUid ? battle.units.find((v) => v.uid === it.targetUid) : null;
+      // IL VISE, IL NE RÉCITE PAS. Le déplacement annoncé a été calculé sur
+      // des positions qui ont bougé depuis : s'il ne permet plus d'atteindre
+      // la cible, il en cherche un autre pour la MÊME carte sur la MÊME
+      // cible. Sans ça, le simple fait que l'adversaire se replace d'une
+      // case faisait partir deux coups et demi dans le vide par match, et
+      // l'IA ne gagnait plus qu'un match sur cinq. L'esquive doit se gagner :
+      // il faut sortir de tout ce qu'il peut atteindre, pas faire un pas.
+      let dest = it.moveTo;
+      if (target && !target.eliminated && !u.moved) {
+        const best = bestTileFor(battle, u, it.id, target);
+        if (best) dest = { x: best.x, y: best.y };
+      }
+      if (dest && !u.moved && (dest.x !== u.x || dest.y !== u.y) && moveUnit(battle, u, dest.x, dest.y)) yield { type: 'move', unit: u, to: dest };
+      const a = listActions(battle, u).find((x) => x.id === it.id);
+      const faisable = a && a.ok && (!it.targetUid || (target && !target.eliminated && a.targets.some((t) => t.unit === target)));
+      if (faisable) {
+        const r = executeAction(battle, u, it.id, target ? { unit: target } : null);
+        yield { type: 'action', unit: u, action: { id: it.id, target: target ? { unit: target } : null }, result: r, announced: true };
+      } else if (a && a.move && isCard(it.id) && it.targetUid && target && !target.eliminated) {
+        whiff(battle, u, a, target);
+        yield { type: 'whiff', unit: u, intent: it, target };
+      }
+      // Sinon (cible éliminée, action sans cible devenue impossible…) : il
+      // replanifie, comme avant, avec ce qu'il lui reste.
+    }
     while (!u.acted && !u.eliminated && !u.down && !battle.result && guard++ < 6) {
       const plan = planUnit(battle, u);
       if (plan.moveTo && moveUnit(battle, u, plan.moveTo.x, plan.moveTo.y)) yield { type: 'move', unit: u, to: plan.moveTo };
@@ -1944,7 +2060,22 @@ export function endEnemyPhase(battle) {
   // ici, et seulement ici, pour que la perte soit d'un tour et pas d'une phase.
   coolCrowd(battle);
   battle.turn++;
+  // La main que l'adversaire jouera à sa prochaine phase est tirée MAINTENANT,
+  // pour qu'il puisse annoncer ce qu'il en fera (voir `planIntents`).
+  // Et avec elle, ce que son tour lui rend : souffle et cinq de momentum.
+  // Sans ça, l'annonce était calculée sur un lutteur plus fatigué et moins
+  // chaud que celui qui jouerait vraiment — elle choisissait une carte plus
+  // faible, et un joueur passif tenait cinq tours de plus.
+  for (const u of living(battle, 'enemy')) {
+    newHand(battle, u);
+    u.energy = u.maxEnergy ?? ENERGY_PER_TURN;
+    u.stamina = clamp(u.stamina + (u.rested ? STAMINA_REST : STAMINA_TICK) * staminaFactor(u), 0, u.maxStamina);
+    u.rested = false;
+    if (!u.down) addMomentum(battle, u, 5);
+    u.handReady = true;
+  }
   startPhase(battle, 'player');
+  planIntents(battle);
 }
 
 export function runEnemyPhase(battle) {

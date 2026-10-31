@@ -168,6 +168,22 @@ const PAGES = [
     ],
   },
   {
+    title: 'Il annonce son coup',
+    icon: '🎯',
+    body: () => [
+      h('p', {}, 'Au début de votre tour, chaque adversaire debout porte une ', h('b', {}, 'bulle'), ' : la première carte qu’il jouera à son prochain tour, et sur qui. Sur le plateau, sa case d’arrivée est marquée, et la case visée aussi. Sa fiche donne les dégâts et la précision prévus.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Si vous…', 'Alors…'].map((x) => h('th', {}, x))),
+        [['restez là', 'il joue exactement ce qu’il a annoncé'],
+         ['faites un pas de côté', 'il vous rattrape : il vise, il ne récite pas'],
+         ['sortez de tout ce qu’il peut atteindre', h('b', {}, 'le coup part dans le vide'), ' — il perd la carte et son énergie, vous gagnez du momentum'],
+         ['vous placez devant une table ou les marches', 'son recul vous y envoie… ou vous y envoyez le suivant']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, 'C’est le puzzle de ', h('i', {}, 'Fights in Tight Spaces'), ' : le placement contre un coup annoncé, avec tout le décor pour s’en servir. Il n’annonce que sa ', h('b', {}, 'première'), ' carte — le reste de son tour, il le joue en réaction.'),
+      h('p', { class: 'muted' }, 'Survolez un adversaire pour lire son annonce en toutes lettres dans sa fiche.'),
+    ],
+  },
+  {
     title: 'La double équipe',
     icon: '🤝',
     body: () => [

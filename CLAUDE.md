@@ -7,7 +7,7 @@ français** : code, commentaires, commits, tests, documentation. On garde ça.
 
 ```bash
 npm start     # serveur statique sur :8080 (scripts/serve.js)
-npm test      # node --test tests/*.test.js — 196 tests, ~40 s, à lancer avant tout commit
+npm test      # node --test tests/*.test.js — 203 tests, ~45 s, à lancer avant tout commit
 node .claude/skills/pixel-art/scripts/measure.mjs [id]   # mesure les palettes des sprites
 ```
 
@@ -21,6 +21,9 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
   `hand.js` (la main, l'énergie, le coût des cartes), `wear.js` (l'usure), `ai.js` (l'adversaire), `rules.js`
   (les fins). Le tour est celui d'un deck-builder : main neuve de 5 à chaque tour, 3 points d'énergie, plusieurs
   cartes à la suite ; `acted` ne passe à vrai que quand l'énergie est à zéro ou qu'une action ferme le tour.
+  L'adversaire **annonce** sa première carte au début du tour du joueur (`planIntents`, `unit.intent`) : sa main
+  du tour suivant est tirée à la fin de sa phase (`handReady`), et `enemySteps` tient l'annonce ou fait partir le
+  coup dans le vide (`whiff`). La direction du jeu : *Fights in Tight Spaces*, en grand espace et avec les props.
 - `src/data/` — tout le contenu : lutteurs, mouvements, gimmicks, stipulations, combos, managers, campagne.
 - `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match.
 - `src/ui/` — les écrans. `match.js` est l'écran de match ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont

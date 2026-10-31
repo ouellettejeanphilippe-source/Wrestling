@@ -2,8 +2,10 @@
 
 ### ▶️ [Jouer maintenant](https://ouellettejeanphilippe-source.github.io/Wrestling/)
 
-Un jeu tactique sur grille à la **Chroma Squad**, avec un **tour de deck-builder** : chaque lutteur pioche cinq
-cartes par tour et a trois points d'énergie pour les jouer. Des parodies de lutteurs WWE/AEU, chacun avec un
+Un jeu tactique sur grille à la **Fights in Tight Spaces**, en grand espace et avec des props : un **tour de
+deck-builder** (cinq cartes piochées par tour, trois points d'énergie pour les jouer), un **adversaire qui annonce
+son coup** avant votre tour, et tout le décor du catch — tables, marches, barricades, chaises, échelle — pour
+l'esquiver ou l'y envoyer. Des parodies de lutteurs WWE/AEW, chacun avec un
 **gimmick** (passif unique), une **classe**, une **spécialité**, un **signature** et un **finisher**. Les matchs se
 gagnent par tombé, soumission, compte à l'extérieur, DQ, par-dessus la troisième corde, échelle, évasion de cage,
 survie…
@@ -19,7 +21,7 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 196 tests du moteur (node:test), ~40 s
+npm test           # 203 tests du moteur (node:test), ~45 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
@@ -51,12 +53,17 @@ Mesuré sur 60 matchs simples joués par l'IA contre l'IA (`autoPlay`), avant et
 
 Un tour est maintenant une suite de décisions : se déplacer, poser un coup qui étourdit, enchaîner avec la prise
 qui demande une cible étourdie, et finir par un tombé — dans le même tour. À plusieurs, un lutteur peut donner son
-tour pour que ses partenaires frappent plus loin et qu'il enchaîne sur leurs coups.
+tour pour que ses partenaires frappent plus loin et qu'il enchaîne sur leurs coups. Et **l'adversaire annonce son
+coup** : la bulle au-dessus de lui dit la première carte qu'il jouera, sur qui, et d'où. Sortir de sa portée fait
+partir le coup dans le vide ; un pas de côté ne suffit pas, il vise. Mesuré : l'IA tient son annonce quand la
+cible ne bouge pas, et gagne 28 matchs sur 60 contre une IA qui ne lit pas les bulles — exactement comme sans
+annonce. Tout l'avantage va à qui les lit.
 
 Ce qui reste à faire, par ordre d'importance :
 
 1. **Du retour à l'écran** : le coup, le bump, la chute, la couverture, le compte. Aujourd'hui une ligne de journal
-   et un nombre qui flotte.
+   et un nombre qui flotte. Et les props méritent plus : une table qui se voit casser, des marches qui font mal à
+   l'image.
 2. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
    lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
    logique de *Chroma Squad*.
@@ -74,7 +81,7 @@ Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'
 | **🆕 Nouvelle saison** | choisir un lutteur parmi ceux du vestiaire, un mode (Kayfabe ou Scénarios), et partir en carrière |
 | **🥊 Match d'exhibition** | un match libre : stipulation, format (1c1, 2c2, 3c3), managers, n'importe lequel des 30 lutteurs ; les résultats 1c1 nourrissent les **rivalités** |
 | **🔒 Vestiaire** | les 29 portraits de la carrière, les verrouillés grisés avec leur condition de déblocage en clair |
-| **📖 Comment jouer** | le tutoriel (16 pages), aussi accessible en match via *Aide* |
+| **📖 Comment jouer** | le tutoriel (17 pages), aussi accessible en match via *Aide* |
 
 ### Les deux modes de campagne
 
@@ -173,6 +180,16 @@ coup qui étourdit, dans le même tour.
 Seuls la **signature** et le **finisher** ne se piochent pas : ils s'ouvrent au momentum (60 et 100) et le
 consomment. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
 une carte **allume sur le plateau** les cases qui la débloqueraient.
+
+### L'adversaire annonce son coup — le puzzle de *Fights in Tight Spaces*
+
+Au début de votre tour, chaque adversaire debout porte une **bulle** : la première carte qu'il jouera à son
+prochain tour, sur qui, et d'où (sa case d'arrivée et la case visée sont marquées sur le plateau ; sa fiche donne
+dégâts et précision prévus). Si vous restez là, il joue exactement ça. Si vous faites un pas de côté, il vous
+rattrape : il vise, il ne récite pas. Si vous sortez de tout ce qu'il peut atteindre, **le coup part dans le
+vide** : il perd la carte et son énergie, vous gagnez du momentum. Il n'annonce que sa première carte ; le reste
+de son tour, il le joue en réaction. Sa main du tour suivant est tirée à la fin de sa phase pour qu'il puisse
+l'annoncer.
 
 ### La double équipe — le système de *Chroma Squad*
 
@@ -315,7 +332,7 @@ src/main.js                   navigation entre écrans
 src/pwa.js                    service worker, bouton d'installation
 src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Dijkstra)
              battle.js        état de match, actions, dégâts, tombés, soumissions, whip, armes/DQ, tag,
-                              escalade, managers, arbitre, double équipe, phases (le gros fichier)
+                              escalade, managers, arbitre, double équipe, intention annoncée, phases
              hand.js          la main, le talon, la défausse, l'énergie et le coût des cartes
              wear.js          l'usure par membre
              ai.js            IA : évalue chaque tuile atteignable × chaque action × chaque cible
@@ -345,14 +362,14 @@ src/ui/      title.js         écran titre, vestiaire
              hub.js           la carte, l'entraînement, le deck, l'historique
              match.js         l'écran de match
              cards.js, dom.js fiches de lutteur, helpers DOM
-             tutorial.js      les 16 pages
+             tutorial.js      les 17 pages
              sound.js         tout l'audio
              spriteart.js     les planches de pixels (grilles de caractères)
              spritepixel.js   palette, postures, vêtements, rendu SVG
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        19 fichiers node:test, 196 tests
+tests/                        20 fichiers node:test, 203 tests
 docs/                         le journal de conception
 ```
 

@@ -309,6 +309,17 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     }
     const atk = ui.mode === 'move' ? ui.atkRange : null;
     const targets = ui.mode === 'target' ? new Map(ui.action.targets.filter((t) => t.unit).map((t) => [key(t.unit.x, t.unit.y), t])) : null;
+    // CE QU'ILS ANNONCENT, SUR LE PLATEAU : la case d'où partira le coup et
+    // celle qui le recevra. C'est ce qui transforme la bulle en décision.
+    const intentMoves = new Map(), intentTargets = new Map();
+    if (battle.phase === 'player' && !battle.result) {
+      for (const e of living(battle, 'enemy')) {
+        if (!e.intent) continue;
+        if (e.intent.moveTo) intentMoves.set(key(e.intent.moveTo.x, e.intent.moveTo.y), e);
+        const t = e.intent.targetUid ? battle.units.find((v) => v.uid === e.intent.targetUid) : null;
+        if (t && !t.eliminated) intentTargets.set(key(t.x, t.y), e);
+      }
+    }
     const threat = ui.hover && ui.hover.team === 'enemy' && !ui.hover.eliminated && ui.mode === 'idle' ? threatRange(ui.hover) : null;
     // Les cases qui débloqueraient la carte survolée.
     const setup = ui.setupFor && ui.sel ? setupTiles(ui.sel, ui.setupFor) : null;
@@ -329,6 +340,8 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const lvl = heightAt(g, x, y);
         const cell = h('div', { class: `cell t-${tile}${lvl ? ' raised' : ''}`, 'data-x': x, 'data-y': y, 'data-p': (x + y) % 2, style: lvl ? { '--lvl': lvl } : {}, onclick: () => onCell(x, y), onpointerenter: (e) => { if (e.pointerType === 'mouse') onHover(x, y); }, onpointerleave: (e) => { if (e.pointerType === 'mouse') onHover(null); } });
         if (TERRAIN[tile].icon) cell.append(h('span', { class: 'ticon' }, TERRAIN[tile].icon));
+        if (intentMoves.has(k)) { cell.classList.add('intent-move'); cell.append(h('span', { class: 'intent-ghost', title: `${intentMoves.get(k).name} viendra ici` }, intentMoves.get(k).intent.icon)); }
+        if (intentTargets.has(k)) cell.classList.add('intent-target');
         if (reach && reach.get(k) && !reach.get(k).blocked) cell.classList.add('reach');
         if (path.has(k)) cell.classList.add('path');
         else if (atk && atk.has(k)) cell.classList.add('atk');
@@ -354,6 +367,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
           const tok = unitToken(u);
           if (ui.sel === u) tok.classList.add('selected');
           if (ui.acting === u) tok.classList.add('acting');
+          if (u.intent && u.team === 'enemy' && battle.phase === 'player') tok.classList.add('announcing');
           // en isométrie, un lutteur plus « en avant » (x + y grand) passe devant
           tok.style.zIndex = 10 + x + y + heightAt(g, x, y);
           tok.style.setProperty('--lvl', heightAt(g, x, y));
@@ -520,10 +534,24 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
       h('div', { class: 'mini hp' }, h('div', { style: { width: `${(u.hp / u.maxHp) * 100}%` } })),
       h('div', { class: 'mini mom' }, h('div', { style: { width: `${u.momentum}%` } })),
       icons.length ? h('span', { class: 'sicons' }, icons.join('')) : null,
+      // L'INTENTION ANNONCÉE, en bulle au-dessus de l'adversaire : la carte
+      // qu'il jouera d'abord, et sur qui. Toujours visible pendant votre tour.
+      u.intent && u.team === 'enemy' && battle.phase === 'player' && !battle.result
+        ? h('span', { class: 'intent-bubble', title: intentText(u.intent) }, `${u.intent.icon} ${u.intent.name.replace(/^[^\w\p{L}]+\s*/u, '').slice(0, 16)}${u.intent.dmg != null ? ` ~${u.intent.dmg}` : ''}`)
+        : null,
       // Plaque de nom : visible pour le lutteur sélectionné, celui qu'on survole,
       // et ceux qui sont en danger — pas pour tout le monde tout le temps.
       h('span', { class: 'uname' }, h('b', {}, shortName(u.name)), h('i', {}, `${u.hp}`)),
     );
+  }
+
+  function intentText(it) {
+    let t = `Annonce : ${it.name}`;
+    if (it.targetName) t += ` sur ${it.targetName}`;
+    if (it.dmg != null) t += ` (~${it.dmg} dégâts, ${it.hit} %)`;
+    else if (it.hit != null) t += ` (${it.hit} %)`;
+    if (it.moveTo) t += ` — il viendra en (${it.moveTo.x}, ${it.moveTo.y})`;
+    return t;
   }
 
   // ------------------------------------------------------------ menu contextuel (popover)
@@ -633,7 +661,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     }
     const insp = ui.hover && ui.hover !== u ? ui.hover : ui.inspect && ui.inspect !== u ? ui.inspect : null;
     if (insp) el.right.append(h('div', { class: 'inspect-label' }, insp.team === 'enemy' ? '🔍 Adversaire (zone de menace en rouge)' : '🔍 Inspection'), unitCard(battle, insp));
-    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? '👉 Choisissez un lutteur (survolez un adversaire pour voir sa zone de menace)' : 'Tour adverse…'));
+    if (!u && !insp) el.right.append(h('div', { class: 'hint' }, battle.phase === 'player' ? '👉 Choisissez un lutteur. Les bulles au-dessus des adversaires annoncent leur prochain coup : sortez de sa portée, ou attirez-le vers le décor.' : 'Tour adverse…'));
     el.right.append(renderObjectives());
     el.right.append(renderRoutes());
   }
@@ -943,7 +971,7 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
   function sonner(ev) {
     switch (ev.type) {
       case 'damage': play(ev.crit ? 'bigHit' : 'hit'); if (ev.crit) crowdPop(0.8); break;
-      case 'miss': play('miss'); break;
+      case 'miss': case 'whiff': play('miss'); break;
       case 'down': play('slam'); crowdPop(0.5); break;
       case 'pin':
         play('count', ev.count);
@@ -1133,6 +1161,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
         const a = step.action; const name = MOVES[a.id] ? MOVES[a.id].name : a.id === 'pin' ? 'Tombé' : a.id;
         if (MOVES[a.id] && MOVES[a.id].tier === 'finisher') { play('finisher'); crowdPop(1.2); }
         floatAt(step.unit, name);
+      } else if (step.type === 'whiff') {
+        floatAt(step.unit, `${step.intent.name} : DANS LE VIDE !`, 'miss');
+        if (step.target) floatAt(step.target, 'ESQUIVÉ !', 'heal');
       }
       await sleep(step.type === 'move' ? 420 : 800);
       if (battle.result) break;

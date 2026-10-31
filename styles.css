@@ -498,6 +498,20 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 .unit.selected .uname, .unit.hurt .uname, .cell:hover .uname { display: flex; }
 .unit.team-player { --team: var(--blue); }
 .unit.team-enemy { --team: var(--red); }
+/* L'intention annoncée : bulle au-dessus de l'adversaire, case visée, case d'arrivée. */
+.intent-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 18px); transform: translateX(-50%);
+  white-space: nowrap; z-index: 13; pointer-events: none;
+  background: var(--red); color: #fff; border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+  padding: 1px 6px; font-size: 0.62rem; font-weight: 700; line-height: 1.5; letter-spacing: 0.2px;
+}
+.intent-bubble::after { content: ''; position: absolute; left: 50%; top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--ink); }
+.unit.announcing .intent-bubble { animation: intent-pulse 1.6s steps(2, end) infinite; }
+@keyframes intent-pulse { 50% { transform: translateX(-50%) translateY(-2px); } }
+.cell.intent-target::after { box-shadow: inset 0 0 0 3px var(--red), inset 0 0 0 5px #00000055; background: repeating-linear-gradient(-45deg, #e8433f44 0 4px, transparent 4px 9px); }
+.cell.intent-move::after { box-shadow: inset 0 0 0 2px #e8433f99; background: #e8433f22; }
+.intent-ghost { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: calc(var(--cell) * 0.45); opacity: 0.55; pointer-events: none; z-index: 3; filter: drop-shadow(1px 1px 0 var(--ink)); }
+@media (prefers-reduced-motion: reduce) { .unit.announcing .intent-bubble { animation: none; } }
 .unit.selected { --team: var(--gold); }
 .unit.hurt .uname i { color: #ff8a80; }
 .unit.down .uname { display: none; }

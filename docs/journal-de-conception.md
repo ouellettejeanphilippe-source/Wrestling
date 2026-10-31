@@ -65,6 +65,38 @@ La réponse est celle du genre : le tour d'un **deck-builder**, sur la grille de
 Ce qui reste : le retour visuel d'un coup, la carrière en équipe (la double équipe n'existe qu'à plusieurs, et la
 carrière est celle d'un seul lutteur), et le match à relais, encore à 30 tours.
 
+## Octobre 2026 — l'adversaire annonce son coup
+
+La direction, dite en une phrase : *Fights in Tight Spaces*, en grand espace et avec les props. Le tour de
+deck-builder était là ; il manquait le puzzle — et le puzzle de ce genre, c'est **l'intention annoncée** (Slay the
+Spire, Fights in Tight Spaces, Into the Breach). Un adversaire dont on ne sait rien est un dé.
+
+Au début du tour du joueur, chaque adversaire debout annonce la première carte qu'il jouera, sur qui, et d'où :
+bulle au-dessus du pion, case d'arrivée et case visée marquées, fiche avec dégâts et précision prévus. Pour ça, sa
+main du tour suivant est tirée **à la fin de sa phase** (`handReady`), pas au début de la suivante. Il n'annonce
+que sa première carte : le reste, il le joue en réaction.
+
+**Trois essais, mesurés sur 60 matchs IA contre IA** (l'IA « joueur » ne lit pas les bulles — tout écart vient
+donc du mécanisme, pas de l'esquive) :
+
+| | victoires de l'adversaire | coups dans le vide par match | joueur passif tient |
+| --- | --- | --- | --- |
+| sans annonce (référence) | 27 / 60 | — | 20,7 tours |
+| annonce *récitée* (la case promise, puis la carte) | **13 / 60** | 2,5 | — |
+| annonce planifiée avec les drapeaux du tour précédent | 17 / 60 | 0,4 | 25,4 → 21,3 une fois corrigé |
+| annonce **visée** (carte et cible tenues, meilleure case recalculée) | **28 / 60** | 0,25 | 20,8 tours |
+
+Les deux pièges : le déplacement annoncé, *récité* sur des positions qui avaient bougé d'une case, n'arrivait plus à
+portée — le coup partait dans le vide sans que personne n'ait esquivé. Et l'annonce était planifiée avec les
+drapeaux de la phase qui venait de finir (`moved`, `acted`) : la moitié des bulles disaient « il souffle » alors
+qu'il allait frapper. Il **vise** maintenant : la carte et la cible sont tenues, la case d'où partir est la
+meilleure au moment de jouer, et l'esquive se gagne en sortant de tout ce qu'il peut atteindre, pas en faisant un
+pas. L'adversaire est exactement aussi fort qu'avant contre qui ne lit pas les bulles — et plus faible contre qui
+les lit, ce qui est le but.
+
+Le coup dans le vide coûte la carte, son énergie et la moitié de son souffle ; celui qui l'a vu venir gagne 6 de
+momentum, la salle chauffe.
+
 ---
 
 # Parodie Pro Wrestling Tactics

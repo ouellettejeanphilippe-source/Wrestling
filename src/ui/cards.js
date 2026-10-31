@@ -61,6 +61,10 @@ export function unitCard(battle, u, opts = {}) {
   if (battle.rules.countOut > 0 && u.outsideCount > 0) st.push(`⏱ Compte ${u.outsideCount}/${battle.rules.countOut}`);
   if (u.climb > 0) st.push(`🧗 Escalade ${u.climb}/2`);
   if (u.teamwork) st.push('🤝 Double équipe : enchaîne sur les coups de ses partenaires');
+  if (u.intent && u.team === 'enemy' && battle.phase === 'player' && !battle.result) {
+    const it = u.intent;
+    st.push(`🎯 Annonce : ${it.name}${it.targetName ? ` sur ${it.targetName}` : ''}${it.dmg != null ? ` (~${it.dmg} dégâts, ${it.hit} %)` : it.hit != null ? ` (${it.hit} %)` : ''}${it.moveTo ? ' — après s’être déplacé' : ''}`);
+  }
   if (u.eliminated) st.push('❌ Éliminé');
   const diff = (k) => { const d = s[k] - u.stats[k]; return d ? h('small', { class: d > 0 ? 'up' : 'dn' }, ` (${d > 0 ? '+' : ''}${d})`) : null; };
   return h('div', { class: `ucard team-${u.team} ${opts.class || ''}` },
