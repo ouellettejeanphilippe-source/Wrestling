@@ -672,7 +672,13 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 }
 
 /* ---------------- overlays : résultat & tutoriel */
-.overlay { position: fixed; inset: 0; background: #0d0a14d0; display: flex; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+/* Un écran plus haut que la fenêtre doit DÉFILER : le robot de test a trouvé un
+   résultat de match (récit en trois actes + cartes proposées) dont le bouton
+   « Continuer » restait hors de l'écran, sans moyen d'y aller. `margin: auto`
+   centre quand ça tient et colle en haut quand ça déborde ; le haut a de la
+   marge pour la bande dorée qui dépasse de la boîte. */
+.overlay { position: fixed; inset: 0; background: #0d0a14d0; display: flex; z-index: 40; padding: 30px 16px 16px; overflow-y: auto; overscroll-behavior: contain; }
+.overlay > * { margin: auto; }
 .result {
   background: var(--panel); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink);
   padding: 26px 32px; max-width: 560px; width: 100%; display: flex; flex-direction: column; gap: 10px; text-align: center;
@@ -923,8 +929,9 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
     position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40;
     background: var(--gold); color: var(--ink); border: 3px solid var(--ink);
     box-shadow: var(--pop); padding: 8px 10px; font-weight: 700; font-size: 0.82rem;
+    pointer-events: none;   /* un conseil ne doit jamais intercepter un clic */
   }
-  .rotate-hint .btn { background: var(--ink); color: var(--gold); }
+  .rotate-hint .btn { background: var(--ink); color: var(--gold); pointer-events: auto; }
 }
 
 /* ---------------------------------------------------------------- sélection
@@ -1330,6 +1337,7 @@ body.in-match #app { padding: 6px 8px 6px; }
 .strip { flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 5px; align-self: center; min-width: 138px; }
 .strip .btn.small { justify-content: center; text-align: center; padding: 5px 9px; font-size: 0.78rem; white-space: nowrap; }
 .strip .btn.off { opacity: 0.45; } .strip .btn.raised, .strip .btn.on { background: var(--gold); color: var(--ink); }
+.ring-menu .btn.raised { background: var(--gold); color: var(--ink); }
 .strip .btn.end { padding: 9px 12px; font-size: 0.92rem; } .strip .btn.end.hot { animation: pulse 0.9s steps(2) infinite; }
 .ring-menu { position: absolute; right: 10px; bottom: calc(100% + 4px); z-index: 25; display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 3px solid var(--ink); box-shadow: var(--pop); padding: 8px; max-width: 320px; }
 .ring-menu .btn { text-align: left; display: flex; flex-direction: column; align-items: flex-start; }

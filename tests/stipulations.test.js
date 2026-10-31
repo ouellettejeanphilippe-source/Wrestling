@@ -9,7 +9,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, autoPlay, listActions, executeAction, climbNeeded,
-  tossChance, tagChance, heartIsTheClock, subIsTheRoute } from '../src/engine/battle.js';
+  tossChance, tagChance, heartIsTheClock, subIsTheRoute, tapChance, TAG_DAMAGE } from '../src/engine/battle.js';
+import { MOVES } from '../src/data/moves.js';
 import { WRESTLERS, WRESTLERS_BY_ID as W } from '../src/data/wrestlers.js';
 import { EXHIBITION_TYPES } from '../src/data/campaign.js';
 import { MATCH_TYPES } from '../src/data/matchTypes.js';
@@ -185,4 +186,45 @@ test('chaque stipulation garde la limite de temps qui lui va', () => {
     assert.ok(MATCH_TYPES[type].maxTurns > 40, `${type} est une forme longue`);
   }
   assert.equal(MATCH_TYPES.singles.maxTurns, undefined, 'le match simple garde la limite par défaut');
+});
+
+test('par équipes : un match tient en vingt-cinq à trente tours, pas en quarante-cinq', () => {
+  // TROUVÉ PAR LE ROBOT DE TEST. Un match par équipes de la carrière dépassait
+  // vingt-quatre tours et quatre-vingts gestes pour un simple de quatorze tours.
+  // Mesure sur 120 matchs : médiane 43 tours et 17 % au chrono avant le
+  // multiplicateur de dégâts (TAG_DAMAGE), médiane 25 et 2 % après.
+  assert.ok(TAG_DAMAGE > 1, 'le tag frappe plus fort que le simple');
+  const tours = []; let chrono = 0;
+  for (let seed = 1; seed <= 24; seed++) {
+    const j = jouer('tag', seed);
+    if (!j) continue;
+    tours.push(j.b.turn);
+    if (/Limite de temps/.test(j.r.reason)) chrono++;
+  }
+  tours.sort((a, b) => a - b);
+  const mediane = tours[Math.floor(tours.length / 2)];
+  assert.ok(mediane <= 34, `médiane ${mediane} tours : trop long`);
+  assert.ok(chrono / tours.length <= 0.12, `${chrono}/${tours.length} au chrono`);
+});
+
+test('soumission uniquement : personne ne tape au premier tour, ni sur un adversaire frais', () => {
+  // Le robot de test a vu un match finir au tour 1 sur un seul geste : 9 sur
+  // 500 matchs finissaient au premier tour, 23 sur 500 avant le troisième,
+  // l'adversaire encore à 80-95 % de ses PV. Une prise use le membre AVANT le
+  // jet d'abandon : on ne peut donc pas lire le « travail déjà fait » dans
+  // l'usure, d'où un plancher sur le tour et sur les PV.
+  const b = createBattle({ match: exhibitionMatch('submission_only', ['jean_sina'], ['gunter']), playerTeam: [W.jean_sina], seed: 9 });
+  const [moi, lui] = [b.units.find((u) => u.team === 'player'), b.units.find((u) => u.team === 'enemy')];
+  const prise = MOVES.armbar || MOVES.chinlock;
+  assert.ok(prise, 'une prise de soumission existe');
+  b.turn = 1; lui.hp = lui.maxHp * 0.4;
+  assert.equal(tapChance(b, moi, lui, prise), 0, 'tour 1 : jamais, même sur un adversaire à 40 %');
+  b.turn = 4; lui.hp = lui.maxHp;
+  assert.equal(tapChance(b, moi, lui, prise), 0, 'adversaire frais : jamais');
+  // Le cœur verrouille l'abandon (voir tapChance) : on le vide pour ne tester
+  // que les deux planchers, et que la porte s'ouvre bien quand ils sont levés.
+  lui.grit = 0; lui.hp = lui.maxHp * 0.4;
+  assert.ok(tapChance(b, moi, lui, prise) > 0, 'travaillé, sans cœur, au tour 4 : la porte s’ouvre');
+  b.turn = 2;
+  assert.equal(tapChance(b, moi, lui, prise), 0, 'et elle se referme au tour 2');
 });

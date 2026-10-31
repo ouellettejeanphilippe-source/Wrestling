@@ -281,7 +281,11 @@ function showExhibition(root, app) {
     h('div', { class: 'row' },
       h('button', { class: 'btn ghost', onclick: () => showTitle(root, app) }, '← Retour'),
       h('button', { class: 'btn primary', onclick: () => {
-        const n = Number(sizeSel.value);
+        // tailleVoulue(), pas sizeSel.value : en bataille royale le sélecteur est
+        // verrouillé sur « 1 contre 1 » alors que le format imposé est 3 contre 4.
+        // Le compteur affichait « 3/3 » et le bouton exigeait un seul lutteur :
+        // l'exhibition ne démarrait jamais (trouvé par le robot de test).
+        const n = tailleVoulue();
         const foes = battleRoyalFoes(typeSel.value, n);
         if (mine.size !== n) return toast(`Choisissez exactement ${n} lutteur(s)`, 'warn');
         if (theirs.size !== foes) return toast(`Choisissez ${foes} adversaire(s)`, 'warn');

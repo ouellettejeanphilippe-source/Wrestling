@@ -7,8 +7,9 @@ français** : code, commentaires, commits, tests, documentation. On garde ça.
 
 ```bash
 npm start     # serveur statique sur :8080 (scripts/serve.js)
-npm test      # node --test tests/*.test.js — 239 tests, ~50 s, à lancer avant tout commit
+npm test      # node --test tests/*.test.js — 241 tests, ~50 s, à lancer avant tout commit
 node .claude/skills/pixel-art/scripts/measure.mjs [id]   # mesure les palettes des sprites
+node scripts/robot/run.cjs --scenario=career:kayfabe       # robot Playwright : joue par l'interface (serveur lancé)
 ```
 
 Pas de linter ni de formateur configuré. Node ≥ 18 (la CI tourne en 22).
@@ -75,6 +76,12 @@ mesure sont faciles à refaire : `createBattle` + `autoPlay` sur soixante graine
 `tests/rythme.test.js`.
 
 ## Vérifier dans le navigateur
+
+**Le robot d'abord** (`scripts/robot/`, options en tête de `bot.cjs`) : il joue une carrière ou une stipulation par de
+vrais clics et signale blocages, gestes sans effet, clics impossibles. Toute modification de `src/ui/` ou de la
+règle d'un match devrait passer par lui (une carrière + `--scenario=exhibition --sizes`, et une passe `--view=phone`) ;
+il a trouvé six défauts d'écran que `npm test` ne voyait pas. Il est volontairement mauvais joueur : `--win=0.8` lui
+fait gagner pour voir les écrans de victoire.
 
 Chromium et Playwright sont disponibles dans les sessions cloud. Pour sauter le tutoriel en test automatisé :
 `localStorage.setItem('ppw-tutorial-seen', '1')` avant de lancer un match. Les cases du plateau sont
