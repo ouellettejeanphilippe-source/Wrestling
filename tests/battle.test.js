@@ -100,12 +100,14 @@ test('portée et prérequis des mouvements filtrent les cibles', () => {
   assert.ok(!acts.find((a) => a.id === 'moonsault').ok, 'moonsault exige un coin');
   place(d, 5, 3); place(j, 6, 4);
   acts = listActions(b, d);
-  assert.ok(!acts.find((a) => a.id === 'moonsault').ok, 'moonsault verrouillé sans momentum (palier classe)');
-  d.momentum = 30;
-  acts = listActions(b, d);
-  assert.ok(acts.find((a) => a.id === 'moonsault').ok, 'moonsault depuis le coin à portée 2 avec 30 momentum');
-  assert.ok(!acts.find((a) => a.id === 'crossbody').ok, 'spécialité verrouillée sous 45');
-  assert.ok(!acts.find((a) => a.id === 'coffin_drop').ok, 'finisher sans momentum');
+  // LE MOMENTUM NE VERROUILLE PLUS LA MAIN. Au tour 1, trois cartes sur cinq
+  // étaient grisées (classe à 25, spécialité à 45, momentum à 5) : dans un
+  // deck-builder, une carte piochée se joue pour son énergie. Mesuré, le
+  // déverrouillage ne change presque rien aux matchs de l'IA (12 tours, 29
+  // coups, note 3,4) — il change ce que voit le joueur. Seuls la signature et
+  // le finisher restent derrière la jauge.
+  assert.ok(acts.find((a) => a.id === 'moonsault').ok, 'moonsault depuis le coin à portée 2, sans aucun momentum');
+  assert.ok(!acts.find((a) => a.id === 'coffin_drop').ok, 'le finisher, lui, reste derrière la jauge');
   d.momentum = 100;
   assert.ok(listActions(b, d).find((a) => a.id === 'coffin_drop').ok);
   assert.ok(listActions(b, d).find((a) => a.id === 'crossbody').ok);
@@ -117,8 +119,8 @@ test('échelle de momentum : un mouvement coûte son palier et en rapporte s’i
   enMain(s, 'bodyslam', 'kneestrike', 'taunt');
   place(s, 7, 5); place(j, 8, 5);
   s.momentum = 30;
-  assert.ok(listActions(b, s).find((a) => a.id === 'bodyslam').ok, 'classe débloquée à 25');
-  assert.ok(!listActions(b, s).find((a) => a.id === 'kneestrike').ok, 'spécialité verrouillée à 30');
+  assert.ok(listActions(b, s).find((a) => a.id === 'bodyslam').ok, 'classe jouable');
+  assert.ok(listActions(b, s).find((a) => a.id === 'kneestrike').ok, 'spécialité jouable : c’est l’énergie qui la limite, plus la jauge');
   assert.ok(listActions(b, s).find((a) => a.id === 'taunt').ok, 'provoquer, quand on l’a en main');
   const r = executeAction(b, s, 'bodyslam', { unit: j });
   assert.ok(r.ok);

@@ -6,6 +6,7 @@ import { createBattle } from './engine/battle.js';
 import { WRESTLERS_BY_ID } from './data/wrestlers.js';
 import { newGame, load, save, clearSave, buildMatch, applyResult, playerBonuses, exhibitionMatch } from './game/state.js';
 import { setupPwa } from './pwa.js';
+import { initVisages } from './ui/visages.js';
 import { loadRivalries, saveRivalries, rivalryFor, recordMatch } from './game/rivalry.js';
 import { matchStory } from './game/story.js';
 import { learnCard, knownMoves } from './game/deck.js';
@@ -68,4 +69,6 @@ const app = {
 };
 window.__app = app;
 setupPwa();
+// Les visages de référence, s'ils ont été téléchargés sur cet appareil (réglage facultatif).
+initVisages();
 app.toTitle();

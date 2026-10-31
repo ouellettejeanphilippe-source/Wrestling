@@ -51,6 +51,31 @@ export function planUnit(battle, unit) {
   return fallback(battle, unit);
 }
 
+// LA MEILLEURE CASE POUR UNE CARTE PROMISE. L'intention annoncée tient la
+// carte et la cible ; la case d'où partir se recalcule au moment de jouer,
+// parce que la cible a pu bouger. On reprend exactement la note du planificateur
+// (coup + position) sur chaque case atteignable, pour la seule carte promise.
+export function bestTileFor(battle, unit, actionId, target) {
+  const reach = getReachable(battle, unit);
+  const tiles = unit.moved ? [reach.get(`${unit.x},${unit.y}`)] : [...reach.values()].filter((v) => !v.blocked);
+  let best = null;
+  for (const t of tiles) {
+    if (!t) continue;
+    const path = pathIn(reach, t.x, t.y);
+    const pos = { x: t.x, y: t.y, path, travel: Math.max(0, path.length - 1) };
+    const a = listActions(battle, unit, pos).find((x) => x.id === actionId);
+    if (!a || !a.ok) continue;
+    const tg = a.targets.find((x) => x.unit === target);
+    if (!tg) continue;
+    let score = scoreAction(battle, unit, pos, a, tg);
+    if (score == null) score = 0;
+    score -= t.cost * 0.5;
+    score += positional(battle, unit, pos, a);
+    if (!best || score > best.score) best = { x: t.x, y: t.y, score };
+  }
+  return best;
+}
+
 // Les scores d'action se comparent à celui d'un coup, qui vaut `touche × dégâts
 // × 2`. Toutes les constantes ci-dessous ont donc été calibrées sur une échelle
 // de dégâts donnée — et le jour où les coups ont été divisés par deux, elles
@@ -100,10 +125,34 @@ function scoreAction(battle, unit, pos, a, tg) {
     // Elle vit maintenant dans le repli, là où on ne va que si rien d'autre ne
     // vaut le coup.
     case 'redraw': return null;
-    // La double équipe n'est pas un coup qu'on compare à un coup : c'est ce
-    // qu'on fait du reste de son tour quand on est bien placé. Elle vit dans
-    // le repli, comme la défausse.
-    case 'teamwork': return null;
+    // LES CARTES TACTIQUES. Sans score, elles tombaient dans la branche par
+    // défaut (« presque rien ») : l'adversaire les gardait en main, mortes, et
+    // jouait avec trois cartes au lieu de cinq.
+    case 'tactic': {
+      const proches = enemies.filter((e) => !e.down && !e.eliminated && manhattan(e, pos) <= 3).length;
+      switch (a.move.tactic) {
+        // Se couvrir vaut plus quand on est amoché et que quelqu'un est à portée.
+        case 'guard': return E(14 + (1 - hpRatio(unit)) * 50 + proches * 8);
+        // Reprendre sa course : seulement après s'être déplacé, et seulement si
+        // personne n'est encore collé — sinon c'est le coup qui vaut, pas le pas.
+        case 'regroup': return (unit.moved && !enemies.some((e) => !e.down && !e.eliminated && manhattan(e, pos) === 1)) ? E(24) : null;
+        // Repenser son tour : quand la main s'est vidée, pas quand elle est pleine.
+        case 'draw': return (unit.hand || []).length <= 3 && (unit.energy ?? 3) >= 2 ? E(22) : E(5);
+        default: return null;
+      }
+    }
+    // LE DERNIER POINT VA À LA DOUBLE ÉQUIPE. Avec trois points d'énergie,
+    // l'IA n'arrivait presque jamais au repli — elle frappait jusqu'à zéro —
+    // et la double équipe restait théorique. Elle vaut un coup de poing
+    // quand il ne reste qu'un point, qu'un adversaire est collé et qu'un
+    // partenaire peut en profiter : c'est le « je tiens, tu frappes » qui
+    // fait un match par équipes.
+    case 'teamwork': {
+      if ((unit.energy ?? 3) > 1) return null;
+      const colle = enemies.some((e) => !e.down && !e.eliminated && manhattan(e, pos) === 1);
+      const partenaire = living(battle, unit.team).some((al) => al !== unit && !al.down && !al.eliminated);
+      return colle && partenaire ? E(30) : null;
+    }
     // Le décompte qui monte est ce qui doit la ramener, pas une préférence
     // vague : à zéro c'est un tour perdu, à cinq c'est le match.
     case 'rollin': return E(8 + (unit.outsideCount || 0) * 48);

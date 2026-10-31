@@ -7,7 +7,7 @@ français** : code, commentaires, commits, tests, documentation. On garde ça.
 
 ```bash
 npm start     # serveur statique sur :8080 (scripts/serve.js)
-npm test      # node --test tests/*.test.js — 196 tests, ~40 s, à lancer avant tout commit
+npm test      # node --test tests/*.test.js — 216 tests, ~45 s, à lancer avant tout commit
 node .claude/skills/pixel-art/scripts/measure.mjs [id]   # mesure les palettes des sprites
 ```
 
@@ -21,10 +21,15 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
   `hand.js` (la main, l'énergie, le coût des cartes), `wear.js` (l'usure), `ai.js` (l'adversaire), `rules.js`
   (les fins). Le tour est celui d'un deck-builder : main neuve de 5 à chaque tour, 3 points d'énergie, plusieurs
   cartes à la suite ; `acted` ne passe à vrai que quand l'énergie est à zéro ou qu'une action ferme le tour.
+  L'adversaire **annonce** sa première carte au début du tour du joueur (`planIntents`, `unit.intent`) : sa main
+  du tour suivant est tirée à la fin de sa phase (`handReady`), et `enemySteps` tient l'annonce ou fait partir le
+  coup dans le vide (`whiff`). La direction du jeu : *Fights in Tight Spaces*, en grand espace et avec les props.
 - `src/data/` — tout le contenu : lutteurs, mouvements, gimmicks, stipulations, combos, managers, campagne.
 - `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match.
-- `src/ui/` — les écrans. `match.js` est l'écran de match ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
-  les sprites.
+- `src/ui/` — les écrans. `match.js` est l'écran de match, construit autour de la main (un clic sur la carte, un
+  clic sur la cible ; le plateau est cadré sur l'action) ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
+  les sprites. Attention : `Element.append` écrit « [object …] » pour un tableau et « null » pour une branche vide ;
+  dans `match.js`, passer par `put(parent, …)` ou par `h()`.
 - `tests/` — la plupart mesurent le **jeu** (longueur des matchs, taux de ceinture sur cent carrières) et pas des
   fonctions. Un test qui casse après un réglage d'équilibrage dit souvent quelque chose de vrai.
 - `docs/journal-de-conception.md` — l'historique des décisions, avec les mesures qui les ont justifiées. À lire
@@ -51,12 +56,17 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
 7. **Sauvegardes** : `ppw-save-v1` (carrière), `ppw-unlocks-v1` (vestiaire), `ppw-rivalries-v1` (rivalités) dans
    `localStorage`. Changer le format d'une sauvegarde demande une migration ou une nouvelle clé.
 8. `index.html` ne charge que `src/main.js` ; pas de bundler, donc pas d'import de paquet npm.
+9. **Jamais de photo de vrai lutteur dans le dépôt.** Le roster parodie de vrais lutteurs et sera remplacé par des
+   personnages originaux avant la v1. Pour les reconnaître, l'application les télécharge sur l'appareil, à la
+   demande (`src/ui/visages.js`, API de Wikipédia et de Commons, licences libres seulement, attribution affichée) ;
+   `tests/visages.test.js` interdit toute image hors `icons/`. Le dossier `local/` est ignoré par git.
 
 ## État du jeu (octobre 2026)
 
 Le README a une section **« Où en est le jeu — honnêtement »** avec les mesures avant/après le tour à énergie :
 match simple de 40 à 12-16 tours en médiane, phases adverses sans dégâts de 50 à 30 %, fins au chrono de 23 à 0 %.
-Les priorités restantes y sont listées dans l'ordre (retour visuel, carrière en équipe, match à relais trop long).
+Les priorités restantes y sont listées dans l'ordre (retour visuel d'un coup, un rôle pour le momentum entre la
+signature et le finisher, carrière en équipe, match à relais trop long).
 Toute session qui touche au match devrait faire bouger au moins un de ces chiffres, et le dire. Les scripts de
 mesure sont faciles à refaire : `createBattle` + `autoPlay` sur soixante graines, voir `tests/energie.test.js` et
 `tests/rythme.test.js`.

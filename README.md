@@ -2,8 +2,10 @@
 
 ### ▶️ [Jouer maintenant](https://ouellettejeanphilippe-source.github.io/Wrestling/)
 
-Un jeu tactique sur grille à la **Chroma Squad**, avec un **tour de deck-builder** : chaque lutteur pioche cinq
-cartes par tour et a trois points d'énergie pour les jouer. Des parodies de lutteurs WWE/AEU, chacun avec un
+Un jeu tactique sur grille à la **Fights in Tight Spaces**, en grand espace et avec des props : un **tour de
+deck-builder** (cinq cartes piochées par tour, trois points d'énergie pour les jouer), un **adversaire qui annonce
+son coup** avant votre tour, et tout le décor du catch — tables, marches, barricades, chaises, échelle — pour
+l'esquiver ou l'y envoyer. Des parodies de lutteurs WWE/AEW, chacun avec un
 **gimmick** (passif unique), une **classe**, une **spécialité**, un **signature** et un **finisher**. Les matchs se
 gagnent par tombé, soumission, compte à l'extérieur, DQ, par-dessus la troisième corde, échelle, évasion de cage,
 survie…
@@ -19,7 +21,7 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 196 tests du moteur (node:test), ~40 s
+npm test           # 216 tests du moteur (node:test), ~45 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
@@ -51,19 +53,26 @@ Mesuré sur 60 matchs simples joués par l'IA contre l'IA (`autoPlay`), avant et
 
 Un tour est maintenant une suite de décisions : se déplacer, poser un coup qui étourdit, enchaîner avec la prise
 qui demande une cible étourdie, et finir par un tombé — dans le même tour. À plusieurs, un lutteur peut donner son
-tour pour que ses partenaires frappent plus loin et qu'il enchaîne sur leurs coups.
+tour pour que ses partenaires frappent plus loin et qu'il enchaîne sur leurs coups. Et **l'adversaire annonce son
+coup** : la bulle au-dessus de lui dit la première carte qu'il jouera, sur qui, et d'où. Sortir de sa portée fait
+partir le coup dans le vide ; un pas de côté ne suffit pas, il vise. Mesuré : l'IA tient son annonce quand la
+cible ne bouge pas, et gagne 28 matchs sur 60 contre une IA qui ne lit pas les bulles — exactement comme sans
+annonce. Tout l'avantage va à qui les lit.
 
 Ce qui reste à faire, par ordre d'importance :
 
-1. **Du retour à l'écran** : le coup, le bump, la chute, la couverture, le compte. Aujourd'hui une ligne de journal
-   et un nombre qui flotte.
-2. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
+1. **Du retour à l'écran, encore.** Le sprite clignote et l'écran tremble, mais un coup n'a toujours pas
+   d'animation : pas de carte qui file vers la cible, pas de bump, pas de couverture à l'image. Et les props
+   méritent plus : une table qui se voit casser, des marches qui font mal.
+2. **Le momentum n'ouvre plus que la signature et le finisher.** Il ne fait donc plus grand-chose entre les deux :
+   une jauge qui monte toute seule, sans rien de plus à décider. Des cartes qui *dépensent* du momentum pour un
+   effet (un coup amélioré, une pioche, un tombé plus facile) lui rendraient un rôle.
+3. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
    lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
    logique de *Chroma Squad*.
-3. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
+4. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
    soigne, le partenaire illégal qui attend. À resserrer.
-4. **Le momentum verrouille encore** les cartes de spécialité (45) au premier tour : un tour sur dix commence avec
-   une seule carte jouable.
+
 
 Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'elles donnent une fois assemblées.
 
@@ -74,7 +83,7 @@ Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'
 | **🆕 Nouvelle saison** | choisir un lutteur parmi ceux du vestiaire, un mode (Kayfabe ou Scénarios), et partir en carrière |
 | **🥊 Match d'exhibition** | un match libre : stipulation, format (1c1, 2c2, 3c3), managers, n'importe lequel des 30 lutteurs ; les résultats 1c1 nourrissent les **rivalités** |
 | **🔒 Vestiaire** | les 29 portraits de la carrière, les verrouillés grisés avec leur condition de déblocage en clair |
-| **📖 Comment jouer** | le tutoriel (16 pages), aussi accessible en match via *Aide* |
+| **📖 Comment jouer** | le tutoriel (17 pages), aussi accessible en match via *Aide* |
 
 ### Les deux modes de campagne
 
@@ -146,12 +155,13 @@ nom, hors vestiaire.
 ### Le tour — trois points d'énergie
 
 Chaque lutteur **se déplace une fois**, puis joue **autant de cartes que son énergie le permet** : trois points
-par tour. On sélectionne, on voit la portée de déplacement (bleu) et d'attaque (rouge), on se place, et un menu
-s'ouvre : **Votre main**, **Mérité** (signature et finisher), **Tombé**, **Provoquer**, **Le ring** (projeter
-par-dessus la corde, grimper, tag, armes, manager, vendre/faire le job), **Double équipe**, **Souffler**. Après
-chaque carte, le menu se rouvre sur le même lutteur tant qu'il lui reste de l'énergie ; le tour se ferme à zéro, ou
-en soufflant. Avant de confirmer une cible, la **prévision** donne précision, dégâts, critique, risque de
-renversement, usure infligée, combos actifs, enchaînement de double équipe et risque de DQ.
+par tour. **Un clic sur la carte, un clic sur la cible.** La main est en bas, toujours visible ; lever une carte
+allume ses cibles et affiche la **prévision** sous la fiche adverse (précision, dégâts, renversement, usure
+infligée, combos, enchaînement de double équipe, risque de DQ) ; cliquer la cible joue. Pour se déplacer, on clique
+une case bleue quand aucune carte n'est levée. Tombé, double équipe, souffler et fin du tour sont des boutons fixes
+à côté de la main ; *le ring* (projeter par-dessus la corde, grimper, tag, armes, manager, vendre/faire le job)
+s'ouvre au besoin. Le tour se ferme à zéro énergie, ou en soufflant. Au clavier : **1 à 7** lèvent une carte,
+**Échap** la baisse, **E** finit le tour.
 
 | carte | coût |
 | --- | --- |
@@ -170,9 +180,24 @@ carte apprise en carrière revient vite. **Tout est une carte**, coup de poing c
 plusieurs exemplaires. **Le tour est le plan** : une carte qui demande une cible étourdie se joue juste après le
 coup qui étourdit, dans le même tour.
 
+**Trois cartes ne frappent personne** : 🛡️ *Se couvrir* (le prochain coup reçu fait moitié moins), 🏃 *Reprendre sa
+course* (un nouveau déplacement, deux cases de plus, avant ou après un coup) et 🧠 *Plan de match* (pioche deux
+cartes). Chacune coûte ⚡1 ; chaque classe en a une dans son kit, et elles s'offrent aussi après un match de
+carrière. L'IA les joue.
+
 Seuls la **signature** et le **finisher** ne se piochent pas : ils s'ouvrent au momentum (60 et 100) et le
-consomment. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
+consomment. Tout le reste se joue pour son énergie, jamais pour sa jauge. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
 une carte **allume sur le plateau** les cases qui la débloqueraient.
+
+### L'adversaire annonce son coup — le puzzle de *Fights in Tight Spaces*
+
+Au début de votre tour, chaque adversaire debout porte une **bulle** : la première carte qu'il jouera à son
+prochain tour, sur qui, et d'où (sa case d'arrivée et la case visée sont marquées sur le plateau ; sa fiche donne
+dégâts et précision prévus). Si vous restez là, il joue exactement ça. Si vous faites un pas de côté, il vous
+rattrape : il vise, il ne récite pas. Si vous sortez de tout ce qu'il peut atteindre, **le coup part dans le
+vide** : il perd la carte et son énergie, vous gagnez du momentum. Il n'annonce que sa première carte ; le reste
+de son tour, il le joue en réaction. Sa main du tour suivant est tirée à la fin de sa phase pour qu'il puisse
+l'annoncer.
 
 ### La double équipe — le système de *Chroma Squad*
 
@@ -193,7 +218,7 @@ plancher (−7 % par tour) **et refroidit la salle** ; une seule case parcourue 
 | | momentum ⚡ | souffle 😮‍💨 |
 | --- | --- | --- |
 | sens | monte quand on frappe, encaisse, provoque | descend quand on frappe (4 à 22 selon le palier, +3 en courant) |
-| rôle | ouvre les paliers (classe 25, spécialité 45, signature 60, finisher 100) ; signature et finisher le dépensent | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
+| rôle | ouvre la signature (60) et le finisher (100), qui le dépensent ; tout le reste se joue pour son énergie | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
 | se refait | en frappant | +5 par tour, +14 si on a soufflé (attendre, provoquer) |
 
 ### Le sol, le cœur et le tombé
@@ -281,7 +306,7 @@ Deck de départ = fondamentaux (en plusieurs exemplaires) + classe + spécialit�
 | --- | --- |
 | 💪 Force, 🪽 Voltigeur, 🧠 Technicien, 🥊 Bagarreur, 🎤 Vedette | 🦅 Aérien, 🔗 Soumission, 🪑 Hardcore, 🦵 Frappeur, 😈 Tricheur, 🗿 Colosse, ⚡ Vitesse, 📣 Micro |
 
-Le catalogue compte **131 mouvements** (11 de base, 23 de classe, 28 de spécialité, 37 signatures, 32 finishers).
+Le catalogue compte **134 mouvements** (11 de base, 26 de classe dont 3 cartes tactiques, 28 de spécialité, 37 signatures, 32 finishers).
 Une partie du vocabulaire n'existe pas à l'arrêt : `requires: { ran: n }` exige n cases de course, `crossedRope`
 d'avoir traversé les cordes, `turnbuckle` d'être monté dans un coin, `targetDown` une cible au sol.
 
@@ -294,10 +319,20 @@ comprises.
 
 ## Interface et direction artistique
 
-- Plateau en **caméra isométrique** (rotation par quarts de tour, touche R) ou en **vue de dessus** ; zoom à la
-  molette ou au pincement, glisser pour déplacer la vue. Le HUD flotte dans les coins pour laisser la place aux
-  sprites. Pensé pour le **paysage** sur téléphone ; en portrait, un rappel s'affiche. L'énergie du tour se lit
-  en tête du menu, sur la fiche et dans la barre d'équipe ; chaque carte affiche son coût ⚡.
+- **L'écran de match est construit autour de la main** (`src/ui/match.js`) : un bandeau minimal en haut (tour, acte,
+  chaleur, et des boutons-icônes pour les objectifs, les routes de victoire, le journal, la caméra), **une fiche
+  compacte de chaque côté** (PV, momentum, souffle, cœur, énergie, deux ou trois statuts ; l'annonce de l'adversaire
+  sous la sienne ; un clic déplie les stats et le gimmick), le **plateau au centre**, et **la main en bas** : de
+  vraies cartes avec leur coût en pastille, un pictogramme de type, le nom, les chiffres, les effets (étourdit,
+  recul, ligne, zone), la condition s'il y en a une, la précision sur la meilleure cible — grisées avec leur raison
+  quand elles ne se jouent pas. Le journal tient en une ligne sous le plateau.
+- **La caméra suit l'action** : elle cadre le ring et les lutteurs debout au lieu de l'aréna entière, et se recentre
+  quand ça change (pas à chaque rendu, pour ne pas voler la vue). Caméra **isométrique** (rotation par quarts de
+  tour, touche R) ou **vue de dessus** ; molette ou pincement pour zoomer, glisser pour déplacer la vue.
+- **Du retour** : le sprite touché clignote, l'écran tremble sur un critique, une chute ou un finisher.
+- Une seule interface, qui se replie : sur un écran étroit ou bas, les fiches passent par-dessus le plateau et se
+  réduisent à l'essentiel ; en portrait, le bandeau passe sur deux lignes et la main prend toute la largeur. Le
+  jeu se joue mieux en **paysage** ; un rappel s'affiche en portrait.
 - Le jeu se présente comme une **émission de catch du samedi soir filmée en pixel** : contours d'encre, ombres dures,
   aplats saturés, lignes de balayage, voyant « ON AIR ».
 - **Sprites 24×32 en SVG**, personne n'est dessiné à la main : un lutteur est *composé* depuis sa description `look`
@@ -315,7 +350,7 @@ src/main.js                   navigation entre écrans
 src/pwa.js                    service worker, bouton d'installation
 src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Dijkstra)
              battle.js        état de match, actions, dégâts, tombés, soumissions, whip, armes/DQ, tag,
-                              escalade, managers, arbitre, double équipe, phases (le gros fichier)
+                              escalade, managers, arbitre, double équipe, intention annoncée, phases
              hand.js          la main, le talon, la défausse, l'énergie et le coût des cartes
              wear.js          l'usure par membre
              ai.js            IA : évalue chaque tuile atteignable × chaque action × chaque cible
@@ -324,7 +359,8 @@ src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Di
              rules.js         conditions de victoire, limite de temps
              rng.js, util.js  RNG à seed, helpers
 src/data/    wrestlers.js     les 33 fiches (30 jouables + 3 PNJ), dont le `look` des sprites
-             moves.js         les 131 mouvements
+             moves.js         les 134 mouvements
+             references.js    qui parodie qui (temporaire, voir « Visages de référence »)
              classes.js       classes et spécialités
              gimmicks.js      les passifs (hooks appelés par le moteur)
              matchTypes.js    les 13 stipulations, armes
@@ -343,16 +379,16 @@ src/game/    state.js         la carrière : argent, fans, entraînement, exploi
              script.js        évaluation des directives et des scripts (étoiles)
 src/ui/      title.js         écran titre, vestiaire
              hub.js           la carte, l'entraînement, le deck, l'historique
-             match.js         l'écran de match
+             match.js         l'écran de match : la main, les fiches, le plateau cadré sur l'action
              cards.js, dom.js fiches de lutteur, helpers DOM
-             tutorial.js      les 16 pages
+             tutorial.js      les 17 pages
              sound.js         tout l'audio
              spriteart.js     les planches de pixels (grilles de caractères)
              spritepixel.js   palette, postures, vêtements, rendu SVG
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        19 fichiers node:test, 196 tests
+tests/                        22 fichiers node:test, 216 tests
 docs/                         le journal de conception
 ```
 
@@ -366,6 +402,24 @@ des fins par soumission, taux de ceinture sur cent carrières…).
 2. Son gimmick dans `src/data/gimmicks.js` (n'importe quel sous-ensemble de hooks).
 3. Sa fiche dans `src/data/wrestlers.js`, avec son `look`. Base, classe et spécialité sont automatiques.
 4. Sa condition de déblocage dans `src/game/unlocks.js`, sinon il n'apparaît qu'en exhibition.
+
+## Visages de référence (temporaire)
+
+Le roster actuel parodie de vrais lutteurs, et **les personnages originaux de la v1 le remplaceront**. En attendant,
+pour reconnaître qui est qui, un réglage de l'écran titre — *Visages de référence*, éteint par défaut — fait
+télécharger **sur l'appareil** la photo de chaque lutteur parodié :
+
+- l'**API publique de Wikipédia** donne l'image de chaque page (un seul appel groupé), et celle de **Wikimedia
+  Commons** l'auteur et la licence (un second) ;
+- seules les images **sous licence libre** sont gardées (celles de Commons) ; une image téléversée sur Wikipédia
+  même, en usage loyal, est écartée ;
+- elles sont mises en cache dans le navigateur, donc visibles **hors ligne**, avec leur **auteur et leur licence**
+  affichés sous la photo, dans la fiche d'un lutteur (exhibition, nouvelle saison) ;
+- éteindre le réglage **efface tout**.
+
+**Rien n'est dans le dépôt ni sur GitHub Pages** : chaque appareil va chercher ce qu'il affiche, et un test
+(`tests/visages.test.js`) interdit toute photo dans git. Un lutteur dont l'image n'est pas libre n'a simplement pas
+de photo. À retirer avec le roster : `src/data/references.js`, `src/ui/visages.js`, le réglage de `title.js`.
 
 ## Idées pour la suite
 

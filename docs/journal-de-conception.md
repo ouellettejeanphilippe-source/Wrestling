@@ -65,6 +65,99 @@ La réponse est celle du genre : le tour d'un **deck-builder**, sur la grille de
 Ce qui reste : le retour visuel d'un coup, la carrière en équipe (la double équipe n'existe qu'à plusieurs, et la
 carrière est celle d'un seul lutteur), et le match à relais, encore à 30 tours.
 
+## Octobre 2026 — l'adversaire annonce son coup
+
+La direction, dite en une phrase : *Fights in Tight Spaces*, en grand espace et avec les props. Le tour de
+deck-builder était là ; il manquait le puzzle — et le puzzle de ce genre, c'est **l'intention annoncée** (Slay the
+Spire, Fights in Tight Spaces, Into the Breach). Un adversaire dont on ne sait rien est un dé.
+
+Au début du tour du joueur, chaque adversaire debout annonce la première carte qu'il jouera, sur qui, et d'où :
+bulle au-dessus du pion, case d'arrivée et case visée marquées, fiche avec dégâts et précision prévus. Pour ça, sa
+main du tour suivant est tirée **à la fin de sa phase** (`handReady`), pas au début de la suivante. Il n'annonce
+que sa première carte : le reste, il le joue en réaction.
+
+**Trois essais, mesurés sur 60 matchs IA contre IA** (l'IA « joueur » ne lit pas les bulles — tout écart vient
+donc du mécanisme, pas de l'esquive) :
+
+| | victoires de l'adversaire | coups dans le vide par match | joueur passif tient |
+| --- | --- | --- | --- |
+| sans annonce (référence) | 27 / 60 | — | 20,7 tours |
+| annonce *récitée* (la case promise, puis la carte) | **13 / 60** | 2,5 | — |
+| annonce planifiée avec les drapeaux du tour précédent | 17 / 60 | 0,4 | 25,4 → 21,3 une fois corrigé |
+| annonce **visée** (carte et cible tenues, meilleure case recalculée) | **28 / 60** | 0,25 | 20,8 tours |
+
+Les deux pièges : le déplacement annoncé, *récité* sur des positions qui avaient bougé d'une case, n'arrivait plus à
+portée — le coup partait dans le vide sans que personne n'ait esquivé. Et l'annonce était planifiée avec les
+drapeaux de la phase qui venait de finir (`moved`, `acted`) : la moitié des bulles disaient « il souffle » alors
+qu'il allait frapper. Il **vise** maintenant : la carte et la cible sont tenues, la case d'où partir est la
+meilleure au moment de jouer, et l'esquive se gagne en sortant de tout ce qu'il peut atteindre, pas en faisant un
+pas. L'adversaire est exactement aussi fort qu'avant contre qui ne lit pas les bulles — et plus faible contre qui
+les lit, ce qui est le but.
+
+Le coup dans le vide coûte la carte, son énergie et la moitié de son souffle ; celui qui l'a vu venir gagne 6 de
+momentum, la salle chauffe.
+
+## Octobre 2026 — l'écran de match, reconstruit autour de la main
+
+Le constat, fait sur captures : l'écran était un *Fire Emblem* — sélectionner un lutteur, le déplacer, un menu
+contextuel, une catégorie, une liste, une cible, une confirmation : **six couches pour jouer une carte**, dans un
+jeu devenu un deck-builder. Les cartes étaient des boutons gris dans un panneau, cachées derrière « Votre main »,
+elle-même cachée derrière un clic sur le lutteur. Le plateau était un petit losange perdu dans du violet, avec
+dix boutons en haut, les fiches répétées, les objectifs, les routes, le journal : tout à la même taille.
+
+La réponse, dans la direction *Fights in Tight Spaces* :
+
+- **La main est en bas, toujours visible**, en vraies cartes : coût en pastille, pictogramme de type, nom, chiffres,
+  effets, condition, précision sur la meilleure cible. Grisées avec leur raison quand elles ne se jouent pas.
+- **Un clic sur la carte, un clic sur la cible.** Plus de menu, de catégorie ni de confirmation. Le lutteur actif se
+  choisit tout seul (le premier qui peut encore jouer) ; se déplacer, c'est cliquer une case bleue quand aucune
+  carte n'est levée. La prévision s'affiche sous la fiche de la cible.
+- **Le plateau est cadré sur l'action**, pas sur l'aréna entière : le ring et les lutteurs debout, recentré quand
+  la boîte change (pas à chaque rendu, pour ne pas voler la vue).
+- **Deux fiches compactes** (vous à gauche, eux à droite avec leur annonce) au lieu de quatre panneaux ; le gimmick
+  et les stats se déplient d'un clic. Un bandeau d'icônes ; objectifs, routes et journal en panneaux à la demande ;
+  le journal en une ligne sous le plateau.
+- **Du retour** : le sprite touché clignote, l'écran tremble sur un critique, une chute ou un finisher.
+- **Une seule interface** : sur un écran bas ou étroit, les fiches passent par-dessus le plateau et se réduisent à
+  l'essentiel ; en portrait, le bandeau passe sur deux lignes.
+
+Trois pièges de la réécriture, tous trouvés au premier rendu : des constantes locales lues avant d'être déclarées
+(le démarrage vit maintenant en fin de fonction) ; `Element.append` qui écrit « [object HTMLDivElement] » pour un
+tableau et « null » pour une branche vide (d'où l'aide `put`) ; et une pastille de coût rognée par un conteneur à
+défilement. Vérifié à 1280×800, 1024×640, 844×390 et 390×844, et en deux contre deux.
+
+**Ce que l'écran a rendu visible, sans le corriger** : au tour 1, trois cartes sur cinq sont grisées, parce que le
+momentum (5) ne débloque ni les cartes de classe (25) ni celles de spécialité (45). Dans un deck-builder, une carte
+en main devrait se jouer pour son énergie. À mesurer avant de toucher — le momentum ouvre aujourd'hui des paliers
+qui existaient quand on choisissait dans un menu.
+
+## Octobre 2026 — le momentum se détend, trois cartes qui ne frappent pas, des visages sur l'appareil
+
+**Le momentum ne verrouille plus la main.** L'écran de match refait a rendu visible ce que les chiffres cachaient :
+au tour 1, trois cartes sur cinq étaient grisées (classe à 25, spécialité à 45, momentum à 5). Dans un deck-builder,
+c'est l'énergie qui limite ce qu'on joue. Mesuré sur 80 matchs IA contre IA avant/après : 12 tours contre 12, 29
+coups contre 30, note 3,4 contre 3,3, adversaire à 41 victoires sur 80 contre 38 — l'IA trouvait déjà quoi jouer,
+c'était le joueur qui voyait les cartes grises. Seules la signature et le finisher restent derrière la jauge.
+Effet de bord, et une bonne surprise : les cartes lourdes (powerbomb, body slam…) n'ont pas de pas d'approche, donc
+un pas de côté les envoie dans le vide quand l'adversaire arrive au bout de son déplacement (une fois sur quatre).
+Avant, seuls les coups de base existaient à ce stade, et ils rattrapaient toujours.
+
+**Trois cartes qui ne frappent personne.** Un deck de coups est un menu : on joue le meilleur. Dans Slay the Spire,
+un tiers du paquet ne fait pas de dégâts, et c'est ce tiers qui fait les décisions. 🛡️ *Se couvrir* (le prochain
+coup reçu fait moitié moins), 🏃 *Reprendre sa course* (redonne le déplacement, +2 cases) et 🧠 *Plan de match*
+(pioche deux cartes), à ⚡1 chacune, une par classe, offertes aussi après un match. Sans score d'IA elles seraient
+tombées dans la branche « presque rien » et restées mortes dans la main adverse : l'IA les joue (1,6 couverture,
+0,5 reprise de course et 0,2 plan de match par match), sans changer l'équilibre (13 tours, 30 coups, 39 victoires
+sur 80).
+
+**Des visages, sur l'appareil.** Le roster parodie de vrais lutteurs et sera remplacé par des personnages originaux
+avant la v1 ; en attendant, pour les reconnaître, un réglage de l'écran titre (éteint par défaut) télécharge leur
+photo **sur l'appareil**, depuis l'API publique de Wikipédia et de Commons, en ne gardant que les images sous
+licence libre, avec leur auteur. Rien dans le dépôt ni sur GitHub Pages. Un premier jet en script local a été
+abandonné après avoir épuisé le quota de l'API en boucle (trente appels un par un ; l'API groupée en demande
+deux) ; la version de l'application fait deux appels groupés et une image par lutteur. Le service worker purgeait
+tous les caches sauf le sien à chaque activation : il épargne maintenant celui des visages.
+
 ---
 
 # Parodie Pro Wrestling Tactics

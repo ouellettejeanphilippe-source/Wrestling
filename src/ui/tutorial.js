@@ -22,15 +22,15 @@ const PAGES = [
     ],
   },
   {
-    title: 'Le momentum ouvre vos options',
+    title: 'Le momentum ouvre vos gros coups',
     icon: '⚡',
     body: () => [
-      h('p', {}, 'Chaque lutteur a une jauge de momentum de 0 à 100. Elle monte quand vous frappez, quand vous encaissez, quand vous provoquez, et elle ouvre des paliers de mouvements de plus en plus forts.'),
+      h('p', {}, 'Chaque lutteur a une jauge de momentum de 0 à 100. Elle monte quand vous frappez, quand vous encaissez, quand vous provoquez. Elle n’ouvre plus que vos deux plus gros coups : la signature et le finisher. Tout ce que vous piochez se joue pour son énergie, jamais pour sa jauge.'),
       h('table', { class: 'tut-table' },
         h('tr', {}, ['Palier', 'Ouvert à', 'Coût'].map((x) => h('th', {}, x))),
-        [['Base : coup de poing, prise, Irish Whip, provoquer', 'base'], ['Mouvements de classe', 'class'], ['Mouvements de spécialité', 'specialty'], ['Signature', 'signature'], ['Finisher', 'finisher']]
+        [['Ce qu’on pioche : fondamentaux, classe, spécialité, cartes tactiques', 'base'], ['Signature', 'signature'], ['Finisher', 'finisher']]
           .map(([label, key]) => h('tr', {}, h('td', {}, label), h('td', {}, MOVE_TIERS[key].unlock ? `⚡ ${MOVE_TIERS[key].unlock}` : '—'), h('td', {}, MOVE_TIERS[key].cost ? `-${MOVE_TIERS[key].cost}` : 'gratuit')))),
-      h('p', {}, 'Les paliers donnent l’', h('b', {}, 'accès'), ' ; seuls le signature et le finisher ', h('b', {}, 'consomment'), ' la jauge. Provoquer est toujours gratuit et rapporte 30 : c’est un vrai choix tactique quand vous êtes à 80.'),
+      h('p', {}, 'Les paliers donnent l’', h('b', {}, 'accès'), ' ; seuls le signature et le finisher ', h('b', {}, 'consomment'), ' la jauge. Provoquer rapporte 30 : c’est un vrai choix tactique quand vous êtes à 80.'),
     ],
   },
   {
@@ -162,9 +162,27 @@ const PAGES = [
          ['Tombé, projection par-dessus la corde, arme, relais', '⚡1'],
          ['Souffler, double équipe, manager, rentrer dans le ring', 'ferme le tour']]
           .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, h('b', {}, 'Des cartes qui ne frappent pas.'), ' ', h('b', {}, '🛡️ Se couvrir'), ' : le prochain coup reçu fait moitié moins. ', h('b', {}, '🏃 Reprendre sa course'), ' : un nouveau déplacement, deux cases de plus — avant ou après un coup. ', h('b', {}, '🧠 Plan de match'), ' : pioche deux cartes. Chacune coûte ⚡1, et chaque classe en a une dans son kit.'),
       h('p', {}, h('b', {}, 'Le tour est le plan.'), ' Se déplacer, placer un coup qui étourdit, enchaîner avec la prise qui demande une cible étourdie : ça tient dans un seul tour. Ce qui n’est pas joué part à la défausse, et on revoit tout son deck tous les cinq tours — une carte apprise en carrière revient vite.'),
       h('p', {}, 'La ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
-      h('p', { class: 'muted' }, 'Après chaque carte, le menu se rouvre sur le même lutteur tant qu’il lui reste de l’énergie. ', h('b', {}, '⏳ Souffler'), ' ferme le tour et rend du souffle.'),
+      h('p', {}, h('b', {}, 'Pour jouer : un clic sur la carte, un clic sur la cible.'), ' La main est en bas, toujours visible ; cliquer une carte allume ses cibles, la prévision s’affiche à droite, cliquer la cible joue. Pour vous déplacer, cliquez une case bleue quand aucune carte n’est levée. Les touches ', h('b', {}, '1 à 7'), ' lèvent une carte, ', h('b', {}, 'Échap'), ' la baisse, ', h('b', {}, 'E'), ' finit le tour.'),
+      h('p', { class: 'muted' }, h('b', {}, '⏳ Souffler'), ' ferme le tour et rend du souffle. Une carte grisée dit pourquoi elle ne se joue pas.'),
+    ],
+  },
+  {
+    title: 'Il annonce son coup',
+    icon: '🎯',
+    body: () => [
+      h('p', {}, 'Au début de votre tour, chaque adversaire debout porte une ', h('b', {}, 'bulle'), ' : la première carte qu’il jouera à son prochain tour, et sur qui. Sur le plateau, sa case d’arrivée est marquée, et la case visée aussi. Sa fiche donne les dégâts et la précision prévus.'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Si vous…', 'Alors…'].map((x) => h('th', {}, x))),
+        [['restez là', 'il joue exactement ce qu’il a annoncé'],
+         ['faites un pas de côté', 'il vous rattrape : il vise, il ne récite pas'],
+         ['sortez de tout ce qu’il peut atteindre', h('b', {}, 'le coup part dans le vide'), ' — il perd la carte et son énergie, vous gagnez du momentum'],
+         ['vous placez devant une table ou les marches', 'son recul vous y envoie… ou vous y envoyez le suivant']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, 'C’est le puzzle de ', h('i', {}, 'Fights in Tight Spaces'), ' : le placement contre un coup annoncé, avec tout le décor pour s’en servir. Il n’annonce que sa ', h('b', {}, 'première'), ' carte — le reste de son tour, il le joue en réaction.'),
+      h('p', { class: 'muted' }, 'Survolez un adversaire pour lire son annonce en toutes lettres dans sa fiche.'),
     ],
   },
   {

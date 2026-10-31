@@ -1,10 +1,10 @@
 // Classes (style de lutte) : stats de base et mouvements de classe.
 export const CLASSES = {
-  powerhouse: { name: 'Force', icon: '💪', desc: 'Gros dégâts, encaisse bien, lent.', moves: ['bodyslam', 'clothesline', 'powerbomb', 'shoulder_block', 'gut_wrench', 'rib_breaker'], base: { hp: 120, str: 11, agi: 4, tec: 5, cha: 7, def: 8, mov: 3 } },
-  highflyer: { name: 'Voltigeur', icon: '🪽', desc: 'Rapide, esquive, plonge depuis les coins. Fragile.', moves: ['dropkick', 'hurricanrana', 'moonsault', 'rebound_clothesline', 'arm_drag', 'dragon_screw'], base: { hp: 85, str: 5, agi: 12, tec: 7, cha: 8, def: 4, mov: 5 } },
-  technician: { name: 'Technicien', icon: '🧠', desc: 'Précis, critiques, soumissions.', moves: ['suplex', 'ddt', 'armbar', 'headlock_takeover', 'chinlock', 'neckbreaker'], base: { hp: 100, str: 7, agi: 7, tec: 12, cha: 5, def: 7, mov: 4 } },
-  brawler: { name: 'Bagarreur', icon: '🥊', desc: 'Frappe fort, aime les armes, endurant.', moves: ['haymaker', 'chop', 'headbutt', 'lariat_run', 'back_rake', 'rib_breaker'], base: { hp: 110, str: 9, agi: 5, tec: 4, cha: 7, def: 6, mov: 4 } },
-  showman: { name: 'Vedette', icon: '🎤', desc: 'Génère momentum et chaleur, coups fourbes.', moves: ['pose', 'eyepoke', 'elbowdrop', 'irish_reversal', 'snapmare', 'neckbreaker'], base: { hp: 95, str: 7, agi: 7, tec: 6, cha: 12, def: 5, mov: 4 } },
+  powerhouse: { name: 'Force', icon: '💪', desc: 'Gros dégâts, encaisse bien, lent.', moves: ['bodyslam', 'clothesline', 'powerbomb', 'shoulder_block', 'gut_wrench', 'rib_breaker', 'brace'], base: { hp: 120, str: 11, agi: 4, tec: 5, cha: 7, def: 8, mov: 3 } },
+  highflyer: { name: 'Voltigeur', icon: '🪽', desc: 'Rapide, esquive, plonge depuis les coins. Fragile.', moves: ['dropkick', 'hurricanrana', 'moonsault', 'rebound_clothesline', 'arm_drag', 'dragon_screw', 'regroup'], base: { hp: 85, str: 5, agi: 12, tec: 7, cha: 8, def: 4, mov: 5 } },
+  technician: { name: 'Technicien', icon: '🧠', desc: 'Précis, critiques, soumissions.', moves: ['suplex', 'ddt', 'armbar', 'headlock_takeover', 'chinlock', 'neckbreaker', 'game_plan'], base: { hp: 100, str: 7, agi: 7, tec: 12, cha: 5, def: 7, mov: 4 } },
+  brawler: { name: 'Bagarreur', icon: '🥊', desc: 'Frappe fort, aime les armes, endurant.', moves: ['haymaker', 'chop', 'headbutt', 'lariat_run', 'back_rake', 'rib_breaker', 'brace'], base: { hp: 110, str: 9, agi: 5, tec: 4, cha: 7, def: 6, mov: 4 } },
+  showman: { name: 'Vedette', icon: '🎤', desc: 'Génère momentum et chaleur, coups fourbes.', moves: ['pose', 'eyepoke', 'elbowdrop', 'irish_reversal', 'snapmare', 'neckbreaker', 'game_plan'], base: { hp: 95, str: 7, agi: 7, tec: 6, cha: 12, def: 5, mov: 4 } },
 };
 
 // Spécialités : deuxième jeu de mouvements. Chaque liste s'est allongée —
@@ -17,6 +17,6 @@ export const SPECIALTIES = {
   striker: { name: 'Frappeur', icon: '🦵', desc: 'Coups précis qui étourdissent.', moves: ['roundhouse', 'kneestrike', 'running_knee', 'irish_reversal', 'shin_breaker'] },
   cheater: { name: 'Tricheur', icon: '😈', desc: 'Coups bas et arbitre distrait.', moves: ['lowblow', 'distract', 'back_rake', 'snapmare'] },
   giant: { name: 'Colosse', icon: '🗿', desc: 'Chokeslam et bottes.', moves: ['chokeslam', 'bigboot', 'shoulder_block', 'avalanche', 'shin_breaker'] },
-  speed: { name: 'Vitesse', icon: '⚡', desc: 'Attaques à distance et plongeons vers l’extérieur.', moves: ['baseballslide', 'dive', 'slingshot_senton', 'running_knee'] },
+  speed: { name: 'Vitesse', icon: '⚡', desc: 'Attaques à distance et plongeons vers l’extérieur.', moves: ['baseballslide', 'dive', 'slingshot_senton', 'running_knee', 'regroup'] },
   mic: { name: 'Micro', icon: '📣', desc: 'Promos qui gonflent l’équipe et rabaissent l’adversaire.', moves: ['promo', 'insult', 'snapmare', 'running_elbow'] },
 };

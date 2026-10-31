@@ -22,6 +22,16 @@ export const MOVES = {
   taunt: { tier: 'base', name: 'Provoquer', type: 'taunt', range: [0, 0], momentum: 30, desc: '+30 momentum, chauffe la foule. Effets bonus selon le gimmick.' },
   whip: { tier: 'base', name: 'Irish Whip', type: 'special', stat: 'str', acc: 90, range: [1, 1], momentum: 5, step: 1, desc: "Projette l'adversaire 2 cases. Cordes = étourdi, coin/marches/table = gros dégâts." },
 
+  // ---- Les cartes tactiques ------------------------------------------------
+  // Elles ne frappent personne : elles changent le tour. C'est ce qui manquait
+  // à un deck qui n'était fait que de coups — dans Slay the Spire un tiers du
+  // paquet ne fait pas de dégâts (garde, pioche, énergie), et c'est ce tiers
+  // qui fait les décisions. `tactic` dit ce que la carte fait ; `energy` fixe
+  // son prix ; `blurb` est la ligne affichée sur la carte.
+  brace: { tier: 'class', name: 'Se couvrir', type: 'tactic', tactic: 'guard', energy: 1, range: [0, 0], momentum: 0, blurb: '🛡️ prochain coup reçu −50 %', desc: 'On se ramasse et on encaisse : le prochain coup reçu avant votre prochain tour fait moitié moins.' },
+  regroup: { tier: 'class', name: 'Reprendre sa course', type: 'tactic', tactic: 'regroup', energy: 1, range: [0, 0], momentum: 0, bonusMov: 2, blurb: '🏃 se déplacer de nouveau, +2 cases', desc: 'Redonne le droit de se déplacer, avec deux cases de plus. Avant ou après un coup : c’est ce qui permet de frapper, de sortir de la ligne, puis de revenir.' },
+  game_plan: { tier: 'class', name: 'Plan de match', type: 'tactic', tactic: 'draw', energy: 1, range: [0, 0], momentum: 0, draw: 2, blurb: '🧠 pioche 2 cartes', desc: 'On lit l’adversaire et on repense son tour : pioche deux cartes de plus.' },
+
   // ---- La course ----------------------------------------------------------
   // Ces mouvements n'existent pas à l'arrêt : `ran` est un interrupteur, pas
   // un bonus. C'est la moitié du vocabulaire du catch qui ne s'ouvre qu'en
@@ -212,10 +222,16 @@ export const MOVE_TIER_LABEL = { base: 'Base', class: 'Classe', specialty: 'Spé
 
 // Échelle de momentum : chaque palier se débloque à un seuil et coûte du momentum à l'usage.
 // Les provocations (type taunt) sont toujours gratuites. Un mouvement peut surcharger unlock / cost.
+//
+// LA CLASSE ET LA SPÉCIALITÉ NE DEMANDENT PLUS DE JAUGE (elles étaient à 25 et 45). Depuis que le
+// tour est celui d'un deck-builder, c'est l'ÉNERGIE qui limite ce qu'on joue ; au tour 1, avec 5 de
+// momentum, trois cartes sur cinq étaient grisées. Mesuré sur 80 matchs : 12 tours, 29 coups, note
+// 3,4 — contre 12, 30 et 3,3 avant. L'IA trouvait déjà quoi jouer ; c'est le joueur qui le voyait.
+// Seules la signature et le finisher restent derrière la jauge.
 export const MOVE_TIERS = {
   base: { unlock: 0, cost: 0 },
-  class: { unlock: 25, cost: 0 },
-  specialty: { unlock: 45, cost: 0 },
+  class: { unlock: 0, cost: 0 },
+  specialty: { unlock: 0, cost: 0 },
   signature: { unlock: 60, cost: 40 },
   finisher: { unlock: 100, cost: 100 },
 };

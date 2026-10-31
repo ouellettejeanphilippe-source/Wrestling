@@ -8,11 +8,13 @@ import { CLASSES } from '../data/classes.js';
 import { EXHIBITION_TYPES } from '../data/campaign.js';
 import { load } from '../game/state.js';
 import { MANAGER_LIST, MANAGERS } from '../data/managers.js';
+import { REFERENCES } from '../data/references.js';
 import { loadRivalries, rivalryFor } from '../game/rivalry.js';
 import { showTutorial } from './tutorial.js';
 import { soundOn, setSound, play } from './sound.js';
 import { loadProgress, locker, UNLOCKS, isUnlocked, resetProgress } from '../game/unlocks.js';
 import { EVENT as INSTALLABLE, canInstall, promptInstall, isInstalled, needsIosHint } from '../pwa.js';
+import { visagesOn, activerVisages, desactiverVisages } from './visages.js';
 
 // Bouton d'installation : présent seulement quand le navigateur a vraiment de
 // quoi installer. Sur iOS il n'y a pas d'événement — l'installation passe par
@@ -48,6 +50,23 @@ function soundToggle() {
   return b;
 }
 
+// LES VISAGES DE RÉFÉRENCE. Éteints par défaut : les allumer télécharge, sur cet
+// appareil seulement, la photo libre de chaque lutteur parodié (Wikipédia et
+// Commons), avec son auteur. Les éteindre efface tout. Voir `ui/visages.js`.
+function visagesToggle(root, app) {
+  const on = visagesOn();
+  const b = h('button', { class: 'btn big', title: 'Télécharge sur cet appareil la photo (libre de droits) des lutteurs que le jeu parodie, pour les reconnaître. Rien ne passe par le dépôt ni par le site.',
+    onclick: async () => {
+      b.disabled = true;
+      try {
+        if (on) { await desactiverVisages(); toast('Visages effacés de cet appareil'); }
+        else { b.textContent = '⏳ Téléchargement…'; const n = await activerVisages(); toast(`${n} visage${n > 1 ? 's' : ''} libre${n > 1 ? 's' : ''} sur ${Object.keys(REFERENCES).length} téléchargé${n > 1 ? 's' : ''} sur cet appareil`); }
+      } catch (e) { toast(`Impossible : ${e.message}`, 'warn'); }
+      showTitle(root, app);
+    } }, on ? '🖼️ Visages de référence : activés' : '🖼️ Visages de référence : éteints');
+  return b;
+}
+
 export function showTitle(root, app) {
   clear(root);
   const saved = load();
@@ -58,6 +77,7 @@ export function showTitle(root, app) {
     h('button', { class: 'btn big', onclick: () => showLocker(root, app) }, `🔒 Vestiaire (${loadProgress().wrestlers.length}/29)`),
     h('button', { class: 'btn big', onclick: () => showTutorial(root, {}) }, '📖 Comment jouer'),
     soundToggle(),
+    visagesToggle(root, app),
     installButton(),
   );
   root.append(h('div', { class: 'title' },
