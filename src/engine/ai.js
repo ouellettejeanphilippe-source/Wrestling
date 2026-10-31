@@ -138,6 +138,14 @@ function scoreAction(battle, unit, pos, a, tg) {
         case 'regroup': return (unit.moved && !enemies.some((e) => !e.down && !e.eliminated && manhattan(e, pos) === 1)) ? E(24) : null;
         // Repenser son tour : quand la main s'est vidée, pas quand elle est pleine.
         case 'draw': return (unit.hand || []).length <= 3 && (unit.energy ?? 3) >= 2 ? E(22) : E(5);
+        // SE SOIGNER : quand on est amoché, et plus on l'est plus ça vaut.
+        case 'heal': return hpRatio(unit) < 0.55 ? E(20 + (1 - hpRatio(unit)) * 60) : null;
+        // CHAUFFER LA SALLE : seulement avec de quoi garder la signature derrière
+        // (70 de momentum, la carte en coûte 40), de l'énergie pour frapper
+        // ensuite, et quelqu'un à portée. Sans ça, l'IA brûlait sa jauge et ne
+        // sortait plus ses gros coups.
+        case 'hype': return unit.momentum >= 70 && (unit.energy ?? 3) >= 2 && proches > 0 ? E(28) : null;
+        case 'feint': return unit.momentum >= 45 && (unit.energy ?? 3) >= 2 && enemies.some((e) => !e.down && !e.eliminated && manhattan(e, pos) <= 2) ? E(16) : null;
         default: return null;
       }
     }

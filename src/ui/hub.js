@@ -6,7 +6,7 @@ import { MATCH_TYPES } from '../data/matchTypes.js';
 import { DIRECTIVES } from '../data/directives.js';
 import { SEASON } from '../data/campaign.js';
 import { CLASSES, SPECIALTIES } from '../data/classes.js';
-import { currentShow, weekNodes, ensureRoute, takeNode, careerRun, partnerOffer, train, trainCost, TRAINABLE, MAX_TRAIN, TRAIN_COST, TRAIN_STEP } from '../game/state.js';
+import { currentShow, weekNodes, ensureRoute, takeNode, careerRun, partnerOffer, train, trainCost, TRAINABLE, MAX_TRAIN, TRAIN_COST, TRAIN_STEP, STABLE_MAX, FATIGUE_MAX, FATIGUE_HP, fatigueOf, fatigueHp, recruitOffer, recruit, validateTeam, isTitleMatch } from '../game/state.js';
 import { NODE_TYPES, SEMAINE_TITRE, isFight, isSolo, rankStep } from '../game/route.js';
 import { restOptions, restTrain, restTrim, restGate, trimmable, eventFor, applyEvent, shopStock, buyCard, buyTrain, buyAds, SHOP_PRICES, SHOP_FANS } from '../game/week.js';
 import { rankLabel, titleTerms, championName, rankOf } from '../game/rank.js';
@@ -38,7 +38,7 @@ export function showHub(root, app, tab = 'show') {
     h('span', { class: 'terms' }, `${t.icon} ${t.name} — ${t.odds}`),
     h('span', { class: 'muted' }, 'Chaque victoire vous fait monter d’une place, chaque défaite en fait perdre une. Vous aurez votre match de titre quoi qu’il arrive : c’est votre classement qui en fixe les conditions.'),
   ));
-  const tabs = h('nav', { class: 'tabs' }, [['show', '📺 Le show'], ['roster', '🧑‍🤝‍🧑 Votre lutteur'], ['history', '📜 Historique']].map(([id, label]) =>
+  const tabs = h('nav', { class: 'tabs' }, [['show', '📺 Le show'], ['roster', `🧑‍🤝‍🧑 Votre écurie (${st.roster.length}/${STABLE_MAX})`], ['history', '📜 Historique']].map(([id, label]) =>
     h('button', { class: `tab ${tab === id ? 'on' : ''}`, onclick: () => showHub(root, app, id) }, label)));
   const body = h('div', { class: 'hub-body' });
   if (tab === 'show') body.append(renderShow(show, st, app, root));
@@ -187,7 +187,7 @@ function renderShop(node, st, app, root) {
 function choisirLutteur(root, app, st, titre, suite) {
   overlayChoix(root, titre, st.roster.map((r) => ({
     label: `${(WRESTLERS_BY_ID[r.id] || {}).name || r.id}`,
-    hint: `${r.wins}V-${r.losses}D · deck ${deckSize(r)}`,
+    hint: `${r.wins}V-${r.losses}D · deck ${deckSize(r)}${fatigueOf(r) ? ` · 😮‍💨 fatigue ${fatigueOf(r)}` : ''}`,
     onPick: () => suite(r),
   })));
 }
@@ -220,7 +220,7 @@ function matchCard(m, st, app, root, node = null) {
     h('h3', {}, `${rules.icon} ${m.title}`, h('span', { class: 'muted' }, ` — ${rules.name}, ${m.teamSize} de vos lutteurs`)),
     m.termsLabel ? h('p', { class: `terms-line terms-${m.terms}` }, m.termsLabel) : null,
     node && node.type === 'elite' ? h('p', { class: 'terms-line terms-net' }, `⭐ Main event — une victoire vaut ${rankStep('elite')} places au classement.`) : null,
-    node && node.type === 'tag' ? h('p', { class: 'terms-line terms-avantage' }, '🤝 Match par équipes — il vous faut un partenaire pour ce soir. Jamais obligatoire : une autre porte de la semaine se joue seul.') : null,
+    node && node.type === 'tag' ? h('p', { class: 'terms-line terms-avantage' }, '🤝 Match par équipes — les vôtres d’abord, un partenaire d’un soir pour les places qu’il vous reste. Jamais obligatoire : une autre porte de la semaine se joue seul.') : null,
     h('p', {}, m.desc), h('p', { class: 'muted small' }, rules.desc),
     h('div', { class: 'opps' }, 'Adversaires : ', opp.map((d) => h('span', { class: 'opp', title: d.bio }, chip(d), ` ${d.name} (${CLASSES[d.cls].icon} ${CLASSES[d.cls].name} / ${SPECIALTIES[d.spec].icon} ${SPECIALTIES[d.spec].name})`))),
     m.reinforcements ? h('p', { class: 'small' }, `🚨 Renforts : ${m.reinforcements.map((r) => `tour ${r.turn} (${r.enemies.map((e) => WRESTLERS_BY_ID[e].name).join(', ')})`).join(' · ')}`) : null,
@@ -229,38 +229,58 @@ function matchCard(m, st, app, root, node = null) {
       : h('div', { class: 'script-box' }, h('b', {}, '📺 Directives du Network : '), m.directives.map((d) => h('div', { class: 'obj-item' }, `⬜ ${DIRECTIVES[d].name} — ${DIRECTIVES[d].desc} (+${DIRECTIVES[d].reward.fans} fans, +${DIRECTIVES[d].reward.money} $)`))),
     h('p', { class: 'reward' }, `Récompense de base : ${m.reward.money} $ · ${m.reward.fans} fans`),
   );
-  // LE PARTENAIRE D'UN SOIR. Votre lutteur est toujours de la partie — c'est sa
-  // carrière. Ce qui se choisit, ce sont les places EN PLUS, et elles se
-  // remplissent avec les lutteurs qu'on a débloqués au vestiaire : chaque nom
-  // gagné sert donc deux fois, une carrière et un renfort.
-  const moi = st.roster[0];
-  const places = Math.max(0, m.teamSize - 1);
-  const partenaires = new Set();
+  // L'ÉQUIPE DE CE SOIR. On choisit d'abord parmi les VÔTRES — c'est ce qui
+  // rend l'écurie utile : en solo, qui monte sur le ring (et qui se repose) ;
+  // à plusieurs, qui accompagne qui. Les places qu'on ne peut pas remplir se
+  // comblent avec un partenaire d'un soir, parmi les lutteurs débloqués au
+  // vestiaire : il vient pour la soirée, il ne rejoint pas la carrière.
+  // Le soir du titre, la tête d'affiche est obligatoire : c'est sa ceinture.
+  const taille = m.teamSize;
+  const titre = isTitleMatch(st, m);
+  const siens = new Set(), invites = new Set();
+  const reposes = [...st.roster].sort((a, b) => fatigueOf(a) - fatigueOf(b) || (a.id === st.headliner ? -1 : 1));
+  // Par défaut : en solo, le plus reposé ; sinon la tête d'affiche.
+  siens.add(titre || taille > 1 ? st.headliner : reposes[0].id);
+  const offre = taille > 1 ? partnerOffer(st, node || { row: st.path.length, col: 0 }, loadProgress().wrestlers, 4) : [];
   const teamBox = h('div', { class: 'team-pick' });
-  if (places > 0) {
-    const offre = partnerOffer(st, node || { row: st.path.length, col: 0 }, loadProgress().wrestlers, 4);
-    teamBox.append(h('div', { class: 'muted' }, `🤝 ${WRESTLERS_BY_ID[moi.id].name} + ${places} partenaire${places > 1 ? 's' : ''} pour ce soir :`));
-    if (!offre.length) {
-      teamBox.append(h('p', { class: 'muted small' }, 'Personne de disponible : débloquez d’autres lutteurs au vestiaire pour pouvoir faire équipe.'));
-    }
-    teamBox.append(h('div', { class: 'team-list' }, offre.map((id) => {
-      const d = WRESTLERS_BY_ID[id];
-      const b = h('button', { class: 'tp', onclick: () => {
-        if (partenaires.has(id)) partenaires.delete(id);
-        else if (partenaires.size < places) partenaires.add(id);
-        else return toast(`Il n’y a que ${places} place${places > 1 ? 's' : ''}`, 'warn');
-        b.classList.toggle('on', partenaires.has(id));
-      } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${SPECIALTIES[d.spec].icon}`));
-      return b;
+  const total = () => siens.size + invites.size;
+  const peindre = () => {
+    clear(teamBox);
+    teamBox.append(h('div', { class: 'muted' }, `🧑‍🤝‍🧑 Votre équipe ce soir — ${total()}/${taille}${titre ? ' · la tête d’affiche est obligatoire' : ''}`));
+    teamBox.append(h('div', { class: 'team-list' }, st.roster.map((r) => {
+      const d = WRESTLERS_BY_ID[r.id], f = fatigueOf(r);
+      const verrou = titre && r.id === st.headliner;
+      return h('button', { class: `tp${siens.has(r.id) ? ' on' : ''}`, title: f ? `Fatigue ${f}/${FATIGUE_MAX} : −${Math.round(f * FATIGUE_HP * 100)} % PV` : 'Reposé', onclick: () => {
+        if (verrou) return toast('La tête d’affiche ne manque pas son match de titre', 'warn');
+        if (siens.has(r.id)) siens.delete(r.id);
+        else if (taille === 1) { siens.clear(); siens.add(r.id); }
+        else if (total() >= taille) return toast(`Il n’y a que ${taille} places`, 'warn');
+        else siens.add(r.id);
+        peindre();
+      } }, chip(d), ` ${d.name} `, h('small', {}, `${r.id === st.headliner ? '⭐ ' : ''}${f ? `😮‍💨 −${Math.round(f * FATIGUE_HP * 100)} % PV` : '✔ reposé'}${verrou ? ' 🔒' : ''}`));
     })));
-    teamBox.append(h('p', { class: 'muted small' }, 'Un partenaire vient pour la soirée : il ne rejoint pas votre carrière, il ne s’entraîne pas, et il ne gagne pas de carte.'));
-  } else {
-    teamBox.append(h('div', { class: 'muted' }, `Un contre un : ${WRESTLERS_BY_ID[moi.id].name} y va seul.`));
-  }
-  teamBox.append(h('button', { class: 'btn primary', onclick: () => {
-    if (partenaires.size !== places) return toast(`Choisissez ${places} partenaire${places > 1 ? 's' : ''}`, 'warn');
-    app.bookMatch(m, [moi.id, ...partenaires], node);
-  } }, '🔔 Booker ce match'));
+    if (taille > 1) {
+      teamBox.append(h('div', { class: 'muted small' }, 'Un partenaire d’un soir, pour combler :'));
+      if (!offre.length) teamBox.append(h('p', { class: 'muted small' }, 'Personne de disponible : débloquez d’autres lutteurs au vestiaire, ou signez-en dans l’onglet de l’écurie.'));
+      teamBox.append(h('div', { class: 'team-list' }, offre.map((id) => {
+        const d = WRESTLERS_BY_ID[id];
+        return h('button', { class: `tp${invites.has(id) ? ' on' : ''}`, onclick: () => {
+          if (invites.has(id)) invites.delete(id);
+          else if (total() >= taille) return toast(`Il n’y a que ${taille} places`, 'warn');
+          else invites.add(id);
+          peindre();
+        } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${SPECIALTIES[d.spec].icon}`));
+      })));
+      teamBox.append(h('p', { class: 'muted small' }, 'Un partenaire vient pour la soirée : il ne s’entraîne pas, ne gagne pas de carte, et ne se fatigue pas.'));
+    }
+    teamBox.append(h('button', { class: 'btn primary', onclick: () => {
+      const ids = [...[...siens].sort((a, b) => (a === st.headliner ? -1 : b === st.headliner ? 1 : 0)), ...invites];
+      const v = validateTeam(st, m, ids);
+      if (!v.ok) return toast(v.reason, 'warn');
+      app.bookMatch(m, ids, node);
+    } }, '🔔 Booker ce match'));
+  };
+  peindre();
   card.append(teamBox);
   return card;
 }
@@ -289,12 +309,15 @@ function renderUnlocks(ouverts) {
 }
 
 function renderRoster(st, app, root) {
-  const box = h('div', {}, h('p', { class: 'muted' }, `Entraînement : +1 stat (ou +10 PV) pour ${TRAIN_COST} $, puis ${TRAIN_STEP} $ de plus à chaque fois — maximum ${MAX_TRAIN} par stat. Tout maximiser est hors de portée d’une carrière : choisissez ce que votre lutteur devient. Il guérit entièrement entre les shows.`));
+  const box = h('div', {}, h('p', { class: 'muted' }, `Entraînement : +1 stat (ou +10 PV) pour ${TRAIN_COST} $, puis ${TRAIN_STEP} $ de plus à chaque fois — maximum ${MAX_TRAIN} par stat. Tout maximiser est hors de portée d’une carrière : choisissez ce que vos lutteurs deviennent. Ils guérissent entièrement entre les shows, mais pas de la fatigue : chaque match d’affilée ôte ${Math.round(FATIGUE_HP * 100)} % de PV (trois niveaux au plus), une semaine sans match en rend un, une semaine off les rend tous.`));
   const cards = h('div', { class: 'cards' });
   for (const r of st.roster) {
     const d = WRESTLERS_BY_ID[r.id];
     const cost = trainCost(r);
-    const extra = h('div', { class: 'train' }, h('div', { class: 'muted small' }, `Fiche : ${r.wins} victoire(s), ${r.losses} défaite(s) · Entraînement : ${cost} $`),
+    const f = fatigueOf(r);
+    const extra = h('div', { class: 'train' },
+      h('div', { class: 'muted small' }, `${r.id === st.headliner ? '⭐ Tête d’affiche — c’est sa carrière, et il est obligatoire le soir du titre. ' : ''}${f ? `😮‍💨 Fatigue ${f}/${FATIGUE_MAX} : −${Math.round(f * FATIGUE_HP * 100)} % PV au prochain match.` : '✔ Reposé.'}`),
+      h('div', { class: 'muted small' }, `Fiche : ${r.wins} victoire(s), ${r.losses} défaite(s) · Entraînement : ${cost} $`),
       h('div', { class: 'train-btns' }, TRAINABLE.map(([k, label, step]) => {
         const lvl = r.bonus[k] / step;
         return h('button', { class: 'btn small', disabled: lvl >= MAX_TRAIN || st.money < cost, onclick: () => { const res = train(st, r.id, k); if (!res.ok) return toast(res.reason, 'warn'); app.saveNow(); toast(`+${step} ${label} pour ${d.name}`); showHub(root, app, 'roster'); } }, `+${step} ${label} (${lvl}/${MAX_TRAIN})`);
@@ -320,6 +343,31 @@ function renderRoster(st, app, root) {
     cards.append(wrestlerCard(d, { bonus: r.bonus, extra }));
   }
   box.append(cards);
+  box.append(renderRecruit(st, app, root));
+  return box;
+}
+
+// SIGNER UN LUTTEUR. On n'y trouve que ceux qu'on a débloqués au vestiaire, à
+// la moitié de leur salaire de fiche — de l'argent qu'on ne met pas à
+// l'entraînement. Mesuré sur 60 carrières : l'écurie ne bat ni n'écrase la
+// tête d'affiche seule (37 % de ceintures contre 33 %, à six points près) ;
+// c'est une manière de jouer, pas la bonne.
+function renderRecruit(st, app, root) {
+  const box = h('div', { class: 'recruit' }, h('h3', {}, `✍️ Signer un lutteur (${st.roster.length}/${STABLE_MAX})`));
+  if (st.roster.length >= STABLE_MAX) { box.append(h('p', { class: 'muted' }, `Écurie complète : ${STABLE_MAX} lutteurs, pas un de plus.`)); return box; }
+  const dispo = loadProgress().wrestlers;
+  const offre = recruitOffer(st, dispo);
+  box.append(h('p', { class: 'muted small' }, 'Un lutteur signé s’entraîne, apprend ses cartes et monte sur le ring quand vous le décidez. Il coûte la moitié de son salaire de fiche. Seuls ceux que vous avez débloqués au vestiaire sont à signer.'));
+  if (!offre.length) { box.append(h('p', { class: 'muted' }, 'Personne à signer : débloquez d’autres lutteurs au vestiaire.')); return box; }
+  box.append(h('div', { class: 'team-list' }, offre.map((o) => {
+    const d = WRESTLERS_BY_ID[o.id];
+    return h('button', { class: 'tp', disabled: st.money < o.cost, title: d.bio, onclick: () => {
+      if (!confirm(`Signer ${d.name} pour ${o.cost} $ ?`)) return;
+      const res = recruit(st, o.id, dispo);
+      if (!res.ok) return toast(res.reason, 'warn');
+      app.saveNow(); toast(res.message); showHub(root, app, 'roster');
+    } }, chip(d), ` ${d.name} `, h('small', {}, `${CLASSES[d.cls].icon} ${SPECIALTIES[d.spec].icon} · ${o.cost} $`));
+  })));
   return box;
 }
 

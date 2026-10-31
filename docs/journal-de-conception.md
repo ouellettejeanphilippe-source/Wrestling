@@ -158,6 +158,48 @@ abandonné après avoir épuisé le quota de l'API en boucle (trente appels un p
 deux) ; la version de l'application fait deux appels groupés et une image par lutteur. Le service worker purgeait
 tous les caches sauf le sien à chaque activation : il épargne maintenant celui des visages.
 
+## Octobre 2026 — le momentum se dépense, un coup a du poids, une carrière a une écurie
+
+Trois demandes à la suite, après avoir dit ce qui restait à faire : un rôle pour le momentum, du retour visuel, une
+carrière en équipe.
+
+**Le momentum se dépense.** Entre la signature (60) et le finisher (100) la jauge ne servait plus à rien. Trois
+cartes tactiques se paient en momentum en plus de leur point d'énergie : *Second souffle* (30 : +18 % PV, +35
+souffle), *La foule se lève* (40 : le prochain coup fait 50 % de plus, prévision de combat comprise) et *Feinte*
+(20 : +25 de précision, pas de renversement). L'IA se soigne amochée, ne chauffe la salle qu'avec 70 de momentum (de
+quoi garder la signature derrière — sans ce seuil elle brûlait sa jauge et ne sortait plus ses gros coups) et feinte à
+portée. Mesuré sur 80 matchs : 14 tours, 32 coups, 40 victoires adverses ; les soins n'allongent pas les matchs d'un
+joueur passif (0,04 soin par match).
+
+**Un coup a du poids.** Le moteur émet un événement `attack` (qui frappe qui, d'où, de quelle nature) avant les
+dégâts. L'écran en tire l'élan de l'attaquant, le recul de la cible, une onomatopée en étoile, et la carte qui
+file de la main à la cible. Les animations passent par la propriété `translate` (Web Animations) : elle s'applique
+*avant* la contre-rotation isométrique du pion, donc on ne touche jamais à son `transform` ; le vecteur d'écran est
+ramené dans le repère du plateau (l'inverse de « aplatir par deux puis tourner de 45° »). Deux défauts trouvés en
+les regardant, présents depuis longtemps : l'onomatopée et les textes flottants étaient *derrière* les sprites
+(z-index 10 contre 10 + x + y), et l'animation des textes avait `rotate(-45deg)` en dur, donc ils se couchaient
+dès qu'on tournait la caméra.
+
+**Une écurie.** Une carrière commence avec la tête d'affiche et peut signer jusqu'à deux lutteurs débloqués, à la
+moitié de leur salaire de fiche. À chaque match on choisit l'équipe ; un partenaire d'un soir comble les places
+vides ; le soir du titre la tête d'affiche est obligatoire (« gagner la ceinture avec X » doit rester vrai). Le
+moteur savait déjà tout faire avec plusieurs lutteurs (bonus, deck et cartes sont par lutteur) : il manquait le
+recrutement, le choix de l'équipe, et surtout **une raison de faire tourner**. Sans elle le meilleur lutteur
+faisait tous les matchs. La **fatigue** : un niveau par match joué (trois au plus), −7 % de PV par niveau, un niveau
+de moins au vestiaire, tous à zéro après une semaine off.
+
+| soixante carrières, mêmes graines | ceinture |
+| --- | --- |
+| tête d'affiche seule, avec fatigue | 33 % |
+| écurie qui recrute et fait tourner, avec fatigue | **37 %** |
+| tête d'affiche seule, sans fatigue | 37 % |
+| écurie, sans fatigue | **30 %** |
+
+Les écarts sont dans la marge d'erreur (environ six points), mais le renversement est net : **sans fatigue, signer
+coûtait de l'argent et ne rapportait rien**. La fatigue est ce qui donne un sens à l'écurie — et elle pénalise le
+solo en retour (−15 % de PV de moyenne en match pour qui fait toujours lutter la même). Aucune des deux manières
+n'écrase l'autre, ce qui est le but.
+
 ---
 
 # Parodie Pro Wrestling Tactics

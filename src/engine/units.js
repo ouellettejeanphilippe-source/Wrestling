@@ -83,6 +83,8 @@ export function createUnit(def, team, x, y, opts = {}) {
     // Les cartes tactiques : une garde qui absorbe le prochain coup, et des
     // cases de déplacement en plus pour le prochain déplacement (voir `doTactic`).
     guard: false, bonusMov: 0,
+    // Ce que les cartes à momentum préparent pour le PROCHAIN coup du tour.
+    hyped: false, feint: false,
     // En double équipe : il a donné son tour pour enchaîner sur les coups de
     // ses partenaires (voir `battle.js`, doubleEquipe).
     teamwork: false,

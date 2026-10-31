@@ -252,6 +252,9 @@ input[type=text]:focus, select:focus { outline: none; border-color: var(--gold);
 .team-list { display: flex; flex-wrap: wrap; gap: 7px; }
 .tp { background: var(--panel); color: var(--text); border: 3px solid var(--ink); padding: 4px 10px 4px 4px; display: inline-flex; align-items: center; gap: 7px; box-shadow: var(--pop-sm); }
 .tp.on { background: var(--gold); color: var(--ink); }
+.tp:disabled { opacity: 0.45; cursor: not-allowed; }
+.tp small { opacity: 0.85; }
+.recruit { margin-top: 14px; border-top: 3px dashed var(--panel3); padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
 .history { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .history th { background: var(--ink); color: var(--gold); text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.06em; }
 .history th, .history td { border-bottom: 2px solid var(--panel3); padding: 7px 9px; text-align: left; }
@@ -524,7 +527,7 @@ body.in-match #app { height: 100dvh; padding: 22px 12px 10px; overflow: hidden; 
 /* ---------------- textes qui giclent (façon onomatopée) */
 .float {
   position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
-  font-family: var(--display); font-size: 0.72rem; pointer-events: none; z-index: 10;
+  font-family: var(--display); font-size: 0.72rem; pointer-events: none; z-index: 200;
   animation: floatUp 1.3s steps(8) forwards; white-space: nowrap;
   -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill;
 }
@@ -865,11 +868,13 @@ button, .cell, .unit, .pm { touch-action: manipulation; }
 }
 
 .view-iso .float { animation-name: floatUpIso; transform-origin: 50% 100%; }
+/* `--iso-out` suit l'angle de la caméra (voir .board-wrap.view-iso) : écrire
+   `rotate(-45deg)` en dur couchait les textes dès qu'on tournait la vue. */
 @keyframes floatUpIso {
-  0% { opacity: 0; transform: rotate(-45deg) scaleY(2) translate(-50%, 8px) scale(0.6); }
-  15% { opacity: 1; transform: rotate(-45deg) scaleY(2) translate(-50%, -6px) scale(1.15); }
-  30% { transform: rotate(-45deg) scaleY(2) translate(-50%, -14px) scale(1); }
-  100% { opacity: 0; transform: rotate(-45deg) scaleY(2) translate(-50%, -46px) scale(1); }
+  0% { opacity: 0; transform: var(--iso-out) translate(-50%, 8px) scale(0.6); }
+  15% { opacity: 1; transform: var(--iso-out) translate(-50%, -6px) scale(1.15); }
+  30% { transform: var(--iso-out) translate(-50%, -14px) scale(1); }
+  100% { opacity: 0; transform: var(--iso-out) translate(-50%, -46px) scale(1); }
 }
 
 @media (max-width: 800px) {
@@ -1333,6 +1338,23 @@ body.in-match #app { padding: 6px 8px 6px; }
 /* ---- retour : un sprite touché clignote */
 .unit.hit .avatar-wrap { animation: hitflash 0.32s steps(4); }
 @keyframes hitflash { 0%, 50% { filter: brightness(3) saturate(0) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff); } 100% { filter: none; } }
+/* L'impact : une onomatopée en étoile, qui claque puis s'efface. `scale` plutôt
+   que `transform`, pour ne pas écraser la contre-rotation isométrique. */
+.impact {
+  position: absolute; left: 50%; top: 18%; z-index: 200; pointer-events: none; white-space: nowrap;   /* au-dessus des pions (z-index 10 + x + y) */
+  translate: -50% 0; padding: 7px 14px; font-family: var(--display); font-size: 0.66rem; line-height: 1;
+  color: var(--ink); background: var(--gold);
+  clip-path: polygon(0 22%, 12% 0, 30% 14%, 50% 0, 70% 14%, 88% 0, 100% 22%, 92% 50%, 100% 78%, 86% 100%, 66% 86%, 50% 100%, 32% 86%, 14% 100%, 0 78%, 8% 50%);
+  animation: impactPop 0.5s steps(5) forwards;
+}
+.impact.big { background: var(--red); color: #fff; font-size: 0.82rem; padding: 10px 18px; }
+@keyframes impactPop { 0% { scale: 0.3; opacity: 0; } 20% { scale: 1.35; opacity: 1; } 60% { scale: 1; opacity: 1; } 100% { scale: 1.05; opacity: 0; } }
+.view-iso .impact { transform-origin: 50% 100%; transform: var(--iso-out); }
+/* Un finisher blanchit la scène une fraction de seconde. */
+.m-scene::after { content: ''; position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 30; }
+.m-scene.flashed::after { animation: sceneFlash 0.3s steps(3); }
+@keyframes sceneFlash { 0% { opacity: 0.75; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .impact { animation: none; opacity: 0; } .m-scene.flashed::after { animation: none; } }
 .cell.via::after { box-shadow: inset 0 0 0 3px #7cc6ff; background: #3fa9f533; }
 .cell.target.pending::after { box-shadow: inset 0 0 0 5px #fff, inset 0 0 0 8px var(--gold); }
 

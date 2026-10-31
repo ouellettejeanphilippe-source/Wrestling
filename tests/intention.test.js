@@ -98,7 +98,7 @@ test('un pas de côté ne suffit pas : il vise, il ne récite pas', () => {
   // de la lecture de placement, et c'est voulu : les coups de base, eux, ont
   // un pas et rattrapent toujours.
   let touches = 0, n = 0;
-  for (let seed = 1; seed <= 12; seed++) {
+  for (let seed = 1; seed <= 40; seed++) {
     const b = mk(['jean_sina'], ['gunter'], seed);
     const p = b.units.find((u) => u.team === 'player'), e = b.units.find((u) => u.team === 'enemy');
     const it = e.intent;

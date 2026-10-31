@@ -21,7 +21,7 @@ dans le code sont dans [`CLAUDE.md`](CLAUDE.md).
 
 ```bash
 npm start          # serveur statique sur http://localhost:8080
-npm test           # 216 tests du moteur (node:test), ~45 s
+npm test           # 239 tests du moteur (node:test), ~50 s
 ```
 
 (ou n'importe quel serveur statique à la racine du dépôt : `python3 -m http.server 8080`).
@@ -61,17 +61,15 @@ annonce. Tout l'avantage va à qui les lit.
 
 Ce qui reste à faire, par ordre d'importance :
 
-1. **Du retour à l'écran, encore.** Le sprite clignote et l'écran tremble, mais un coup n'a toujours pas
-   d'animation : pas de carte qui file vers la cible, pas de bump, pas de couverture à l'image. Et les props
-   méritent plus : une table qui se voit casser, des marches qui font mal.
-2. **Le momentum n'ouvre plus que la signature et le finisher.** Il ne fait donc plus grand-chose entre les deux :
-   une jauge qui monte toute seule, sans rien de plus à décider. Des cartes qui *dépensent* du momentum pour un
-   effet (un coup amélioré, une pioche, un tombé plus facile) lui rendraient un rôle.
-3. **La carrière en équipe.** La double équipe n'existe qu'à plusieurs, et la carrière reste celle d'un seul
-   lutteur : les nœuds 🤝 et l'exhibition la font jouer, pas la route. Une carrière d'écurie, c'est la suite
-   logique de *Chroma Squad*.
-4. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
+1. **Des personnages originaux.** Le roster parodie de vrais lutteurs et sera remplacé avant la v1 (voir
+   « Visages de référence »). C'est le plus gros chantier restant : sprites, gimmicks, cartes signatures.
+2. **Le match par équipes à relais** reste une forme longue (30 tours en médiane) : quatre corps, le coin qui
    soigne, le partenaire illégal qui attend. À resserrer.
+3. **Le reste du retour visuel.** Un coup a maintenant du poids (élan, recul, onomatopée, carte qui file), mais
+   une chute, une couverture et une table qui casse n'ont toujours que leur texte flottant et leur pose. Les
+   déplacements se font par téléportation d'une case à l'autre.
+4. **Une difficulté qui monte entre les carrières** (l'Ascension de *Slay the Spire*), maintenant que l'écurie
+   donne au joueur de quoi s'adapter.
 
 
 Les sections qui suivent décrivent les règles en place ; ce tableau dit ce qu'elles donnent une fois assemblées.
@@ -97,8 +95,9 @@ adverse « travaille » le match, mais un **shoot** reste possible.
 
 ## La carrière
 
-**Un lutteur, huit semaines, une ceinture au bout.** Sept nœuds de route, puis le **Championnat du Monde** contre
-The Roc. La carrière se termine toujours par ce match, gagné ou perdu, et le show continue après une défaite : ce
+**Une tête d'affiche, une écurie qui grandit, huit semaines, une ceinture au bout.** Sept nœuds de route, puis le
+**Championnat du Monde** contre The Roc. On commence avec un seul lutteur — la tête d'affiche, celle dont
+dépendent les déblocages — et on peut en signer jusqu'à deux autres (voir « L'écurie »). La carrière se termine toujours par ce match, gagné ou perdu, et le show continue après une défaite : ce
 qui se paie, c'est le public (−14 % de fans) et le classement.
 
 ### La route — une carte à embranchements
@@ -110,7 +109,7 @@ pointe, et on choisit.
 | --- | --- |
 | 🤼 **Match** | un match écrit, solo : une victoire, une place au classement |
 | ⭐ **Main event** | un adversaire classé, renforcé (+10 PV, +1 partout) : **deux places** si on gagne, une seule perdue sinon |
-| 🤝 **Par équipes** | un match 2c2 ou 3c3 avec un **partenaire d'un soir** choisi parmi les lutteurs débloqués ; jamais imposé — chaque nœud mène à au moins une porte solo |
+| 🤝 **Par équipes** | un match 2c2 ou 3c3 avec les vôtres et, si besoin, un **partenaire d'un soir** choisi parmi les lutteurs débloqués ; jamais imposé — chaque nœud mène à au moins une porte solo |
 | 🛋️ **Semaine off** | une séance d'entraînement offerte, une carte oubliée, ou un house show |
 | ❓ **En coulisses** | un angle, deux portes, jamais gratuit |
 | 💼 **Bureau du booker** | acheter une carte, une séance, de l'affichage |
@@ -128,6 +127,25 @@ le soir du titre fixe **les conditions** du match, jamais s'il a lieu :
 | **1ᵉʳ prétendant** | un contre un, match propre |
 | **2ᵉ à 5ᵉ** | un contre un, mais le champion a choisi la date et l'arbitre : +25 PV, +1 partout |
 | **6ᵉ et en dessous** | il amène son homme de main ; amenez le vôtre |
+
+### L'écurie — jusqu'à trois lutteurs
+
+Onglet **Votre écurie** du hub. On y **signe** des lutteurs parmi ceux qu'on a débloqués au vestiaire, à la moitié
+de leur salaire de fiche (250 à 1 000 $) : c'est de l'argent qu'on ne met pas à l'entraînement. Chacun s'entraîne,
+apprend ses cartes et tient sa fiche de son côté.
+
+À **chaque match**, on choisit qui monte sur le ring : en solo, lequel des trois ; à plusieurs, qui accompagne
+qui, et un **partenaire d'un soir** (parmi les lutteurs débloqués) comble les places qu'on ne remplit pas. Les
+partenaires d'un soir ne s'entraînent pas, n'apprennent rien et ne se fatiguent pas.
+
+**La fatigue est ce qui donne un sens à la rotation.** Un lutteur qui lutte prend un niveau (trois au plus) et perd
+7 % de PV par niveau ; un lutteur qui reste au vestiaire en perd un ; une semaine sans match en rend un à tous,
+une **semaine off les rend tous**. Le soir du titre, **la tête d'affiche est obligatoire** : si elle a lutté toute
+la route, elle y arrive à −21 %. Se reposer avant le titre est un plan.
+
+Mesuré sur 60 carrières par politique : tête d'affiche seule **33 %** de ceintures, écurie qui recrute et fait
+tourner **37 %** (à six points près) ; **sans fatigue, c'était 37 contre 30** — signer coûtait sans rien rapporter.
+L'écurie est une manière de jouer, ni la bonne ni la mauvaise.
 
 ### Entre les matchs
 
@@ -180,10 +198,14 @@ carte apprise en carrière revient vite. **Tout est une carte**, coup de poing c
 plusieurs exemplaires. **Le tour est le plan** : une carte qui demande une cible étourdie se joue juste après le
 coup qui étourdit, dans le même tour.
 
-**Trois cartes ne frappent personne** : 🛡️ *Se couvrir* (le prochain coup reçu fait moitié moins), 🏃 *Reprendre sa
-course* (un nouveau déplacement, deux cases de plus, avant ou après un coup) et 🧠 *Plan de match* (pioche deux
-cartes). Chacune coûte ⚡1 ; chaque classe en a une dans son kit, et elles s'offrent aussi après un match de
-carrière. L'IA les joue.
+**Six cartes ne frappent personne.** Trois se paient en énergie seulement : 🛡️ *Se couvrir* (le prochain coup reçu
+fait moitié moins), 🏃 *Reprendre sa course* (un nouveau déplacement, deux cases de plus, avant ou après un coup)
+et 🧠 *Plan de match* (pioche deux cartes). Trois se paient **aussi en momentum** : 🩹 *Second souffle* (30 : +18 %
+de PV et +35 de souffle), 🔥 *La foule se lève* (40 : le prochain coup fait 50 % de plus, prévision comprise) et
+🎭 *Feinte* (20 : le prochain coup gagne 25 de précision et ne peut pas être renversé). C'est ce qui rend un rôle
+au momentum entre la signature (60) et le finisher (100) : le dépenser ici, c'est ne pas le garder pour le gros
+coup. Chacune coûte ⚡1 ; chaque classe en a au moins une dans son kit, elles s'offrent après un match de
+carrière, et l'IA les joue.
 
 Seuls la **signature** et le **finisher** ne se piochent pas : ils s'ouvrent au momentum (60 et 100) et le
 consomment. Tout le reste se joue pour son énergie, jamais pour sa jauge. Une carte `step: N` **emmène** son lutteur jusqu'à N cases vers la cible avant de frapper. Survoler
@@ -218,7 +240,7 @@ plancher (−7 % par tour) **et refroidit la salle** ; une seule case parcourue 
 | | momentum ⚡ | souffle 😮‍💨 |
 | --- | --- | --- |
 | sens | monte quand on frappe, encaisse, provoque | descend quand on frappe (4 à 22 selon le palier, +3 en courant) |
-| rôle | ouvre la signature (60) et le finisher (100), qui le dépensent ; tout le reste se joue pour son énergie | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
+| rôle | ouvre la signature (60) et le finisher (100), qui le dépensent, et paie trois cartes tactiques (20 à 40) ; tout le reste se joue pour son énergie | sous 25 : −25 % de dégâts, −10 de précision, plus de signature ni de finisher |
 | se refait | en frappant | +5 par tour, +14 si on a soufflé (attendre, provoquer) |
 
 ### Le sol, le cœur et le tombé
@@ -306,7 +328,7 @@ Deck de départ = fondamentaux (en plusieurs exemplaires) + classe + spécialit�
 | --- | --- |
 | 💪 Force, 🪽 Voltigeur, 🧠 Technicien, 🥊 Bagarreur, 🎤 Vedette | 🦅 Aérien, 🔗 Soumission, 🪑 Hardcore, 🦵 Frappeur, 😈 Tricheur, 🗿 Colosse, ⚡ Vitesse, 📣 Micro |
 
-Le catalogue compte **134 mouvements** (11 de base, 26 de classe dont 3 cartes tactiques, 28 de spécialité, 37 signatures, 32 finishers).
+Le catalogue compte **137 mouvements** (11 de base, 28 de classe, 29 de spécialité, 37 signatures, 32 finishers), dont **six cartes tactiques** qui ne frappent personne.
 Une partie du vocabulaire n'existe pas à l'arrêt : `requires: { ran: n }` exige n cases de course, `crossedRope`
 d'avoir traversé les cordes, `turnbuckle` d'être monté dans un coin, `targetDown` une cible au sol.
 
@@ -329,7 +351,11 @@ comprises.
 - **La caméra suit l'action** : elle cadre le ring et les lutteurs debout au lieu de l'aréna entière, et se recentre
   quand ça change (pas à chaque rendu, pour ne pas voler la vue). Caméra **isométrique** (rotation par quarts de
   tour, touche R) ou **vue de dessus** ; molette ou pincement pour zoomer, glisser pour déplacer la vue.
-- **Du retour** : le sprite touché clignote, l'écran tremble sur un critique, une chute ou un finisher.
+- **Du retour** : l'attaquant **s'élance** vers sa cible et le sprite touché **recule**, au pas de pixel ; une
+  **onomatopée en étoile** claque sur la case (POW, SLAM, BOOM, CRAC, CLANG, WHAM) ; **la carte jouée quitte la main
+  et file vers sa cible** ; un finisher blanchit la scène ; celui qui esquive un coup annoncé fait un saut de
+  côté. L'écran tremble sur un critique, une chute ou un finisher. Tout est coupé pour qui a demandé moins de
+  mouvement (`prefers-reduced-motion`).
 - Une seule interface, qui se replie : sur un écran étroit ou bas, les fiches passent par-dessus le plateau et se
   réduisent à l'essentiel ; en portrait, le bandeau passe sur deux lignes et la main prend toute la largeur. Le
   jeu se joue mieux en **paysage** ; un rappel s'affiche en portrait.
@@ -359,7 +385,7 @@ src/engine/  grid.js          terrain, aréna 20×16, gabarits, déplacement (Di
              rules.js         conditions de victoire, limite de temps
              rng.js, util.js  RNG à seed, helpers
 src/data/    wrestlers.js     les 33 fiches (30 jouables + 3 PNJ), dont le `look` des sprites
-             moves.js         les 134 mouvements
+             moves.js         les 137 mouvements
              references.js    qui parodie qui (temporaire, voir « Visages de référence »)
              classes.js       classes et spécialités
              gimmicks.js      les passifs (hooks appelés par le moteur)
@@ -388,7 +414,7 @@ src/ui/      title.js         écran titre, vestiaire
              avatar.js        enrobage DOM des sprites
 manifest.webmanifest, sw.js   installation et mode hors ligne
 icons/                        icônes d'application, générées par le moteur de sprites
-tests/                        22 fichiers node:test, 216 tests
+tests/                        24 fichiers node:test, 239 tests
 docs/                         le journal de conception
 ```
 
@@ -423,7 +449,8 @@ de photo. À retirer avec le roster : `src/data/references.js`, `src/ui/visages.
 
 ## Idées pour la suite
 
-- D'abord ce que dit la section « Où en est le jeu » : retour visuel, carrière en équipe, match à relais.
+- D'abord ce que dit la section « Où en est le jeu » : des personnages originaux, le match à relais, le reste du
+  retour visuel.
 - Une difficulté montante entre les runs (l'Ascension de *Slay the Spire*).
 - Jouer un match entièrement au clavier, rôles et labels ARIA.
 - Des cartes qui ne sont pas que des mouvements : une carte qui change une règle du match pour un tour.
