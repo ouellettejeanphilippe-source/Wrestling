@@ -4,7 +4,7 @@ import { PHASES } from '../engine/phases.js';
 import { COMBOS } from '../data/combos.js';
 import { MOVE_TIERS } from '../data/moves.js';
 import { MANAGER_LIST } from '../data/managers.js';
-import { HAND_SIZE } from '../engine/hand.js';
+import { HAND_SIZE, ENERGY_PER_TURN, ENERGY_BY_TIER } from '../engine/hand.js';
 
 const SEEN_KEY = 'ppw-tutorial-seen';
 export const tutorialSeen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch { return false; } };
@@ -15,7 +15,7 @@ const PAGES = [
     title: 'Un match, trois actes',
     icon: '🎬',
     body: () => [
-      h('p', {}, 'Le plateau se joue comme un Fire Emblem : chaque lutteur se déplace une fois, puis agit une fois. Mais un match de lutte n’est pas une bataille, c’est un spectacle. Il se raconte en trois actes, et le jeu suit ce rythme tout seul.'),
+      h('p', {}, 'Le plateau se joue comme un Chroma Squad : chaque lutteur se déplace une fois, puis joue ', h('b', {}, 'autant de cartes que son énergie le permet'), ' — trois points par tour. Mais un match de lutte n’est pas une bataille, c’est un spectacle. Il se raconte en trois actes, et le jeu suit ce rythme tout seul.'),
       h('div', { class: 'tut-phases' }, Object.values(PHASES).map((p) => h('div', { class: `tut-phase ${p.key}` },
         h('b', {}, `${p.icon} ${p.name}`), h('span', { class: 'tut-tag' }, p.tag), h('p', {}, p.desc)))),
       h('p', { class: 'muted' }, 'La phase est affichée en haut de l’écran pendant le match. Elle change selon le tour, la chaleur de la foule et l’usure des corps, pas selon un minuteur.'),
@@ -150,18 +150,36 @@ const PAGES = [
     ],
   },
   {
-    title: 'Vous ne choisissez pas, vous piochez',
+    title: 'Une main neuve, trois points d’énergie',
     icon: '🃏',
     body: () => [
-      h('p', {}, 'Un lutteur connaît une vingtaine de mouvements, mais il n’en a que ', h('b', {}, `${HAND_SIZE} en main`), ' à chaque tour. On ne choisit plus « le meilleur coup » — on joue ce qu’on a, et c’est ce qui force à s’adapter.'),
+      h('p', {}, 'Un lutteur connaît une vingtaine de mouvements, mais ', h('b', {}, `il en pioche ${HAND_SIZE} à chaque tour`), ', et il a ', h('b', {}, `${ENERGY_PER_TURN} points d’énergie ⚡`), ' pour les jouer. On ne choisit plus « le meilleur coup » — on joue ce qu’on a, dans l’ordre qu’on veut, jusqu’à ce que l’énergie soit à zéro.'),
       h('table', { class: 'tut-table' },
-        h('tr', {}, ['Ce qui se pioche', 'Ce qui ne se pioche jamais'].map((x) => h('th', {}, x))),
-        h('tr', {},
-          h('td', {}, 'Tout le reste : mouvements de classe, de spécialité, de course, des cordes, d’usure.'),
-          h('td', {}, h('b', {}, 'Les fondamentaux'), ' — coup de poing, prise, Irish Whip, provoquer — sont toujours là. Et la ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre.'))),
-      h('p', {}, h('b', {}, 'Ce que vous ne jouez pas, vous le gardez.'), ' C’est la règle qui compte : tenir son Lariat lancé pendant trois tours en cherchant ses quatre cases de course, c’est du catch. Une main rebattue à chaque tour, ce serait du hasard.'),
-      h('p', {}, 'Les cartes, le déplacement et l’histoire sont ', h('b', {}, 'la même affaire'), ' : une carte qui réclame de la course EST la raison de traverser le ring, et le coup qui en sort EST le moment qu’on racontera à la fin. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
-      h('p', { class: 'muted' }, 'Rien qui passe ? ', h('b', {}, '🔄 Jeter la main et repiocher'), ' : ça coûte le tour, mais ça rend du souffle comme une provocation. Le talon se reconstitue tout seul avec la défausse — on ne tombe jamais à court de son propre répertoire.'),
+        h('tr', {}, ['Carte', 'Coût'].map((x) => h('th', {}, x))),
+        [['Fondamentaux (coup de poing, prise, Irish Whip, provoquer) et mouvements de classe', `⚡${ENERGY_BY_TIER.base}`],
+         ['Mouvements de spécialité, signature', `⚡${ENERGY_BY_TIER.specialty}`],
+         ['Finisher', `⚡${ENERGY_BY_TIER.finisher} — le tour entier`],
+         ['Tombé, projection par-dessus la corde, arme, relais', '⚡1'],
+         ['Souffler, double équipe, manager, rentrer dans le ring', 'ferme le tour']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, h('b', {}, 'Le tour est le plan.'), ' Se déplacer, placer un coup qui étourdit, enchaîner avec la prise qui demande une cible étourdie : ça tient dans un seul tour. Ce qui n’est pas joué part à la défausse, et on revoit tout son deck tous les cinq tours — une carte apprise en carrière revient vite.'),
+      h('p', {}, 'La ', h('b', {}, 'signature'), ' et le ', h('b', {}, 'finisher'), ' ne se tirent pas au sort : c’est le momentum qui les ouvre. Survolez une carte : les cases qui la débloquent ', h('b', {}, 's’allument sur le plateau'), '.'),
+      h('p', { class: 'muted' }, 'Après chaque carte, le menu se rouvre sur le même lutteur tant qu’il lui reste de l’énergie. ', h('b', {}, '⏳ Souffler'), ' ferme le tour et rend du souffle.'),
+    ],
+  },
+  {
+    title: 'La double équipe',
+    icon: '🤝',
+    body: () => [
+      h('p', {}, 'À plusieurs, un lutteur peut ', h('b', {}, 'donner son tour'), ' pour se mettre en double équipe. Jusqu’à son prochain tour :'),
+      h('table', { class: 'tut-table' },
+        h('tr', {}, ['Ce qu’il donne', 'À qui'].map((x) => h('th', {}, x))),
+        [['Une case de déplacement en plus', 'à tout partenaire qui part d’à côté de lui'],
+         ['Un coup enchaîné (70 % d’un coup de poing, sans jet ni renversement)', 'sur tout adversaire adjacent à lui qu’un partenaire touche'],
+         ['+6 momentum tout de suite, +8 à chaque enchaînement', 'à lui-même']]
+          .map(([a, v]) => h('tr', {}, h('td', {}, a), h('td', {}, v)))),
+      h('p', {}, 'C’est le système de ', h('i', {}, 'Chroma Squad'), ' en version catch : on encercle, l’un tient la position et l’autre frappe, et les deux cognent. La prévision de combat annonce l’enchaînement avant de confirmer.'),
+      h('p', { class: 'muted' }, 'En match à relais, seul le lutteur légal peut s’y mettre : le partenaire sur le tablier n’est pas dans le ring. En un contre un, l’option n’existe pas.'),
     ],
   },
   {

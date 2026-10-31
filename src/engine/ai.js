@@ -1,12 +1,13 @@
 // IA ennemie : pour chaque tuile atteignable, évalue toutes les actions possibles et choisit la meilleure.
 import { manhattan, tileAt, isOutside, stepToward, heightAt, pathIn, occupies } from './grid.js';
-import { enemiesOf, hpRatio } from './util.js';
+import { enemiesOf, hpRatio, living } from './util.js';
 import { listActions, getReachable, hitChance, computeDamage, moveRange, tapChance, tossChance, subIsTheRoute, novelty, DAMAGE_SCALE } from './battle.js';
 import { movePart, wearFrom, wearOf, WEAR_MAX, WEAR_HURT, WEAR_BROKEN } from './wear.js';
 import { matchPhase } from './phases.js';
 import { MOVES } from '../data/moves.js';
 
 export function planUnit(battle, unit) {
+  const rules = battle.rules;
   const reach = getReachable(battle, unit);
   const tiles = unit.moved ? [reach.get(`${unit.x},${unit.y}`)] : [...reach.values()].filter((v) => !v.blocked);
   let best = null;
@@ -24,6 +25,16 @@ export function planUnit(battle, unit) {
         if (score == null) continue;
         score -= t.cost * 0.5;
         score += positional(battle, unit, pos, a);
+        // LE PARTENAIRE ILLÉGAL NE FRAPPE PAS, POINT. Le veto vivait dans le
+        // score du coup, AVANT les bonus de position : depuis le tablier, à
+        // côté d'un adversaire collé aux cordes, « se rapprocher » et « rester
+        // près de son partenaire » suffisaient à le repasser au-dessus du
+        // seuil — et l'Irish Whip, noté à part, n'avait pas de veto du tout.
+        // Tant qu'un tour ne valait qu'un coup, ça passait pour du catch ;
+        // avec trois cartes par tour, c'était 73 % de disqualifications. Le
+        // veto s'applique donc ici, sur le score FINAL, à tout ce qui vise un
+        // adversaire. Un arbitre distrait reste la seule exception.
+        if (rules.tag && !unit.legal && battle.refDistracted <= 0 && tg.unit && tg.unit.team !== unit.team) score = Math.min(score, 6);
         if (!best || score > best.score) {
           best = { score, moveTo: pos.x !== unit.x || pos.y !== unit.y ? pos : null, action: { id: a.id, target: tg.unit ? { unit: tg.unit } : null } };
         }
@@ -71,6 +82,11 @@ function scoreAction(battle, unit, pos, a, tg) {
       const near = enemies.filter((e) => !e.down && manhattan(e, pos) <= 2).length;
       let s = rules.victory === 'belt' ? 130 : hpRatio(unit) < 0.4 ? 160 : 45;
       s += unit.climb * 220 - near * 55;
+      // L'ADVERSAIRE EST AU SOL : C'EST MAINTENANT. Depuis qu'un coup ne fait
+      // plus redescendre (seule une chute le fait), l'échelon pris pendant
+      // qu'il est par terre reste acquis. L'IA préférait pourtant le marteler
+      // au sol — ce qui ne sert à rien dans un match sans tombé.
+      if (rules.victory === 'belt' && enemies.every((e) => e.eliminated || e.down || manhattan(e, pos) > 2)) s += 160;
       return E(s);
     }
     case 'tag': return E(hpRatio(unit) < 0.45 ? 220 : 8);
@@ -84,6 +100,10 @@ function scoreAction(battle, unit, pos, a, tg) {
     // Elle vit maintenant dans le repli, là où on ne va que si rien d'autre ne
     // vaut le coup.
     case 'redraw': return null;
+    // La double équipe n'est pas un coup qu'on compare à un coup : c'est ce
+    // qu'on fait du reste de son tour quand on est bien placé. Elle vit dans
+    // le repli, comme la défausse.
+    case 'teamwork': return null;
     // Le décompte qui monte est ce qui doit la ramener, pas une préférence
     // vague : à zéro c'est un tour perdu, à cinq c'est le match.
     case 'rollin': return E(8 + (unit.outsideCount || 0) * 48);
@@ -124,7 +144,9 @@ function scoreAction(battle, unit, pos, a, tg) {
     case 'pickup': return E(rules.dq ? 12 : 70);
     // Aller fouiller sous le ring : intéressant quand les armes sont légales,
     // et seulement si on n'est pas en train de se faire compter à l'extérieur.
-    case 'scavenge': return E(rules.dq ? 6 : rules.countOut > 0 ? 10 : 55);
+    // Et jamais pendant que l'adversaire monte à l'échelle : une chaise ne
+    // décroche pas la ceinture, un homme sous le ring non plus.
+    case 'scavenge': return E(enemies.some((e) => e.climb > 0) ? 4 : rules.dq ? 6 : rules.countOut > 0 ? 10 : 55);
     case 'special': {
       if (a.id === 'whip') return E(scoreWhip(battle, unit, pos, tg.unit));
       return E(tg.unit.momentum >= 50 ? 45 : 5);
@@ -138,7 +160,7 @@ function scoreAction(battle, unit, pos, a, tg) {
       // Faire le job, c'est perdre EXPRÈS — mais pas n'importe quand. On donne
       // la fin quand on est bien amoché et que le match a duré : un job au
       // troisième tour, c'est un mauvais match, et la note s'en ressent.
-      const pret = hpRatio(unit) < 0.4 && battle.turn >= 14;
+      const pret = hpRatio(unit) < 0.4 && battle.turn >= 6;      // la moitié d'un match au tour à énergie
       return E(pret ? 260 : 3);
     }
     default: {
@@ -177,7 +199,19 @@ function scoreAction(battle, unit, pos, a, tg) {
         if (m.type === 'weapon') s -= 30 * marge;
       }
       if (t.down && !(m.requires && m.requires.targetDown)) s *= 0.6;
-      if (t.climb > 0) s += 200;
+      // Dans un match à la ceinture, marteler un homme au sol n'use aucun cœur
+      // qui compte : la seule chose qui vaille, c'est l'échelle.
+      if (t.down && rules.victory === 'belt') s *= 0.4;
+      // Frapper un grimpeur ne le fait plus redescendre : il faut le METTRE
+      // AU SOL, ou le déplacer. Un coup de poing sur un homme à mi-échelle ne
+      // vaut que ce qu'il rapproche de la chute.
+      if (t.climb > 0) s += (dmg >= t.hp || (m.effects && (m.effects.push || m.effects.pull))) ? 220 : 50;
+      // ET DÉGAGER CELUI QUI BLOQUE L'ÉCHELLE. Un homme debout à côté de
+      // l'échelle empêche de monter ; un homme étourdi, repoussé ou au sol,
+      // non. Au pied de l'échelle, les coups qui font ça valent plus que les
+      // dégâts qu'ils infligent.
+      if (rules.victory === 'belt' && !t.down && manhattan(t, pos) === 1 && tileAt(battle.grid, pos.x, pos.y) === 'ladder'
+        && m.effects && (m.effects.daze || m.effects.push || m.effects.pull || dmg >= t.hp)) s += 70;
       // Attaquer sans être légal, c'est 25 % de DQ par coup. Un malus fixe ne
       // pesait rien face au score d'un gros mouvement : le partenaire illégal
       // entrait dans le ring à chaque tour et perdait le match. Avec des
@@ -354,6 +388,20 @@ function positional(battle, unit, pos, action = null) {
   // d'un grimpeur doit valoir plus que tout le reste.
   const grimpeur = enemiesOf(battle, unit).find((e) => e.climb > 0);
   if (grimpeur) s += Math.max(0, 90 - manhattan(grimpeur, pos) * 12);
+  // ON NE DESCEND PAS DE L'ÉCHELLE POUR ALLER CHERCHER UNE CHAISE. Un échelon
+  // acquis ne se perd plus qu'en tombant ou en bougeant — et l'IA bougeait :
+  // elle quittait l'échelle à mi-hauteur pour fouiller sous le ring, et les
+  // matchs d'échelle s'enlisaient jusqu'au chrono. Tant qu'on a un échelon, la
+  // seule case qui vaille est celle de l'échelle.
+  if (rules.victory === 'belt' && unit.climb > 0 && tileAt(g, pos.x, pos.y) !== 'ladder') s -= 150;
+  // ET ON NE S'ÉLOIGNE PAS DE L'ÉCHELLE POUR UNE CHAISE. Tracé sur les matchs
+  // gagnés en trois tours : le perdant partait ramasser une arme à cinq cases,
+  // l'autre montait deux fois sans être dérangé. Dans un match à la ceinture,
+  // la seule case qui compte est au centre, pour les deux.
+  if (rules.victory === 'belt') {
+    const echelle = findTile(g, 'ladder');
+    if (echelle) s -= Math.min(60, 7 * manhattan(pos, echelle));
+  }
   const near = enemiesOf(battle, unit).filter((e) => manhattan(e, pos) <= 4);
   if (near.length) {
     const mine = heightAt(g, pos.x, pos.y);
@@ -396,6 +444,11 @@ function fallback(battle, unit) {
   let goal = null;
   if (battle.rules.victory === 'belt') goal = findTile(g, 'ladder');
   else if (battle.rules.cage && hpRatio(unit) < 0.4) goal = nearestTile(g, unit, 'turnbuckle');
+  // Le partenaire illégal n'a qu'une destination : à côté de son partenaire,
+  // la main tendue. Marcher vers l'adversaire, c'est entrer dans le ring.
+  const legalMate = battle.rules.tag && !unit.legal
+    ? battle.units.find((v) => v.team === unit.team && v !== unit && !v.eliminated && v.legal) : null;
+  if (!goal && legalMate) goal = legalMate;
   if (!goal && enemies.length) {
     goal = enemies.slice().sort((a, b) => (b.down - a.down) || manhattan(a, unit) - manhattan(b, unit))[0];
   }
@@ -413,6 +466,15 @@ function fallback(battle, unit) {
   // ne sert à rien — il faut d'autres cartes. Si la jauge est basse, en
   // revanche, provoquer ouvre les paliers, qui eux ne se piochent pas.
   const jouable = actions.some((a) => a.ok && a.move && (unit.hand || []).includes(a.move.id));
+  // LA DOUBLE ÉQUIPE, quand elle peut servir : collé à un adversaire, avec un
+  // partenaire debout qui n'a pas encore joué cette phase (il profitera de
+  // l'enchaînement tout de suite) — ou qui jouera au tour suivant si on est
+  // le dernier à agir. Avant la provocation : un partenaire qui enchaîne vaut
+  // plus que trente points de jauge.
+  const equipe = actions.find((a) => a.type === 'teamwork' && a.ok);
+  const colle = enemies.some((e) => !e.down && !e.eliminated && manhattan(e, pos) === 1);
+  const partenaire = living(battle, unit.team).some((al) => al !== unit && !al.down && !al.eliminated);
+  if (equipe && colle && partenaire) return { moveTo, action: { id: 'teamwork', target: null }, score: 0 };
   const jeter = actions.find((a) => a.type === 'redraw' && a.ok);
   const taunts = actions.filter((a) => a.type === 'taunt' && a.ok).sort((a, b) => (b.move.momentum || 0) - (a.move.momentum || 0));
   if (!jouable && jeter && unit.momentum >= 40) return { moveTo, action: { id: 'redraw', target: null }, score: 0 };

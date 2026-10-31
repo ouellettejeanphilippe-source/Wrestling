@@ -60,6 +60,7 @@ export function unitCard(battle, u, opts = {}) {
   if (battle.rules.tag) st.push(u.legal ? '⭐ Légal' : '🚫 Non légal');
   if (battle.rules.countOut > 0 && u.outsideCount > 0) st.push(`⏱ Compte ${u.outsideCount}/${battle.rules.countOut}`);
   if (u.climb > 0) st.push(`🧗 Escalade ${u.climb}/2`);
+  if (u.teamwork) st.push('🤝 Double équipe : enchaîne sur les coups de ses partenaires');
   if (u.eliminated) st.push('❌ Éliminé');
   const diff = (k) => { const d = s[k] - u.stats[k]; return d ? h('small', { class: d > 0 ? 'up' : 'dn' }, ` (${d > 0 ? '+' : ''}${d})`) : null; };
   return h('div', { class: `ucard team-${u.team} ${opts.class || ''}` },
@@ -68,6 +69,7 @@ export function unitCard(battle, u, opts = {}) {
       h('div', {}, h('span', { class: 'lbl' }, 'PV'), bar(u.hp, u.maxHp, 'hpbar', `${u.hp}/${u.maxHp}`)),
       h('div', {}, h('span', { class: 'lbl' }, 'Momentum'), bar(u.momentum, 100, 'mombar ticks', `${u.momentum}/100`)),
       h('div', {}, h('span', { class: 'lbl' }, 'Cœur'), h('span', { class: 'hearts' }, '❤️'.repeat(u.grit) + '🖤'.repeat(Math.max(0, u.maxGrit - u.grit)))),
+      h('div', {}, h('span', { class: 'lbl' }, 'Énergie'), h('span', { class: 'energy-pips' }, Array.from({ length: u.maxEnergy || 3 }, (_, i) => h('i', { class: i < (u.energy ?? 0) ? 'on' : '' }, '⚡')), h('small', { class: 'muted' }, ` ${u.energy ?? 0}/${u.maxEnergy || 3}`))),
     ),
     h('div', { class: 'ustats' }, ['str', 'agi', 'tec', 'def', 'cha'].map((k) => h('span', {}, h('b', {}, STAT_LABELS[k]), ` ${s[k]}`, diff(k))), h('span', {}, h('b', {}, 'MOV'), ` ${moveRange(battle, u)}`)),
     st.length ? h('div', { class: 'ustatus' }, st.map((x) => h('span', {}, x))) : null,

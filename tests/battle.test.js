@@ -124,8 +124,9 @@ test('échelle de momentum : un mouvement coûte son palier et en rapporte s’i
   assert.ok(r.ok);
   if (r.hit) assert.ok(s.momentum >= 30 + MOVES.bodyslam.momentum, 'un mouvement de classe ne coûte rien et rapporte');
   else assert.equal(s.momentum, 30, 'un coup raté ne coûte rien non plus');
-  // Signature et finisher, eux, consomment la jauge.
-  s.acted = false; s.momentum = 100;
+  // Signature et finisher, eux, consomment la jauge. (Le finisher coûte
+  // aussi les trois points d'énergie du tour : on les lui rend.)
+  s.acted = false; s.momentum = 100; s.energy = 3;
   const f = executeAction(b, s, 'attitude_adjustment', { unit: j });
   assert.ok(f.ok);
   assert.ok(s.momentum < 100, 'le finisher dépense le momentum');
@@ -208,11 +209,23 @@ test('match d’échelle : trois échelons sans dégâts pour décrocher la cein
   assert.equal(climbNeeded(b), 2);
   executeAction(b, s, 'climb');
   assert.equal(s.climb, 1);
-  s.acted = false;
+  // UN COUP NE FAIT PLUS REDESCENDRE, UNE CHUTE OUI. Avec trois cartes par
+  // tour, « le moindre coup vous fait redescendre » voulait dire que personne
+  // ne montait jamais : l'adversaire avait toujours un coup à placer entre
+  // deux échelons, et la moitié des matchs d'échelle finissaient par un
+  // abandon ou au chrono. Il faut désormais METTRE AU SOL le grimpeur — ou le
+  // déplacer — pour lui faire perdre ses échelons. Un échelon coûte aussi
+  // deux points d'énergie : un par tour au plus.
+  s.acted = false; s.energy = 3;
   b.api.applyDamage(s, 5, findE(b, 'jobber_1'), {});
-  assert.equal(s.climb, 0, 'les dégâts font retomber');
+  assert.equal(s.climb, 1, 'un coup ne fait pas retomber');
+  // (Deux fois : « N'abandonne jamais » retient John Sena debout la première.)
+  b.api.applyDamage(s, s.hp, findE(b, 'jobber_1'), {});
+  b.api.applyDamage(s, s.hp, findE(b, 'jobber_1'), {});
+  assert.equal(s.climb, 0, 'une chute, oui');
+  s.down = false; s.hp = 50;
   const souffle = s.stamina;
-  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; executeAction(b, s, 'climb'); }
+  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; s.energy = 3; executeAction(b, s, 'climb'); }
   assert.ok(s.stamina < souffle, 'chaque échelon coûte du souffle');
   assert.ok(s.flags.belt);
   assert.equal(b.result.winner, 'player');
@@ -238,7 +251,7 @@ test('cage : évasion depuis un coin', () => {
   const b = mk('cage', ['jean_sina'], ['jobber_1']);
   const s = findP(b, 'jean_sina');
   place(s, 5, 3);
-  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; executeAction(b, s, 'climb'); }
+  for (let i = 0; i < climbNeeded(b); i++) { s.acted = false; s.energy = 3; executeAction(b, s, 'climb'); }
   assert.ok(s.flags.escaped);
   assert.equal(b.result.winner, 'player');
 });

@@ -36,7 +36,9 @@ export function checkWin(battle) {
   // un garde-fou plutôt qu'un arbitre. Sans limite, la médiane est de 39 tours
   // et le 90e centile de 59 : à 60, elle ne coupe plus qu'un match sur onze —
   // et un « Broadway » de temps en temps, c'est du vrai catch.
-  if (!winner && battle.turn > (battle.match.maxTurns || battle.rules.maxTurns || 60)) {
+  // Avec le tour à énergie, la médiane est tombée à 13 tours et aucun match
+  // simple sur soixante ne dépasse 40 : la limite suit, et reste un garde-fou.
+  if (!winner && battle.turn > (battle.match.maxTurns || battle.rules.maxTurns || 40)) {
     // Limite de temps : décision aux points (PV restants), pas une défaite automatique.
     const share = (team) => {
       const us = living(battle, team);
@@ -123,10 +125,10 @@ export function winRoutes(battle) {
     });
   }
   if (r.victory === 'belt') {
-    routes.push({ id: 'belt', icon: '🪜', name: 'Décrocher la ceinture', how: 'Montez sur l’échelle au centre du ring et grimpez deux tours de suite sans subir de dégâts.', state: '', ready: true });
+    routes.push({ id: 'belt', icon: '🪜', name: 'Décrocher la ceinture', how: 'Montez sur l’échelle au centre du ring et grimpez deux échelons (un par tour) sans être mis au sol ni projeté.', state: '', ready: true });
   }
   if (r.cage) {
-    routes.push({ id: 'escape', icon: '🧗', name: 'Évasion de la cage', how: 'Depuis un coin, escaladez deux tours de suite sans subir de dégâts.', state: '', ready: true });
+    routes.push({ id: 'escape', icon: '🧗', name: 'Évasion de la cage', how: 'Depuis un coin, trois échelons (un par tour) sans être mis au sol.', state: '', ready: true });
   }
   if (r.victory === 'survive') {
     routes.push({ id: 'survive', icon: '⏳', name: 'Survivre au chrono', how: `Tenez jusqu’au tour ${battle.match.turns} avec au moins un lutteur debout.`, state: `Tour ${battle.turn}/${battle.match.turns}`, ready: false });

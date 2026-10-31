@@ -30,7 +30,7 @@ export function rateMatch(battle) {
   const s = battle.stats;
   const varietes = new Set(battle.units.flatMap((u) => Object.keys(u.memory.used || {}))).size;
   let n = 0.4;
-  n += Math.min(1.3, battle.turn / 32);                       // la durée
+  n += Math.min(1.3, battle.turn / 14);                       // la durée (14 tours : un match plein, au tour à énergie)
   n += Math.min(1.0, all(b, 'nearfall').length * 0.3);        // les faux départs
   n += Math.min(0.7, (s.reversals || 0) * 0.2);               // les renversements
   n += Math.min(0.9, varietes / 26);                          // la variété

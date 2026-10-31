@@ -22,8 +22,11 @@ import { WEAR_BROKEN } from '../engine/wear.js';
 import { avgHeat } from '../engine/util.js';
 
 export const DIRECTIVES = {
-  fast: { final: true, name: 'Vite fait, bien fait', desc: 'Gagner en 22 tours ou moins.', check: (b) => b.turn <= 22, reward: { fans: 40, money: 150 } },
-  long: { final: true, name: 'Faites durer le plaisir', desc: 'Le match doit durer au moins 40 tours.', check: (b) => b.turn >= 40, reward: { fans: 40, money: 150 } },
+  // Recalibrées pour le tour à énergie : sur 80 matchs simples, le quart le
+  // plus court tient en 9 tours, la médiane est à 11, le quart le plus long
+  // part de 15. (Avant : 22 et 40, pour des matchs de 35 tours.)
+  fast: { final: true, name: 'Vite fait, bien fait', desc: 'Gagner en 9 tours ou moins.', check: (b) => b.turn <= 9, reward: { fans: 40, money: 150 } },
+  long: { final: true, name: 'Faites durer le plaisir', desc: 'Le match doit durer au moins 15 tours.', check: (b) => b.turn >= 15, reward: { fans: 40, money: 150 } },
   finisher_finish: { name: 'Finir avec le finisher', desc: 'La victoire doit suivre directement un finisher.', check: (b) => b.stats.finisherFinish, reward: { fans: 60, money: 200 } },
   table: { name: 'Cassez une table !', desc: 'Quelqu’un doit passer à travers une table.', check: (b) => b.stats.tables > 0, reward: { fans: 60, money: 200 } },
   // « Faire un tag » était réalisée 100 fois sur 100 : dans un match par

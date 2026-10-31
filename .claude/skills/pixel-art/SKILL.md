@@ -221,15 +221,27 @@ se dessine donc comme une posture, jamais comme un corps de plus.
 
 ## Où ça vit, dans ce dépôt
 
-- `src/ui/spriteart.js` — les planches, **généré** : ne pas éditer à la main.
-- Le générateur vit dans le répertoire de travail temporaire de la session
-  (`gen2.py`). Il valide largeur, palette et centrage de chaque ligne, et
-  produit la table des colonnes du torse depuis le dessin lui-même, pour
-  qu'elle ne puisse pas dériver.
+- `src/ui/spriteart.js` — les planches (`BASE_FRONT`, `BASE_BACK`, `BASE_FEM`,
+  `BASE_GIANT`, `BASE_HEAVY`, `BASE_SLIM`, `BASE_BIGHEAD`, `BASE_DOWN`), les
+  couches (`OVERLAYS`), la table des colonnes du torse (`TORSO`), les postures
+  (`STANCES`), les expressions (`FACES`) et les images de repos
+  (`IDLE_FRAMES`). Chaque planche est une grille de caractères, un caractère
+  par pixel, les caractères étant des emplacements de palette (légende en tête
+  du fichier). **C'est aujourd'hui la source de vérité** : le générateur
+  Python qui les a produites vivait dans le répertoire temporaire d'une
+  session et n'a pas été commité — il n'existe plus. Toute retouche se fait
+  donc dans ces grilles, en reprenant à la main ce qu'il vérifiait : largeur
+  de 24 colonnes sur chaque ligne, caractères tous dans la légende, corps
+  centré sur la colonne 11 (le miroir de `x` est `22 - x`), et `TORSO`
+  recalculée depuis le dessin si le torse bouge. Si on réécrit un générateur,
+  on le commite dans `.claude/skills/pixel-art/scripts/`.
 - `src/ui/spritepixel.js` — palette, vêtements peints sur la peau, postures,
   expressions, contour, composition.
+- `src/ui/avatar.js` — l'enrobage DOM : vignettes, pions, repos animé.
 - `src/data/wrestlers.js` — par lutteur : `look.build`, `look.stance`,
-  `look.face`, `look.idle`, couleurs et caractéristiques.
+  `look.face`, `look.idle`, `look.features`, couleurs.
+- `icons/` — générées par le même moteur ; à regénérer si le sprite de
+  l'icône change.
 
 ## Vérifier
 

@@ -17,26 +17,28 @@ export const MATCH_TYPES = {
   // `maxTurns` : la limite de temps appartient à la stipulation. Un match par
   // équipes a quatre corps à user au lieu de deux et le lutteur amoché sort du
   // ring : à 60 tours, la moitié d'entre eux se terminaient au chrono. Un vrai
-  // match par équipes EST une forme longue.
-  tag: { name: 'Match par équipes', icon: '🤝', arena: 'standard', victory: 'fall', firstFall: true, countOut: 6, dq: true, tag: true, weapons: 0, underRing: 2, maxTurns: 85,
+  // match par équipes EST une forme longue. Les valeurs ont été divisées par
+  // 1,5 avec le tour à énergie (trois cartes par tour, matchs deux fois plus
+  // courts) : la limite reste un garde-fou, mesuré à zéro fin au chrono.
+  tag: { name: 'Match par équipes', icon: '🤝', arena: 'standard', victory: 'fall', firstFall: true, countOut: 6, dq: true, tag: true, weapons: 0, underRing: 2, maxTurns: 55,
     desc: 'Un seul lutteur légal par équipe. Tag avec un partenaire adjacent (+momentum, +souffle) ; le partenaire se remet en attendant À SON COIN, pas au moment du relais. À bout de forces, la main ne se touche pas toujours : c’est le ring coupé. Attaquer sans être légal = risque de DQ. Le premier tombé décide, et c’est une forme longue (85 tours).' },
   hardcore: { name: 'Hardcore', icon: '🪑', arena: 'hardcore', victory: 'fall', firstFall: true, countOut: 0, dq: false, weapons: 4, underRing: 4, tables: true,
     desc: 'Pas de DQ, pas de compte à l’extérieur, armes et tables partout — et la table des commentateurs est au menu. Le tombé compte n’importe où.' },
   battle_royal: { name: 'Bataille royale', icon: '👑', arena: 'standard', victory: 'lastStanding', firstFall: false, countOut: 0, dq: false, toss: true, noPin: true,
     desc: 'Aucun tombé : on élimine en jetant un adversaire par-dessus la troisième corde (il doit être sur les cordes ou dans un coin). Un homme frais s’accroche — il faut l’USER d’abord, l’étourdir ne suffit pas. Se joue à trois contre quatre : dernier debout gagne.' },
   ladder: { name: 'Match d’échelle', icon: '🪜', arena: 'ladder', victory: 'belt', firstFall: false, countOut: 0, dq: false, weapons: 2, underRing: 2, noPin: true,
-    desc: 'Grimpez l’échelle (au centre du ring) TROIS tours de suite sans subir de dégâts pour décrocher la ceinture. Chaque échelon coûte du souffle, et le moindre coup vous fait redescendre. Pas de tombé, pas de DQ.' },
+    desc: 'Grimpez l’échelle (au centre du ring) : trois échelons, un par tour, personne debout à côté de vous. Un coup ne vous fait pas redescendre — une chute ou une projection, oui. Pas de tombé, pas d’abandon, pas de DQ.' },
   cage: { name: 'Cage d’acier', icon: '🔒', arena: 'cage', victory: 'fall_or_escape', firstFall: true, countOut: 0, dq: false, cage: true,
-    desc: 'Tombé, soumission, ou évasion : grimpez depuis un coin pendant trois tours sans subir de dégâts. Projeter quelqu’un dans la cage fait mal.' },
+    desc: 'Tombé, soumission, ou évasion : grimpez depuis un coin, trois échelons, un par tour — seule une chute vous fait redescendre. Projeter quelqu’un dans la cage fait mal.' },
   tlc: { name: 'TLC (Tables, Échelles, Chaises)', icon: '🪜', arena: 'ladder', victory: 'belt', firstFall: false, countOut: 0, dq: false, weapons: 4, underRing: 4, tables: true, noPin: true,
-    desc: 'Tables, échelles et chaises : tout est légal et tout est fourni. La table des commentateurs se brise. Grimpez l’échelle trois tours de suite sans être touché pour décrocher la ceinture.' },
+    desc: 'Tables, échelles et chaises : tout est légal et tout est fourni. La table des commentateurs se brise. Trois échelons, un par tour, pour décrocher la ceinture — seule une chute ou une projection fait redescendre.' },
   hell_in_cell: { name: 'Hell in a Cell', icon: '😈', arena: 'cage', victory: 'fall', firstFall: true, countOut: 0, dq: false, cage: true, weapons: 2, underRing: 3, tables: true,
     desc: 'Enfermés — et vraiment : aucune escalade n’est proposée. Pas de DQ, pas de compte : ça se termine par tombé ou soumission. Les murs font mal et il y a des chaises sous le ring.' },
-  last_man_standing: { name: 'Last Man Standing', icon: '🔟', arena: 'standard', victory: 'fall', firstFall: true, countOut: 0, dq: false, noPin: true, tenCount: true, underRing: 3, tables: true, maxTurns: 85,
+  last_man_standing: { name: 'Last Man Standing', icon: '🔟', arena: 'standard', victory: 'fall', firstFall: true, countOut: 0, dq: false, noPin: true, tenCount: true, underRing: 3, tables: true, maxTurns: 55,
     desc: 'Aucun tombé et aucun abandon : il faut mettre l’adversaire au sol et qu’il ne réponde pas au compte de dix. Il se relève tant qu’il a du cœur ❤️ — et c’est le dernier cœur qui décide. Une prise de soumission ne fait pas taper, elle fait perdre connaissance. Tout est légal.' },
   street_fight: { name: 'Street Fight (sans DQ)', icon: '🥊', arena: 'hardcore', victory: 'fall', firstFall: true, countOut: 0, dq: false, weapons: 3, underRing: 3, tables: true,
     desc: 'Pas de disqualification, pas de compte, et les tombés comptent n’importe où — y compris à l’extérieur. Armes au sol et sous le ring.' },
-  submission_only: { name: 'Soumission uniquement', icon: '🔗', arena: 'standard', victory: 'fall', firstFall: true, countOut: 6, dq: true, noPin: true, underRing: 0, maxTurns: 75,
+  submission_only: { name: 'Soumission uniquement', icon: '🔗', arena: 'standard', victory: 'fall', firstFall: true, countOut: 6, dq: true, noPin: true, underRing: 0, maxTurns: 50,
     desc: 'Pas de tombé : la seule façon de gagner est de faire abandonner l’adversaire. Sans tombé, le cœur ❤️ fait office d’horloge tout seul — les corps lâchent donc deux fois plus vite. Les armes restent illégales, et personne n’est venu en cacher sous le ring.' },
   survival: { name: 'Survie', icon: '⏱️', arena: 'standard', victory: 'survive', firstFall: false, countOut: 0, dq: false, weapons: 3,
     desc: 'Des renforts arrivent chaque tour ou presque. Tenez jusqu’à la fin du chrono avec au moins un lutteur debout.' },

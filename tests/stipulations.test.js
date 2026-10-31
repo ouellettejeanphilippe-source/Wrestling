@@ -49,9 +49,10 @@ test('les douze stipulations produisent toutes un vrai match', () => {
       if (/Limite de temps/.test(j.r.reason)) chrono++;
     }
     const moy = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
-    // Un match qui se règle en dix tours n'est pas un match : c'est ce que
-    // faisaient l'échelle (7,3), le TLC (7,3) et la bataille royale (11,4).
-    if (moy(tours) < 15) echecs.push(`${type} : ${moy(tours).toFixed(1)} tours, trop court`);
+    // Un match qui se règle en cinq tours n'est pas un match : c'est ce que
+    // faisaient l'échelle (7,3) et le TLC (7,3) à l'époque des tours à un
+    // coup. Avec le tour à énergie, tout se joue entre dix et quinze tours.
+    if (moy(tours) < 8) echecs.push(`${type} : ${moy(tours).toFixed(1)} tours, trop court`);
     // Et un match qui va au chrono une fois sur deux n'a pas de conclusion :
     // c'était le cas de la soumission uniquement (85 %) et du tag (88 %).
     if (chrono / n > 0.45) echecs.push(`${type} : ${Math.round(chrono / n * 100)} % au chrono`);
@@ -138,12 +139,12 @@ test('le ring se coupe : un lutteur à bout ne passe pas toujours le relais', ()
 
 test('grimper : deux échelons quand ça se dispute, trois quand ça se fuit', () => {
   // L'ÉCHELLE SE DISPUTE. Personne ne monte avec un adversaire debout à côté
-  // de lui — mesuré, trois tours tranquilles d'affilée ne se trouvent alors
-  // jamais : 60 % des matchs finissaient au chrono au lieu de décrocher la
-  // ceinture. À deux, on retrouve 48 à 55 % de fins par la ceinture.
+  // de lui, et une projection fait redescendre. À trois échelons, avec trois
+  // cartes par tour en face, neuf matchs sur douze allaient au chrono ; à
+  // deux, dix sur douze finissent par la ceinture.
   for (const type of ['ladder', 'tlc']) {
     const b = createBattle({ match: exhibitionMatch(type, ['jean_sina'], ['gunter']), playerTeam: [W.jean_sina], seed: 5 });
-    assert.equal(climbNeeded(b), 2, `${type} : deux tours d’escalade, mais il faut faire de la place`);
+    assert.equal(climbNeeded(b), 2, `${type} : deux échelons, mais il faut faire de la place`);
   }
   // LA CAGE SE FUIT, et personne ne vous y bloque : là, la longueur EST la
   // difficulté. À deux, l'évasion passait de 70 à 88 % et le match tombait de
@@ -178,8 +179,10 @@ test('on ne grimpe pas avec quelqu’un debout sur le dos', () => {
 test('chaque stipulation garde la limite de temps qui lui va', () => {
   // Un match par équipes a quatre corps à user au lieu de deux ; à 60 tours,
   // la moitié d'entre eux se terminaient au chrono.
+  // (Les valeurs ont suivi le tour à énergie : la limite par défaut est à 40,
+  // les formes longues au-dessus.)
   for (const type of ['tag', 'last_man_standing', 'submission_only']) {
-    assert.ok(MATCH_TYPES[type].maxTurns > 60, `${type} est une forme longue`);
+    assert.ok(MATCH_TYPES[type].maxTurns > 40, `${type} est une forme longue`);
   }
   assert.equal(MATCH_TYPES.singles.maxTurns, undefined, 'le match simple garde la limite par défaut');
 });

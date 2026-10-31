@@ -3,6 +3,7 @@ import { CLASSES, SPECIALTIES } from '../data/classes.js';
 import { GIMMICKS } from '../data/gimmicks.js';
 import { MOVES } from '../data/moves.js';
 import { newWear } from './wear.js';
+import { ENERGY_PER_TURN } from './hand.js';
 
 // Le fonds commun. Il s'est étoffé pour une raison : un long match a besoin
 // d'un vocabulaire de remplissage — piétiner, un genou sur le crâne, un
@@ -75,6 +76,13 @@ export function createUnit(def, team, x, y, opts = {}) {
     // et la réponse ne changeait jamais. Avec lui, il faut doser : souffler,
     // user l'adversaire, garder de quoi finir.
     stamina: 100, maxStamina: 100,
+    // L'ÉNERGIE DU TOUR. Trois points, rendus à chaque tour ; chaque carte en
+    // coûte. C'est ce qui fait d'un tour une suite de décisions plutôt qu'un
+    // seul coup (voir `hand.js`).
+    energy: ENERGY_PER_TURN, maxEnergy: ENERGY_PER_TURN,
+    // En double équipe : il a donné son tour pour enchaîner sur les coups de
+    // ses partenaires (voir `battle.js`, doubleEquipe).
+    teamwork: false,
     stats, cls: def.cls, spec: def.spec, gimmick: def.gimmick, alignment: def.alignment,
     moves: unitMoves(def, bonus), weight: def.weight || 'heavy', color: def.color, initials: def.initials,
     // gabarit sur la grille : `size` accepte 2, [3, 2] ou { w, h }.
