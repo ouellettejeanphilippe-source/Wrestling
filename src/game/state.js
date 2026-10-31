@@ -38,6 +38,31 @@ export const emptyFeats = () => ({
   winsByType: {}, restWeeks: 0,
 });
 
+// L'ÉCURIE. Une carrière commence avec UN lutteur (la tête d'affiche) et peut en
+// signer jusqu'à deux autres parmi ceux qu'on a débloqués au vestiaire. Chacun
+// s'entraîne, apprend ses cartes et a sa fiche ; à chaque match on choisit
+// qui monte sur le ring. Voir `signCost`, `validateTeam` et la fatigue plus bas.
+export const STABLE_MAX = 3;
+
+// LA FATIGUE, OU POURQUOI FAIRE TOURNER L'ÉCURIE. Sans elle, le meilleur lutteur
+// faisait tous les matchs et les deux autres ne servaient à rien : la décision
+// n'existait pas. Un lutteur qui monte sur le ring prend un niveau de fatigue
+// (trois au plus) et perd 7 % de PV par niveau ; un lutteur qui reste au
+// vestiaire en perd un ; une semaine off remet tout le monde à zéro. Le soir du
+// titre, la tête d'affiche est OBLIGATOIRE : si elle a lutté toute la route,
+// elle y arrive à −21 %. Se reposer avant le titre est un plan.
+export const FATIGUE_MAX = 3, FATIGUE_HP = 0.07;
+export const fatigueOf = (entry) => Math.min(FATIGUE_MAX, Math.max(0, (entry && entry.fatigue) || 0));
+export const fatigueHp = (entry) => {
+  const def = entry && WRESTLERS_BY_ID[entry.id];
+  return def ? Math.round(def.stats.hp * FATIGUE_HP * fatigueOf(entry)) : 0;
+};
+
+// Le cachet d'un lutteur qu'on signe : la moitié de son salaire de fiche, à
+// cinquante dollars près, 250 au minimum. Une carrière commence avec 800 $ et
+// s'entraîne pour 150 à 450 la séance : signer, c'est ne pas s'entraîner.
+export const signCost = (def) => Math.max(250, Math.round(((def && def.salary) || 500) * 0.5 / 50) * 50);
+
 // Les colosses : ceux qu'on n'attrape pas et qu'on ne projette pas.
 const estColosse = (def) => !!def && (def.spec === 'giant' || def.weight === 'super');
 
@@ -45,10 +70,12 @@ export function newGame({ promoName, mode, starters }) {
   const seed = Date.now() % 1000000;
   const state = {
     version: 1, promoName: promoName || 'PPW — Parodie Pro Wrestling', mode: mode || 'kayfabe', showIndex: 0,
-    // UNE CARRIÈRE EST CELLE D'UN SEUL LUTTEUR. Le roster n'a qu'une entrée :
-    // c'est lui qu'on entraîne, c'est son deck qui grossit, c'est sa fiche de
-    // victoires. Les matchs par équipes existent toujours, mais comme une
-    // OPTION de la carte, avec un partenaire pour la soirée (voir `week.js`).
+    // UNE CARRIÈRE COMMENCE AVEC UN LUTTEUR : la tête d'affiche, c'est lui qui
+    // compte pour la progression entre les carrières. L'écurie grossit en
+    // signant des lutteurs débloqués au vestiaire (`recruit`, jusqu'à
+    // STABLE_MAX) ; à chaque match on choisit qui monte sur le ring. Un
+    // partenaire d'un soir comble les places qu'on ne peut pas remplir.
+    // Une sauvegarde d'avant l'écurie a une seule entrée et continue comme avant.
     money: 800, fans: 100, seed, roster: [rosterEntry(starters[0])], history: [], finished: false, ending: null,
     // La carrière commence huitième prétendant. Sept matchs de route pour
     // remonter, et le huitième soir décide de tout. Une sauvegarde d'avant le
@@ -95,6 +122,11 @@ export function weekNodes(state) {
 // la carrière — match joué, semaine off ou passage au bureau du booker.
 export function takeNode(state, node) {
   ensureRoute(state);
+  // Une semaine sans match : on récupère. La semaine off remet tout le monde à
+  // zéro, les autres (coulisses, bureau) enlèvent un niveau de fatigue.
+  if (node.type && !isFight(node.type)) {
+    for (const r of state.roster) r.fatigue = node.type === 'rest' ? 0 : Math.max(0, (r.fatigue || 0) - 1);
+  }
   state.path.push({ row: node.row, col: node.col, type: node.type });
   state.showIndex = state.path.length;
   if (state.showIndex > SEMAINE_TITRE) state.showIndex = SEMAINE_TITRE;
@@ -129,7 +161,45 @@ export const rosterDefs = (state) => state.roster.map((r) => WRESTLERS_BY_ID[r.i
 // Ce que la campagne transmet au moteur pour chaque lutteur : les bonus
 // d'entraînement ET son deck. L'exhibition n'appelle jamais cette fonction :
 // c'est ce qui exclut les decks du mode exhibition, sans un seul `if`.
-export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, { ...r.bonus, ...deckBonus(r) }]));
+// La fatigue passe ici aussi : elle retire des PV à qui a trop lutté.
+export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) => [r.id, { ...r.bonus, ...deckBonus(r), hp: (r.bonus.hp || 0) - fatigueHp(r) }]));
+
+// SIGNER UN LUTTEUR. `eligibles` arrive d'en haut (la progression du vestiaire
+// vit dans le stockage du navigateur, que `state.js` ne touche pas) : on ne
+// signe que ceux qu'on a débloqués, et chacun a son prix.
+export function recruitOffer(state, eligibles) {
+  const dans = new Set(state.roster.map((r) => r.id));
+  return (eligibles || [])
+    .filter((id) => WRESTLERS_BY_ID[id] && !dans.has(id) && !WRESTLERS_BY_ID[id].npc && !WRESTLERS_BY_ID[id].boss)
+    .map((id) => ({ id, cost: signCost(WRESTLERS_BY_ID[id]) }))
+    .sort((a, b) => a.cost - b.cost || a.id.localeCompare(b.id));
+}
+export function recruit(state, id, eligibles) {
+  const def = WRESTLERS_BY_ID[id];
+  if (!def) return { ok: false, reason: 'Lutteur inconnu' };
+  if (state.roster.some((r) => r.id === id)) return { ok: false, reason: 'Déjà dans votre écurie' };
+  if (state.roster.length >= STABLE_MAX) return { ok: false, reason: `Écurie complète (${STABLE_MAX} lutteurs)` };
+  if (!(eligibles || []).includes(id)) return { ok: false, reason: 'Pas encore débloqué au vestiaire' };
+  const cost = signCost(def);
+  if (state.money < cost) return { ok: false, reason: `Pas assez d’argent (${cost} $)` };
+  state.money -= cost;
+  state.roster.push(rosterEntry(id));
+  return { ok: true, cost, message: `${def.name} signe pour ${cost} $ et rejoint l’écurie.` };
+}
+
+// L'ÉQUIPE QUE LE HUB ENVOIE DANS LE RING. Les règles sont ici et pas dans
+// l'interface, pour qu'un test les tienne : la bonne taille, personne en
+// double, au moins un des vôtres (un match n'est pas une soirée de
+// partenaires), et le soir du titre la tête d'affiche est du voyage.
+export function validateTeam(state, matchDef, teamIds) {
+  const taille = matchDef.teamSize || 1;
+  if (!Array.isArray(teamIds) || teamIds.length !== taille) return { ok: false, reason: `Il faut ${taille} lutteur${taille > 1 ? 's' : ''}` };
+  if (new Set(teamIds).size !== teamIds.length) return { ok: false, reason: 'Le même lutteur deux fois' };
+  const siens = teamIds.filter((id) => state.roster.some((r) => r.id === id));
+  if (!siens.length) return { ok: false, reason: 'Au moins un lutteur de votre écurie' };
+  if (isTitleMatch(state, matchDef) && !teamIds.includes(state.headliner)) return { ok: false, reason: `${(WRESTLERS_BY_ID[state.headliner] || {}).name || 'La tête d’affiche'} doit être du voyage : c’est sa ceinture` };
+  return { ok: true };
+}
 
 // LES PARTENAIRES D'UN SOIR. Il n'y a plus d'agents libres à recruter : une
 // carrière n'a qu'un lutteur, et personne ne rejoint son roster. Ce qui existe,
@@ -142,7 +212,8 @@ export const playerBonuses = (state) => Object.fromEntries(state.roster.map((r) 
 // lu ici : `state.js` ne touche pas au stockage du navigateur.
 export function partnerOffer(state, node, eligibles, combien = 3) {
   const rng = createRng((state.seed || 1) + node.row * 811 + node.col * 53);
-  const pool = (eligibles || []).filter((id) => id !== state.headliner && WRESTLERS_BY_ID[id]);
+  const dans = new Set(state.roster.map((r) => r.id));       // l'écurie n'est pas un renfort
+  const pool = (eligibles || []).filter((id) => !dans.has(id) && WRESTLERS_BY_ID[id]);
   return rng.shuffle(pool).slice(0, combien);
 }
 
@@ -277,6 +348,9 @@ export function applyResult(state, battle, matchDef, teamIds, node = null) {
   state.money += summary.money;
   state.fans = Math.max(0, state.fans + summary.fans);
   for (const r of state.roster) if (teamIds.includes(r.id)) { if (won) r.wins++; else r.losses++; }
+  // La fatigue : qui a lutté ce soir en prend un niveau, qui est resté au
+  // vestiaire en perd un.
+  for (const r of state.roster) r.fatigue = teamIds.includes(r.id) ? Math.min(FATIGUE_MAX, (r.fatigue || 0) + 1) : Math.max(0, (r.fatigue || 0) - 1);
   // UN MATCH APPREND QUELQUE CHOSE. C'est ce qui manquait entre deux épisodes :
   // le répertoire d'un lutteur était le même au premier et au huitième. On
   // gagne trois cartes au choix, on en gagne deux quand on a perdu — une

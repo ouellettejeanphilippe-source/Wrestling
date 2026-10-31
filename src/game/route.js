@@ -35,10 +35,10 @@ export const SEMAINE_TITRE = SEMAINES - 1;   // index de la dernière ligne
 export const NODE_TYPES = {
   match: { key: 'match', icon: '🤼', name: 'Match', desc: 'Un match de carte. Une victoire vous fait monter d’une place au classement.' },
   elite: { key: 'elite', icon: '⭐', name: 'Main event', desc: 'Un adversaire classé, devant une vraie salle. Ça rapporte DEUX places au classement — et il cogne deux fois plus fort.' },
-  rest:  { key: 'rest',  icon: '🛋️', name: 'Semaine off', desc: 'Pas de match. Une séance d’entraînement offerte, ou une carte retirée du deck.' },
+  rest:  { key: 'rest',  icon: '🛋️', name: 'Semaine off', desc: 'Pas de match. Toute l’écurie récupère de sa fatigue, et vous avez une séance d’entraînement offerte ou une carte retirée du deck.' },
   event: { key: 'event', icon: '❓', name: 'En coulisses', desc: 'Un angle, une rencontre, une proposition. On ne sait jamais à l’avance.' },
   shop:  { key: 'shop',  icon: '💼', name: 'Bureau du booker', desc: 'On y achète ce qui se vend : un mouvement, un manager, du muscle.' },
-  tag:   { key: 'tag',   icon: '🤝', name: 'Match par équipes', desc: 'Un soir à plusieurs. Il faut trouver un partenaire — quelqu’un que vous avez débloqué acceptera de faire équipe. Ça paie mieux, et ça n’est jamais obligatoire.' },
+  tag:   { key: 'tag',   icon: '🤝', name: 'Match par équipes', desc: 'Un soir à plusieurs. Avec les vôtres, ou un partenaire d’un soir parmi ceux que vous avez débloqués. Ça paie mieux, et ça n’est jamais obligatoire.' },
   boss:  { key: 'boss',  icon: '🏆', name: 'Championnat du Monde', desc: 'Le dernier soir. La seule question de toute la carrière.' },
 };
 

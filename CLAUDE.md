@@ -7,7 +7,7 @@ français** : code, commentaires, commits, tests, documentation. On garde ça.
 
 ```bash
 npm start     # serveur statique sur :8080 (scripts/serve.js)
-npm test      # node --test tests/*.test.js — 216 tests, ~45 s, à lancer avant tout commit
+npm test      # node --test tests/*.test.js — 239 tests, ~50 s, à lancer avant tout commit
 node .claude/skills/pixel-art/scripts/measure.mjs [id]   # mesure les palettes des sprites
 ```
 
@@ -25,7 +25,10 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
   du tour suivant est tirée à la fin de sa phase (`handReady`), et `enemySteps` tient l'annonce ou fait partir le
   coup dans le vide (`whiff`). La direction du jeu : *Fights in Tight Spaces*, en grand espace et avec les props.
 - `src/data/` — tout le contenu : lutteurs, mouvements, gimmicks, stipulations, combos, managers, campagne.
-- `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match.
+- `src/game/` — la carrière hors match : route, classement, deck, vestiaire, sauvegarde, histoire du match. Une
+  carrière a une **tête d'affiche** (`state.headliner`, celle des déblocages) et une **écurie** de trois lutteurs
+  au plus (`state.roster`, `recruit`, `validateTeam`, la fatigue) ; le hub (`ui/hub.js`) fait choisir l'équipe à
+  chaque match.
 - `src/ui/` — les écrans. `match.js` est l'écran de match, construit autour de la main (un clic sur la carte, un
   clic sur la cible ; le plateau est cadré sur l'action) ; `spriteart.js` + `spritepixel.js` + `avatar.js` sont
   les sprites. Attention : `Element.append` écrit « [object …] » pour un tableau et « null » pour une branche vide ;
@@ -65,8 +68,8 @@ Lire la section **Code** du `README.md` pour la carte complète. En bref :
 
 Le README a une section **« Où en est le jeu — honnêtement »** avec les mesures avant/après le tour à énergie :
 match simple de 40 à 12-16 tours en médiane, phases adverses sans dégâts de 50 à 30 %, fins au chrono de 23 à 0 %.
-Les priorités restantes y sont listées dans l'ordre (retour visuel d'un coup, un rôle pour le momentum entre la
-signature et le finisher, carrière en équipe, match à relais trop long).
+Les priorités restantes y sont listées dans l'ordre (des personnages originaux avant la v1, le match à relais trop
+long, le reste du retour visuel, une difficulté qui monte entre les carrières).
 Toute session qui touche au match devrait faire bouger au moins un de ces chiffres, et le dire. Les scripts de
 mesure sont faciles à refaire : `createBattle` + `autoPlay` sur soixante graines, voir `tests/energie.test.js` et
 `tests/rythme.test.js`.

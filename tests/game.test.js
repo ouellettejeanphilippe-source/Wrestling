@@ -7,12 +7,13 @@ import { rankOf } from '../src/game/rank.js';
 import { WRESTLERS_BY_ID } from '../src/data/wrestlers.js';
 import { SEASON } from '../src/data/campaign.js';
 
-test('une carrière, un lutteur : le roster n’a qu’une entrée', () => {
-  // On ne recrute plus personne : il n'y a pas d'écurie où faire entrer
-  // quelqu'un. Ce qui existe, ce sont des partenaires d'un soir, tirés des
-  // lutteurs qu'on a débloqués au vestiaire.
+test('une carrière commence avec un lutteur : la tête d’affiche', () => {
+  // L'écurie se construit ensuite, en signant des lutteurs débloqués au
+  // vestiaire (voir `tests/ecurie.test.js`). Il n'y a toujours pas d'agents
+  // libres à recruter au hasard, et les partenaires d'un soir restent tirés
+  // des lutteurs débloqués.
   const st = newGame({ promoName: 'Test', mode: 'kayfabe', starters: ['jean_sina'] });
-  assert.equal(st.roster.length, 1, 'une carrière est celle d’un seul lutteur');
+  assert.equal(st.roster.length, 1, 'on commence avec un seul lutteur');
   assert.equal(st.roster[0].id, 'jean_sina');
   assert.equal(st.headliner, 'jean_sina');
   assert.equal(st.freeAgents, undefined, 'plus d’agents libres');
