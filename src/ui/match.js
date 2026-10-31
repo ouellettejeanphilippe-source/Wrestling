@@ -34,7 +34,7 @@ import { showTutorial, tutorialSeen } from './tutorial.js';
 import { matchStory } from '../game/story.js';
 
 const ATTACK_TYPES = new Set(['strike', 'grapple', 'aerial', 'submission', 'weapon']);
-const TACTIC_ICON = { guard: '🛡️', regroup: '🏃', draw: '🧠' };
+const TACTIC_ICON = { guard: '🛡️', regroup: '🏃', draw: '🧠', heal: '🩹', hype: '🔥', feint: '🎭' };
 const TYPE_ICON = { tactic: '🛡️', strike: '👊', grapple: '🤼', aerial: '🦅', submission: '🔗', special: '🌀', weapon: '🪑', taunt: '📣', pin: '🤝', toss: '🚀', teamwork: '🤝', climb: '🪜', tag: '🖐️', manager: '🎩', wait: '⏳', redraw: '🔄', scavenge: '🔦', pickup: '🪑', rollin: '↩️', sell: '🎭', job: '📜' };
 const TILE_HELP = {
   floor: 'Plancher : hors du ring. Compte de l’arbitre dans les matchs avec règles.',
@@ -520,6 +520,9 @@ export function mountMatch(root, { battle, matchDef, onFinish, onContinue, onQui
     if (battle.rules.countOut > 0 && u.outsideCount > 0) st.push(`⏱ compte ${u.outsideCount}/${battle.rules.countOut}`);
     if (u.climb > 0) st.push(`🧗 ${u.climb}`);
     if (u.teamwork) st.push('🤝 double équipe');
+    if (u.guard) st.push('🛡️ couvert');
+    if (u.hyped) st.push('🔥 foule debout');
+    if (u.feint) st.push('🎭 feinte');
     if (winded(u)) st.push('😮‍💨 à bout de souffle');
     if (u.eliminated) st.push('❌ éliminé');
     const it = u.intent && u.team === 'enemy' && battle.phase === 'player' && !battle.result ? u.intent : null;

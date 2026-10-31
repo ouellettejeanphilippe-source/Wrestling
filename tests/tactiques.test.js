@@ -100,3 +100,90 @@ test('l’IA joue ces cartes au lieu de les garder mortes en main', () => {
   assert.ok(course + plan > 0, 'et les deux autres aussi, de temps en temps');
   assert.ok(garde / n <= 4, 'sans que la garde devienne le seul coup du match');
 });
+
+// ------------------------------------------------------- les cartes à momentum
+// Entre la signature (60) et le finisher (100), la jauge ne servait plus à
+// rien depuis que la classe et la spécialité ne la demandent plus. Ces trois
+// cartes se paient en momentum : le dépenser ici, c'est ne pas le garder pour
+// le gros coup.
+import { computeDamage, hitChance, reverseChance } from '../src/engine/battle.js';
+
+test('Second souffle, La foule se lève et Feinte se paient en momentum', () => {
+  for (const [id, prix] of [['second_wind', 30], ['crowd_up', 40], ['feint', 20]]) {
+    assert.equal(MOVES[id].type, 'tactic');
+    assert.equal(MOVES[id].cost, prix, `${id} coûte ${prix} de momentum`);
+    assert.ok(CARD_POOL.includes(id), `${id} s’offre après un match`);
+  }
+  const b = mk(['jean_sina'], ['jobber_1']);
+  const [u] = b.units;
+  u.hand = ['second_wind', 'crowd_up', 'feint', 'punch', 'punch'];
+  u.momentum = 10;
+  for (const id of ['second_wind', 'crowd_up', 'feint']) {
+    const a = listActions(b, u).find((x) => x.id === id);
+    assert.equal(a.ok, false, `${id} : verrouillée sans le momentum`);
+    assert.match(a.reason, /Momentum/);
+  }
+  u.momentum = 100;
+  for (const id of ['second_wind', 'crowd_up', 'feint']) assert.ok(listActions(b, u).find((x) => x.id === id).ok, `${id} jouable avec la jauge`);
+});
+
+test('Second souffle rend des PV et du souffle, et coûte 30 de momentum', () => {
+  const b = mk(['jean_sina'], ['jobber_1']);
+  const [u] = b.units;
+  u.hand = ['second_wind', 'punch'];
+  u.hp = Math.round(u.maxHp * 0.4); u.stamina = 30; u.momentum = 50;
+  const hp0 = u.hp;
+  executeAction(b, u, 'second_wind');
+  assert.ok(u.hp - hp0 >= Math.round(u.maxHp * 0.17), `+18 % de PV (${u.hp - hp0})`);
+  assert.equal(u.stamina, 65, '+35 de souffle');
+  assert.equal(u.momentum, 20, 'et 30 de momentum de moins');
+});
+
+test('La foule se lève : le prochain coup fait 50 % de plus, une seule fois', () => {
+  const b = mk(['jean_sina'], ['jobber_1']);
+  const [u, e] = b.units;
+  u.x = e.x - 1; u.y = e.y;
+  u.hand = ['crowd_up', 'punch', 'punch'];
+  u.momentum = 60;
+  e.statuses.dazed = 3;                      // pas de renversement : on teste la consommation
+  const avant = computeDamage(b, u, e, MOVES.punch, { noRng: true }).dmg;
+  executeAction(b, u, 'crowd_up');
+  assert.equal(u.hyped, true);
+  assert.equal(u.momentum, 20, 'elle coûte 40');
+  const apres = computeDamage(b, u, e, MOVES.punch, { noRng: true }).dmg;
+  assert.ok(apres >= Math.round(avant * 1.4), `la prévision le voit (${avant} → ${apres})`);
+  executeAction(b, u, 'punch', { unit: e });
+  assert.equal(u.hyped, false, 'consommée par le coup');
+  assert.equal(computeDamage(b, u, e, MOVES.punch, { noRng: true }).dmg, avant, 'le coup suivant est normal');
+});
+
+test('Feinte : +25 de précision, pas de renversement, une seule fois', () => {
+  const b = mk(['jean_sina'], ['gunter']);
+  const [u, e] = b.units;
+  u.x = e.x - 1; u.y = e.y;
+  u.hand = ['feint', 'powerbomb'];
+  u.momentum = 60; e.down = false; e.statuses = {};
+  const h0 = hitChance(b, u, e, MOVES.powerbomb);
+  const r0 = reverseChance(b, u, e, MOVES.powerbomb);
+  assert.ok(r0 > 0, 'sans feinte, un gros coup sur un adversaire frais peut être renversé');
+  executeAction(b, u, 'feint');
+  assert.equal(u.momentum, 40);
+  assert.equal(hitChance(b, u, e, MOVES.powerbomb), Math.min(100, h0 + 25));
+  assert.equal(reverseChance(b, u, e, MOVES.powerbomb), 0, 'plus de renversement possible');
+  executeAction(b, u, 'powerbomb', { unit: e });
+  assert.equal(u.feint, false, 'consommée');
+});
+
+test('l’IA se soigne quand elle est amochée, et chauffe la salle avec de la jauge à revendre', () => {
+  const ids = WRESTLERS.filter((w) => !w.npc).map((w) => w.id);
+  let soins = 0, foules = 0, n = 40;
+  for (let seed = 1; seed <= n; seed++) {
+    const b = mk([ids[seed % ids.length]], [ids[(seed * 7 + 3) % ids.length]], seed);
+    autoPlay(b, 400);
+    soins += b.log.filter((l) => /serre les dents/.test(l.text)).length;
+    foules += b.log.filter((l) => /LA FOULE SE LÈVE/.test(l.text)).length;
+  }
+  assert.ok(soins / n >= 0.3, `se soigner est joué (${(soins / n).toFixed(2)} par match)`);
+  assert.ok(foules > 0, 'chauffer la salle aussi, de temps en temps');
+  assert.ok(soins / n <= 3, 'sans que le soin rende les matchs interminables');
+});

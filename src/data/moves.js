@@ -30,6 +30,13 @@ export const MOVES = {
   // son prix ; `blurb` est la ligne affichée sur la carte.
   brace: { tier: 'class', name: 'Se couvrir', type: 'tactic', tactic: 'guard', energy: 1, range: [0, 0], momentum: 0, blurb: '🛡️ prochain coup reçu −50 %', desc: 'On se ramasse et on encaisse : le prochain coup reçu avant votre prochain tour fait moitié moins.' },
   regroup: { tier: 'class', name: 'Reprendre sa course', type: 'tactic', tactic: 'regroup', energy: 1, range: [0, 0], momentum: 0, bonusMov: 2, blurb: '🏃 se déplacer de nouveau, +2 cases', desc: 'Redonne le droit de se déplacer, avec deux cases de plus. Avant ou après un coup : c’est ce qui permet de frapper, de sortir de la ligne, puis de revenir.' },
+  // Ces trois-là se paient en MOMENTUM, pas seulement en énergie : c'est ce qui
+  // redonne un rôle à la jauge entre la signature (60) et le finisher (100).
+  // Dépenser pour se soigner, pour chauffer la salle ou pour feinter, c'est ne
+  // pas le garder pour le gros coup — et c'est une décision.
+  second_wind: { tier: 'class', name: 'Second souffle', type: 'tactic', tactic: 'heal', energy: 1, cost: 30, range: [0, 0], momentum: 0, heal: 0.18, stamina: 35, blurb: '🩹 +18 % PV, +35 souffle', desc: 'On serre les dents et on repart : rend 18 % de ses PV et 35 de souffle. Coûte 30 de momentum.' },
+  crowd_up: { tier: 'specialty', name: 'La foule se lève', type: 'tactic', tactic: 'hype', energy: 1, cost: 40, range: [0, 0], momentum: 0, hype: 1.5, blurb: '🔥 prochain coup +50 %', desc: 'La salle est debout : le prochain coup porté ce tour-ci fait 50 % de plus. Coûte 40 de momentum.' },
+  feint: { tier: 'class', name: 'Feinte', type: 'tactic', tactic: 'feint', energy: 1, cost: 20, range: [0, 0], momentum: 0, accuracy: 25, blurb: '🎭 prochain coup +25 précision, sans renversement', desc: 'On fait mine de partir à gauche : le prochain coup porté ce tour-ci gagne 25 de précision et ne peut pas être renversé. Coûte 20 de momentum.' },
   game_plan: { tier: 'class', name: 'Plan de match', type: 'tactic', tactic: 'draw', energy: 1, range: [0, 0], momentum: 0, draw: 2, blurb: '🧠 pioche 2 cartes', desc: 'On lit l’adversaire et on repense son tour : pioche deux cartes de plus.' },
 
   // ---- La course ----------------------------------------------------------

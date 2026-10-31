@@ -832,6 +832,8 @@ export function executeAction(battle, unit, actionId, target = null) {
       && (subIsTheRoute(battle) || wearLevel(tgt || unit, movePart(a.move)) >= 1);
     if (!garde) playCard(battle, unit, a.move.id);
   }
+  // La foule et la feinte ne valent que pour UN coup.
+  if (['strike', 'grapple', 'aerial', 'submission', 'weapon'].includes(a.type)) { unit.hyped = false; unit.feint = false; }
   // L'ÉNERGIE SE DÉPENSE, LE TOUR NE SE FERME QUE QUAND ELLE EST À ZÉRO. Un
   // coup de poing laisse de quoi en porter deux autres ; un finisher prend
   // tout. Le tombé offert après un finisher est gratuit (voir `onlyPin`).
@@ -870,7 +872,25 @@ function doTaunt(battle, unit, move) {
 //            main à cet instant : on pioche donc de quoi la remplacer, plus
 //            le gain annoncé)
 function doTactic(battle, unit, move) {
+  // Le prix en momentum, quand la carte en a un.
+  if (moveCost(move) > 0) addMomentum(battle, unit, -moveCost(move));
   switch (move.tactic) {
+    case 'heal':
+      heal(battle, unit, unit.maxHp * (move.heal || 0.18));
+      unit.stamina = clamp(unit.stamina + (move.stamina || 35), 0, unit.maxStamina);
+      addHeat(battle, 3);
+      log(battle, `🩹 ${unit.name} reprend son souffle et serre les dents : il repart.`);
+      break;
+    case 'hype':
+      unit.hyped = true;
+      addHeat(battle, 10);
+      emit(battle, { type: 'taunt', x: unit.x, y: unit.y });
+      log(battle, `🔥 LA FOULE SE LÈVE ! Le prochain coup de ${unit.name} fera 50 % de plus.`, 'big');
+      break;
+    case 'feint':
+      unit.feint = true;
+      log(battle, `🎭 ${unit.name} feint : son prochain coup ne se verra pas venir.`);
+      break;
     case 'guard':
       unit.guard = true;
       addHeat(battle, 2);
@@ -914,6 +934,7 @@ export function hitChance(battle, attacker, target, move, opts = {}) {
   // Le relief compte : frapper d'en haut est plus facile, d'en bas plus dur.
   c += clamp(heightAt(battle.grid, from.x, from.y) - heightAt(battle.grid, target.x, target.y), -3, 3) * 6;
   if (attacker.statuses.cursed) c -= 25;
+  if (attacker.feint) c += 25;                       // « Feinte »
   if (attacker.statuses.dazed) c -= 10;
   if (winded(attacker)) c -= 10;
   // Un bras hors service ne tient pas une prise : c'est la contrepartie
@@ -955,6 +976,9 @@ export function computeDamage(battle, attacker, target, move, opts = {}) {
   if (winded(attacker)) dmg *= 0.75;
   // La rancune : celui qui vient chercher sa revanche frappe un peu plus fort.
   if (attacker.flags.grudge) dmg *= GRUDGE_DAMAGE;
+  // LA FOULE SE LÈVE : le prochain coup porté ce tour-ci. Compté aussi dans la
+  // prévision de combat, puisqu'elle passe par ici.
+  if (attacker.hyped) dmg *= 1.5;
   // ON TAPE SUR LA ROUE VOILÉE. Frapper un membre déjà entamé fait un peu plus
   // mal que frapper du neuf : c'est le paiement de l'usure ciblée pour qui n'a
   // pas de prise de soumission. Volontairement modeste — à 15 %, les matchs
@@ -996,6 +1020,7 @@ const REVERSE_BY_TIER = { base: 0.02, class: 0.05, specialty: 0.07, signature: 0
 export function reverseChance(battle, attacker, target, move) {
   if (!move || target.down || target.statuses.dazed || target.eliminated) return 0;
   if (['taunt', 'special'].includes(move.type)) return 0;
+  if (attacker.feint) return 0;                  // « Feinte » : il ne l'a pas vu venir
   const A = getStats(battle, attacker), D = getStats(battle, target);
   let c = REVERSE_BY_TIER[move.tier] ?? REVERSE_BY_TIER.base;
   c += clamp((D.tec + D.agi) - (A.tec + A.agi), -8, 8) * 0.006;
@@ -1920,6 +1945,7 @@ export function startPhase(battle, team) {
     u.teamwork = false;
     u.acted = false; u.moved = false; u.movedTiles = 0; u.movePath = null; u.moveMomentum = 0; u.prev = null; u.onlyPin = false;
     u.guard = false; u.bonusMov = 0;      // une garde ne vaut que jusqu'à son prochain tour
+    u.hyped = false; u.feint = false;
     if (u.down) {
       if (u.downTurns === 0) {
         u.downTurns = 1; u.acted = true;
